@@ -624,7 +624,9 @@ function chatReply(question, context) {
   if (/advance|multiple.?draw|future.?draw/.test(q))
     return 'Advance Play: play up to 30 consecutive drawings in advance. Not available with the $5 or $10 Quick Picks box.';
 
-  return 'I can answer questions about Jackpot Triple Play payouts, odds, taxes, Combo, rolldowns, and draw schedule - and do the math for you.\n\nTry asking:\n- "What do I win for 5 of 6?"\n- "Take-home on $500"\n- "Combo prize for 8 matches"\n- "Spent $10 won $25 -- what is my ROI?"\n- "When is the next drawing?"';
+  if (/\b(texas|california|new york|ohio|georgia|michigan|illinois|pennsylvania|new jersey|arizona|colorado|virginia|north carolina|massachusetts|washington|oregon|nevada|maryland|connecticut|minnesota|wisconsin|missouri|louisiana|kentucky|tennessee|indiana|alabama|south carolina|oklahoma|arkansas|iowa|mississippi|kansas|utah|nebraska|west virginia|idaho|hawaii|maine|new hampshire|rhode island|montana|delaware|south dakota|north dakota|alaska|vermont|wyoming|new mexico)\b/i.test(q))
+    return 'Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Every donation helps us expand to new states -- visit jackpot.allaml.ai to donate and help make it happen!';
+  return 'I can answer questions about Jackpot Triple Play payouts, odds, taxes, Combo, rolldowns, and draw schedule - and do the math for you.\n\nTry asking:\n- "What do I win for 5 of 6?"\n- "Take-home on $500"\n- "Combo prize for 8 matches"\n- "Spent $10 won $25 -- what is my ROI?"\n- "When is the next drawing?"\n\nNote: Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Donate at jackpot.allaml.ai and help us expand!';
 }
 
 app.post('/check', (req, res) => {
@@ -700,9 +702,18 @@ app.post('/check', (req, res) => {
 const EMAIL_CFG_PATH = path.join(__dirname, 'email.config.json');
 
 function getEmailConfig() {
-  if (!fs.existsSync(EMAIL_CFG_PATH)) return null;
-  try { return JSON.parse(fs.readFileSync(EMAIL_CFG_PATH, 'utf8')); }
-  catch (e) { return null; }
+  if (fs.existsSync(EMAIL_CFG_PATH)) {
+    try { return JSON.parse(fs.readFileSync(EMAIL_CFG_PATH, 'utf8')); }
+    catch (e) {}
+  }
+  if (process.env.EMAIL_API_KEY) {
+    return {
+      provider: 'resend',
+      apiKey: process.env.EMAIL_API_KEY,
+      from: process.env.EMAIL_FROM || 'Jackpot Analyzer <noreply@allaml.ai>'
+    };
+  }
+  return null;
 }
 
 async function sendViaResend(cfg, to, subject, text, html) {
@@ -1110,7 +1121,9 @@ function chatReplyLottoX(question, context) {
   if (/jackpot.?combo|combo.?jackpot/.test(q))
     return 'Jackpot Combo ($9): a bundle of 3 Quick Pick tickets - one Florida Lotto ($2), one Powerball ($2), and one Mega Millions ($5) - all for the next available drawing. EZMatch cannot be added to Jackpot Combo tickets. Not available with Advance Play.';
 
-  return 'I can answer questions about Florida Lotto (Lotto X) payouts, odds, multipliers, EZMatch, Double Play, taxes, and draw schedule - and do the math for you.\n\nTry asking:\n- "What do I win for 5 of 6?"\n- "5 of 6 with 10x" (exact prize + take-home)\n- "Take-home on $30,000"\n- "Spent $20 won $150 -- what is my ROI?"\n- "When is the next drawing?"';
+  if (/\b(texas|california|new york|ohio|georgia|michigan|illinois|pennsylvania|new jersey|arizona|colorado|virginia|north carolina|massachusetts|washington|oregon|nevada|maryland|connecticut|minnesota|wisconsin|missouri|louisiana|kentucky|tennessee|indiana|alabama|south carolina|oklahoma|arkansas|iowa|mississippi|kansas|utah|nebraska|west virginia|idaho|hawaii|maine|new hampshire|rhode island|montana|delaware|south dakota|north dakota|alaska|vermont|wyoming|new mexico)\b/i.test(q))
+    return 'Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Every donation helps us expand to new states -- visit jackpot.allaml.ai to donate and help make it happen!';
+  return 'I can answer questions about Florida Lotto (Lotto X) payouts, odds, multipliers, EZMatch, Double Play, taxes, and draw schedule - and do the math for you.\n\nTry asking:\n- "What do I win for 5 of 6?"\n- "5 of 6 with 10x" (exact prize + take-home)\n- "Take-home on $30,000"\n- "Spent $20 won $150 -- what is my ROI?"\n- "When is the next drawing?"\n\nNote: Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Donate at jackpot.allaml.ai and help us expand!';
 }
 
 app.get('/nextdraw/lottox', (req, res) => res.json(getNextDrawLottoX()));
@@ -1198,27 +1211,29 @@ app.post('/chat/lottox', (req, res) => {
 
 
 async function start() {
-  const { used, free } = await findFreePorts();
   let port;
 
-  if (used.length > 0) {
-    // Auto-kill the first used port and reuse it — no prompt
-    port = used[0];
-    const pid = await getPidOnPort(port);
-    if (pid) {
-      console.log(`Killing existing session (PID ${pid}) on port ${port}...`);
-      await killPid(pid);
-    }
-    process.stdout.write('Waiting for port to be released...');
-    let released = false;
-    try { await waitForPortFree(port); released = true; console.log(' done.'); }
-    catch (e) {
-      console.log('\n⚠️  Still busy, using next free port.');
-      port = free[0];
-      if (!port) { console.error('No free ports available. Exiting.'); process.exit(1); }
-    }
+  if (process.env.PORT) {
+    port = parseInt(process.env.PORT);
   } else {
-    port = PORT_START;
+    const { used, free } = await findFreePorts();
+    if (used.length > 0) {
+      port = used[0];
+      const pid = await getPidOnPort(port);
+      if (pid) {
+        console.log(`Killing existing session (PID ${pid}) on port ${port}...`);
+        await killPid(pid);
+      }
+      process.stdout.write('Waiting for port to be released...');
+      try { await waitForPortFree(port); console.log(' done.'); }
+      catch (e) {
+        console.log('\n  Still busy, using next free port.');
+        port = free[0];
+        if (!port) { console.error('No free ports available. Exiting.'); process.exit(1); }
+      }
+    } else {
+      port = PORT_START;
+    }
   }
 
   const server = http.createServer(app);
@@ -1473,7 +1488,9 @@ function chatReplyCashPop(question, context) {
   if (/multiplier|multiply|5x|250x/.test(q))
     return 'The multiplier is randomly assigned by the terminal when you buy your ticket -- it prints right on it, so you know your potential prize before the draw even happens. It ranges from 5x to 250x your play amount.\n\nHigher multipliers are rarer but the Florida Lottery does not publish the exact odds for each tier. Ask me "$5 with 100x" (or any combo) and I will calculate the exact prize and take-home for you.';
 
-  return 'I can help with Cash Pop prizes, odds, draw times, taxes, and more. Try asking something like:\n\n- "How do I play?"\n- "What are my odds if I play 5 numbers?"\n- "$10 with 200x" -- I will calculate the exact prize\n- "Spent $50 won $250 -- what is my return?"\n- "When is the next draw?"';
+  if (/\b(texas|california|new york|ohio|georgia|michigan|illinois|pennsylvania|new jersey|arizona|colorado|virginia|north carolina|massachusetts|washington|oregon|nevada|maryland|connecticut|minnesota|wisconsin|missouri|louisiana|kentucky|tennessee|indiana|alabama|south carolina|oklahoma|arkansas|iowa|mississippi|kansas|utah|nebraska|west virginia|idaho|hawaii|maine|new hampshire|rhode island|montana|delaware|south dakota|north dakota|alaska|vermont|wyoming|new mexico)\b/i.test(q))
+    return 'Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Every donation helps us expand to new states -- visit jackpot.allaml.ai to donate and help make it happen!';
+  return 'I can help with Cash Pop prizes, odds, draw times, taxes, and more. Try asking something like:\n\n- "How do I play?"\n- "What are my odds if I play 5 numbers?"\n- "$10 with 200x" -- I will calculate the exact prize\n- "Spent $50 won $250 -- what is my return?"\n- "When is the next draw?"\n\nNote: Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Donate at jackpot.allaml.ai and help us expand!';
 }
 
 app.post('/chat/cashpop', (req, res) => {
@@ -1702,7 +1719,9 @@ function chatReplyFantasy5(question, context) {
   if (/tax|take.?home|after|net|withhold/.test(q))
     return 'Tax details:\n\n- Prizes over $5,000: 24% federal withholding\n- Florida: NO state income tax\n- Top federal bracket 37% - may owe more at filing\n\nEstimated take-home examples:\n- $10 prize: ~$10 (under threshold)\n- $500 prize: ~$500 (under threshold)\n- $200,000 jackpot: ~$152,000 after 24% withholding\n\nTip: ask "take-home on $[amount]" for any specific prize.';
 
-  return 'I can answer questions about Fantasy 5 payouts, odds, taxes, EZMatch, draw schedule, and more.\n\nTry asking:\n- "What do I win for 4 of 5?"\n- "Take-home on $500"\n- "Spent $30 won $10 -- what is my loss?"\n- "How does EZMatch work?"\n- "When is the next drawing?"';
+  if (/\b(texas|california|new york|ohio|georgia|michigan|illinois|pennsylvania|new jersey|arizona|colorado|virginia|north carolina|massachusetts|washington|oregon|nevada|maryland|connecticut|minnesota|wisconsin|missouri|louisiana|kentucky|tennessee|indiana|alabama|south carolina|oklahoma|arkansas|iowa|mississippi|kansas|utah|nebraska|west virginia|idaho|hawaii|maine|new hampshire|rhode island|montana|delaware|south dakota|north dakota|alaska|vermont|wyoming|new mexico)\b/i.test(q))
+    return 'Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Every donation helps us expand to new states -- visit jackpot.allaml.ai to donate and help make it happen!';
+  return 'I can answer questions about Fantasy 5 payouts, odds, taxes, EZMatch, draw schedule, and more.\n\nTry asking:\n- "What do I win for 4 of 5?"\n- "Take-home on $500"\n- "Spent $30 won $10 -- what is my loss?"\n- "How does EZMatch work?"\n- "When is the next drawing?"\n\nNote: Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Donate at jackpot.allaml.ai and help us expand!';
 }
 
 let lastAutoRefreshF5 = null;

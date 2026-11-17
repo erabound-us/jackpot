@@ -1,0 +1,17 @@
+node_modules
+logs
+backups
+vault
+*.log
+email.config.json
+start_jackpot.*
+startup_public.ps1
+tray.ps1
+deploy.ps1
+xcopy_exclude.txt
+test_out.txt
+patch_chat2.js
+jackpot-tunnel-config.yml
+%BDIR%
+.amazonq
+.git
