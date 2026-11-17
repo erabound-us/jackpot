@@ -1,0 +1,2302 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>&#127921; Florida Jackpot Analyzer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23f59e0b'/%3E%3Ccircle cx='50' cy='50' r='30' fill='white' opacity='0.9'/%3E%3Ctext x='50' y='58' font-size='28' font-weight='bold' text-anchor='middle' fill='%23f59e0b' font-family='Arial'%3EFL%3C/text%3E%3C/svg%3E">
+<meta name="description" content="Free AI-powered statistical analysis on every official Florida Lottery draw. Generate your best odds lines.">
+<meta name="theme-color" content="#0f1117">
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --border:#2a2d3a; --accent:#4f8ef7; --green:#22c55e; --yellow:#f59e0b; --red:#ef4444; --text:#e2e8f0; --muted:#64748b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; }
+  header { background:var(--card); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; flex-wrap:wrap; gap:8px; }
+  .tab-bar { background:var(--card); border-bottom:1px solid var(--border); display:flex; overflow-x:auto; scrollbar-width:none; position:sticky; top:57px; z-index:9; }
+  .tab-bar::-webkit-scrollbar { display:none; }
+  .tab { padding:10px 18px; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; white-space:nowrap; border-bottom:2px solid transparent; transition:all 0.15s; user-select:none; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .game-panel { display:none; }
+  .game-panel.active { display:block; }
+  .coming-soon { text-align:center; padding:60px 24px; }
+  .coming-soon .cs-icon { font-size:48px; margin-bottom:16px; }
+  .coming-soon h2 { font-size:20px; font-weight:700; margin-bottom:10px; }
+  .coming-soon p { font-size:14px; color:var(--muted); line-height:1.7; max-width:400px; margin:0 auto 24px; }
+  .coming-soon .donate-btn { display:inline-block; padding:12px 28px; background:linear-gradient(135deg,#635bff,#4f46e5); color:#fff; border-radius:8px; text-decoration:none; font-size:14px; font-weight:700; }
+  header h1 { font-size:18px; font-weight:700; }
+  .header-right { display:flex; align-items:center; gap:8px; }
+  .hdr-btn { background:transparent; border:1px solid var(--border); color:var(--muted); padding:4px 12px; border-radius:8px; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:5px; transition:all 0.15s; white-space:nowrap; }
+  .hdr-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .hdr-btn.danger:hover:not(:disabled) { border-color:var(--red); color:var(--red); }
+  .hdr-btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .spin { display:inline-block; }
+  .spinning { animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .port-badge { background:var(--accent); color:#fff; padding:2px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+  main { padding:16px; max-width:600px; margin:0 auto; }
+  .draw-banner { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:12px; display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:center; }
+  .draw-banner.sales-closed { border-color:rgba(34,197,94,0.4); }
+  .draw-col { display:flex; flex-direction:column; gap:3px; }
+  .draw-col.center { align-items:center; text-align:center; }
+  .draw-col.right { align-items:flex-end; text-align:right; }
+  .draw-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .draw-when { font-size:14px; font-weight:700; }
+  .draw-sub { font-size:11px; color:var(--muted); }
+  .jackpot-link { font-size:13px; font-weight:700; color:var(--yellow); text-decoration:none; }
+  .jackpot-link:hover { text-decoration:underline; }
+  .countdown { font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .sales-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; background:rgba(34,197,94,0.15); color:var(--green); }
+  .sales-badge.closed { background:rgba(239,68,68,0.15); color:var(--red); }
+  .generate-btn { width:100%; padding:18px; margin-bottom:12px; background:linear-gradient(135deg,var(--accent),#3a7bd5); color:#fff; border:none; border-radius:12px; font-size:18px; font-weight:700; cursor:pointer; box-shadow:0 4px 20px rgba(79,142,247,0.3); transition:opacity 0.15s,transform 0.1s; }
+  .generate-btn:hover:not(:disabled) { opacity:0.92; transform:translateY(-1px); }
+  .generate-btn:active:not(:disabled) { transform:translateY(0); }
+  .generate-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+  .press-hint { font-size:11px; color:var(--muted); text-align:center; margin-bottom:12px; display:none; }
+  .press-hint span { color:var(--accent); font-weight:600; }
+  .status-msg { padding:12px 14px; border-radius:10px; font-size:13px; margin-bottom:12px; display:none; }
+  .status-msg.loading { display:block; background:rgba(79,142,247,0.08); border:1px solid rgba(79,142,247,0.2); color:var(--accent); }
+  .status-msg.error { display:block; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); color:var(--red); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .card h2 { font-size:15px; font-weight:600; margin-bottom:12px; }
+  #results { display:none; }
+  #results.show { display:block; }
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .badge.blue { background:rgba(79,142,247,0.15); color:var(--accent); }
+  .updated-label { font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .line-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; transition:opacity 0.15s; }
+  .line-card.best { border-color:var(--yellow); background:rgba(245,158,11,0.05); }
+  .line-card.fading { opacity:0; }
+  .line-label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; min-width:38px; }
+  .line-card.best .line-label { color:var(--yellow); }
+  .balls { display:flex; gap:6px; flex-wrap:wrap; flex:1; }
+  .ball { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; background:rgba(79,142,247,0.15); color:var(--accent); border:1px solid rgba(79,142,247,0.3); }
+  .line-card.best .ball { background:rgba(245,158,11,0.15); color:var(--yellow); border-color:rgba(245,158,11,0.4); }
+  .score-label { font-size:11px; color:var(--muted); white-space:nowrap; }
+  .line-card.best .score-label { color:var(--yellow); }
+  .history-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+  .history-row:last-child { border-bottom:none; }
+  .history-date { font-size:11px; color:var(--muted); min-width:68px; }
+  .history-balls { display:flex; gap:5px; flex-wrap:wrap; }
+  .hball { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:rgba(100,116,139,0.15); color:var(--muted); border:1px solid var(--border); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-weight:500; padding:4px 6px; border-bottom:1px solid var(--border); }
+  td { padding:7px 6px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  .num-circle { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:50%; background:rgba(79,142,247,0.1); color:var(--accent); font-size:12px; font-weight:700; }
+  .bar-wrap { background:var(--bg); border-radius:4px; height:6px; flex:1; }
+  .bar-fill { height:6px; border-radius:4px; background:var(--accent); }
+  .num-input { width:44px; height:38px; text-align:center; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; font-size:14px; font-weight:700; }
+  .num-input:focus { outline:none; border-color:var(--accent); }
+  .num-input.matched { border-color:var(--green); background:rgba(34,197,94,0.1); color:var(--green); }
+  .line-input-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+  .line-row-label { font-size:11px; font-weight:700; color:var(--muted); min-width:38px; }
+  .check-line-result { padding:8px 10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); margin-bottom:6px; font-size:13px; }
+  .check-line-result.winner { border-color:var(--green); background:rgba(34,197,94,0.05); }
+  .check-total { padding:12px; border-radius:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); text-align:center; margin-top:8px; }
+  .check-total .amount { font-size:24px; font-weight:800; color:var(--yellow); }
+  .chat-messages { max-height:320px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+  .chat-msg { padding:10px 12px; border-radius:10px; font-size:13px; line-height:1.5; max-width:88%; white-space:pre-wrap; }
+  .chat-msg.user { background:var(--accent); color:#fff; align-self:flex-end; border-bottom-right-radius:3px; }
+  .chat-msg.bot { background:rgba(79,142,247,0.08); border:1px solid rgba(79,142,247,0.2); align-self:flex-start; border-bottom-left-radius:3px; }
+  .chat-msg.thinking { color:var(--muted); font-style:italic; font-size:12px; align-self:flex-start; }
+  .chat-input-row { display:flex; gap:8px; }
+  .chat-input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:8px; font-size:13px; }
+  .chat-input:focus { outline:none; border-color:var(--accent); }
+  .chat-send { background:var(--accent); color:#fff; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; }
+  .chat-send:disabled { opacity:0.5; cursor:not-allowed; }
+  .chat-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { background:var(--bg); border:1px solid var(--border); color:var(--muted); padding:4px 10px; border-radius:12px; font-size:11px; cursor:pointer; transition:all 0.15s; }
+  .chip:hover { border-color:var(--accent); color:var(--accent); }
+  .disclaimer { padding:10px 12px; background:rgba(245,158,11,0.05); border:1px solid rgba(245,158,11,0.15); border-radius:8px; font-size:12px; color:var(--muted); text-align:center; }
+  .action-btn { width:100%; padding:12px; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; margin-top:8px; }
+  .action-btn.primary { background:var(--green); color:#fff; }
+  .action-btn.secondary { background:transparent; color:var(--muted); border:1px solid var(--border); }
+
+  /* FAQ modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:300; align-items:center; justify-content:center; padding:16px; }
+  .modal-overlay.show { display:flex; }
+  .modal-box { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; max-width:560px; width:100%; max-height:85vh; overflow-y:auto; position:relative; }
+  .modal-box h2 { font-size:17px; font-weight:700; margin-bottom:16px; }
+  .faq-item { margin-bottom:16px; }
+  .faq-q { font-size:13px; font-weight:700; color:var(--text); margin-bottom:4px; }
+  .faq-a { font-size:13px; color:var(--muted); line-height:1.6; }
+  .faq-a strong { color:var(--text); }
+  .modal-close { position:absolute; top:14px; right:16px; background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; line-height:1; }
+  .modal-close:hover { color:var(--text); }
+
+  /* Score tooltip */
+  .score-wrap { position:relative; display:flex; align-items:center; gap:4px; }
+  .score-info { width:15px; height:15px; border-radius:50%; background:rgba(79,142,247,0.15); color:var(--accent); font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; border:1px solid rgba(79,142,247,0.3); }
+  .score-tooltip { display:none; position:absolute; right:0; bottom:calc(100% + 6px); background:#1e2130; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--muted); line-height:1.6; width:240px; z-index:50; box-shadow:0 4px 16px rgba(0,0,0,0.5); }
+  .score-tooltip strong { color:var(--text); display:block; margin-bottom:4px; }
+  .score-wrap:hover .score-tooltip, .score-wrap:focus-within .score-tooltip { display:block; }
+
+  /* Sticky disclaimer footer */
+  .disclaimer-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(15,17,23,0.95); border-top: 1px solid var(--border);
+    padding: 6px 16px; text-align: center; backdrop-filter: blur(8px);
+  }
+  .disclaimer-bar a {
+    font-size: 11px; color: var(--muted); text-decoration: none;
+    cursor: pointer; transition: color 0.15s;
+  }
+  .disclaimer-bar a:hover { color: var(--accent); }
+
+  /* Disclaimer popup */
+  .disclaimer-popup {
+    display: none; position: fixed; bottom: 36px; left: 50%;
+    transform: translateX(-50%); z-index: 200;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px;
+    max-width: 520px; width: calc(100vw - 32px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    font-size: 12px; color: var(--muted); line-height: 1.7;
+  }
+  .disclaimer-popup.show { display: block; }
+  .disclaimer-popup h3 { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+  .disclaimer-popup .close-btn {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none; color: var(--muted);
+    font-size: 18px; cursor: pointer; line-height: 1;
+  }
+  .disclaimer-popup .close-btn:hover { color: var(--text); }
+  .disclaimer-popup .helpline {
+    margin-top: 10px; padding: 8px 10px;
+    background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 6px; color: var(--red); font-size: 11px;
+  }
+  /* Push main content up so sticky bar doesn't cover it */
+  main { padding-bottom: 40px; padding-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>&#127921; Jackpot Analyzer</h1>
+  <div class="header-right">
+    <button class="hdr-btn" onclick="openFAQ()">&#10067; FAQ</button>
+    <button class="hdr-btn danger" id="resetBtn" onclick="doReset()">&#128465; Reset</button>
+    <button class="hdr-btn" id="refreshBtn" onclick="doRefresh()" style="display:none"><span class="spin" id="refreshSpin">&#8635;</span> Update Data</button>
+    <span class="port-badge" id="portBadge" style="display:none">Port &mdash;</span>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="switchTab('jtp')">🎱 Jackpot Triple Play</div>
+  <div class="tab" onclick="switchTab('powerball')">⚡ Powerball</div>
+  <div class="tab" onclick="switchTab('megamillions')">💫 Mega Millions</div>
+  <div class="tab" onclick="switchTab('lottox')">🍀 Lotto X</div>
+  <div class="tab" onclick="switchTab('cashpop')">💰 Cash POP</div>
+  <div class="tab" onclick="switchTab('fantasy5')">🌟 Fantasy 5</div>
+  <div class="tab" onclick="switchTab('pick5')">🎲 Pick 5</div>
+  <div class="tab" onclick="switchTab('pick4')">🎯 Pick 4</div>
+  <div class="tab" onclick="switchTab('pick3')">🔢 Pick 3</div>
+  <div class="tab" onclick="switchTab('pick2')">✌️ Pick 2</div>
+</div>
+
+<main>
+<div class="game-panel active" id="panel-jtp">
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;">&#127921;</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Jackpot Triple Play</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Each $1 ticket includes 1 player-selected line + 2 auto Quick Pick lines — draws every Tuesday &amp; Friday at 11:15 PM ET.</div>
+  </div>
+  <div class="draw-banner" id="drawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="drawWhen">&mdash;</div>
+      <div class="draw-sub" id="drawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Current Jackpot</div>
+      <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/jackpot-triple-play" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
+      <div class="draw-sub">Starting $250K &middot; Max $3M</div>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="countdown">&mdash;</div>
+      <div class="sales-badge" id="salesBadge">&mdash;</div>
+      <div class="draw-sub" id="closeTimeLabel">&mdash;</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
+    <label for="lineCount" style="font-size:12px;color:var(--muted);">Number of tickets:</label>
+    <input type="number" id="lineCount" value="6" min="1" max="100" oninput="jtpUpdateCost()"
+      style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;">
+    <span style="font-size:12px;color:var(--muted);">max 100</span>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="jtpComboGen" onchange="jtpUpdateCost()" style="width:14px;height:14px;"> Combo (+$1/ticket)
+    </label>
+  </div>
+  <div id="jtpCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="jtpCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="jtpCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="generateBtn" onclick="generate()">&#127921; Generate Lines</button>
+  <div class="press-hint" id="pressHint">Generation <span id="pressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div class="status-msg" id="statusMsg"></div>
+  <div id="results">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="drawsBadge"></span></div>
+      <div class="updated-label" id="updatedLabel"></div>
+      <div id="linesContainer"></div>
+    </div>
+    <div class="card"><h2>&#128197; Recent Winning Numbers</h2><div id="historyContainer"></div></div>
+    <div class="card">
+      <h2>&#128202; Number Frequency</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#128293; Most Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="topTable"></tbody></table></div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#10052; Least Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="bottomTable"></tbody></table></div>
+      </div>
+    </div>
+    <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#127922; Check My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your 3 lines &mdash; we'll look up the winning numbers automatically.</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
+      <input type="date" id="jtpDrawDate" onchange="jtpLookupDraw()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+      <div id="jtpDrawnDisplay" style="margin-top:8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Winning Numbers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="jtpDrawnBalls"></div>
+      </div>
+      <div id="jtpDrawLookupMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Your Lines</div>
+      <input type="number" id="jtpCheckLineCount" value="3" min="1" max="30" oninput="jtpRebuildCheckLines()" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:13px;font-weight:700;">
+    </div>
+    <div id="myLinesInputs"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:12px;font-size:13px;">
+      <input type="checkbox" id="comboCheck" style="width:16px;height:16px;cursor:pointer;">
+      <label for="comboCheck" style="cursor:pointer;">Include Combo (+$1)</label>
+    </div>
+    <button class="action-btn primary" onclick="checkNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="clearCheck()">&#10005; Reset</button>
+    <div id="checkResult" style="margin-top:12px;"></div>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#128172; Payout Assistant</h2>
+    <div class="chat-chips">
+      <span class="chip" onclick="quickAsk('What are the jackpot odds?')">Jackpot odds</span>
+      <span class="chip" onclick="quickAsk('How does the Combo add-on work?')">Combo</span>
+      <span class="chip" onclick="quickAsk('What is a rolldown?')">Rolldown</span>
+      <span class="chip" onclick="quickAsk('What is the lump sum after taxes?')">Taxes &amp; lump sum</span>
+      <span class="chip" onclick="quickAsk('When is the next drawing?')">Draw schedule</span>
+      <span class="chip" onclick="quickAsk('How do I claim my prize?')">Claiming prizes</span>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="chatInput" placeholder="Ask about payouts, odds, taxes, Combo...">
+      <button class="chat-send" id="chatSend" onclick="sendChat()">Send</button>
+    </div>
+  </div>
+  <div class="card" id="emailCard" style="margin-top:12px;display:none;">
+    <h2>&#128140; Email My Lines</h2>
+    <div id="emailNotConfigured" style="display:none;font-size:12px;color:var(--yellow);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+      &#9888; Email sender not configured yet. Fill in the Email Settings below.
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Send your generated lines to one or more email addresses.</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="jtpEmailIncLines" checked style="width:14px;height:14px;"> My Lines</label>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="jtpEmailIncWinning" checked style="width:14px;height:14px;"> Winning Numbers</label>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">To (comma-separated)</div>
+      <input id="emailTo" type="text" placeholder="you@example.com, friend@example.com"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;">
+    </div>
+    <button onclick="sendEmail()" id="emailSendBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Lines</button>
+    <div id="emailStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+
+  <div class="card" id="emailSettingsCard" style="margin-top:12px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleEmailSettings()">
+      <h2 style="margin:0;">&#9881; Email Settings</h2>
+      <span id="emailSettingsToggle" style="font-size:12px;color:var(--muted);">&#9660; Configure</span>
+    </div>
+    <div id="emailSettingsBody" style="display:none;margin-top:12px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Configure the Resend API key that sends emails. Set up once — users just enter their destination address above.</div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Resend API Key</div>
+        <input id="cfgApiKey" type="password" placeholder="re_xxxxxxxxxxxxxxxxxxxx" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">Get your free API key at <a href="https://resend.com/api-keys" target="_blank" style="color:var(--accent);">resend.com/api-keys</a> &mdash; free tier: 3,000 emails/month.</div>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">From Address</div>
+        <input id="cfgFrom" type="text" placeholder="Florida Jackpot Analyzer &lt;noreply@allaml.ai&gt;" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="saveEmailConfig()" style="flex:1;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Save Settings</button>
+        <button onclick="testEmailConfig()" style="flex:1;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Send Test Email</button>
+      </div>
+      <div id="cfgStatus" style="margin-top:8px;font-size:13px;"></div>
+    </div>
+  </div>
+
+  </div>
+
+
+<div class="game-panel" id="panel-lottox">
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;">🍀</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Florida Lotto (Lotto X)</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 6 numbers from 1–53 — draws every Wednesday &amp; Saturday at 11:15 PM ET. Every ticket includes a random multiplier up to 10×!</div>
+  </div>
+  <div class="draw-banner" id="lxDrawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="lxDrawWhen">&mdash;</div>
+      <div class="draw-sub" id="lxDrawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Current Jackpot</div>
+      <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/florida-lotto" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
+      <div class="draw-sub">Rolls until won &middot; Millions</div>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="lxCountdown">&mdash;</div>
+      <div class="sales-badge" id="lxSalesBadge">&mdash;</div>
+      <div class="draw-sub" id="lxCloseTimeLabel">&mdash;</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <label for="lxLineCount" style="font-size:12px;color:var(--muted);">Number of tickets:</label>
+    <input type="number" id="lxLineCount" value="6" min="1" max="100" oninput="lxUpdateCost()"
+      style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;">
+    <span style="font-size:12px;color:var(--muted);">max 100</span>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="lxEZMatchGen" onchange="lxUpdateCost()" style="width:14px;height:14px;"> EZMatch (+$1)
+    </label>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="lxDPGen" onchange="lxUpdateCost()" style="width:14px;height:14px;"> Double Play (+$1)
+    </label>
+  </div>
+  <div id="lxCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="lxCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="lxCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="lxGenerateBtn" onclick="lxGenerate()">🍀 Generate Lines</button>
+  <div class="press-hint" id="lxPressHint">Generation <span id="lxPressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div class="status-msg" id="lxStatusMsg"></div>
+  <div id="lxResults">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="lxDrawsBadge"></span></div>
+      <div class="updated-label" id="lxUpdatedLabel"></div>
+      <div id="lxLinesContainer"></div>
+    </div>
+    <div class="card"><h2>&#128197; Recent Winning Numbers</h2><div id="lxHistoryContainer"></div></div>
+    <div class="card">
+      <h2>&#128202; Number Frequency</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#128293; Most Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="lxTopTable"></tbody></table></div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#10052; Least Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="lxBottomTable"></tbody></table></div>
+      </div>
+    </div>
+    <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#127922; Check My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your line &mdash; we'll look up the winning numbers automatically.</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
+      <input type="date" id="lxDrawDate" onchange="lxLookupDraw()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+      <div id="lxDrawnDisplay" style="margin-top:8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Winning Numbers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="lxDrawnBalls"></div>
+      </div>
+      <div id="lxDrawLookupMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Your Lines</div>
+      <input type="number" id="lxCheckLineCount" value="1" min="1" max="30" oninput="lxRebuildCheckLines()" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:13px;font-weight:700;">
+    </div>
+    <div id="lxLinesInputs"></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Multiplier on ticket</div>
+        <select id="lxMultiplier" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+          <option value="1">Unknown</option>
+          <option value="2">2&times;</option>
+          <option value="3">3&times;</option>
+          <option value="4">4&times;</option>
+          <option value="5">5&times;</option>
+          <option value="10">10&times;</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">EZMatch won <span style="color:var(--accent);">($)</span></div>
+        <input type="number" id="lxEZMatch" value="0" min="0" max="500" style="width:80px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:14px;font-weight:700;">
+      </div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <input type="checkbox" id="lxDPCheck" style="width:16px;height:16px;cursor:pointer;" onchange="document.getElementById('lxDPInputs').style.display=this.checked?'block':'none'">
+        <label for="lxDPCheck" style="font-size:12px;color:var(--muted);cursor:pointer;">I have <strong style="color:var(--text);">Double Play</strong> (+$1) &mdash; enter the DP winning numbers</label>
+      </div>
+      <div id="lxDPInputs" style="display:none;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Double Play Winning Numbers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="lxDPDrawnInputs">
+          <input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2">
+        </div>
+      </div>
+    </div>
+    <button class="action-btn primary" onclick="lxCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="lxClearCheck()">&#10005; Reset</button>
+    <div id="lxCheckResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="lxEmailCard" style="margin-top:12px;display:none;">
+    <h2>&#128140; Email My Lines</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Send your generated lines to one or more email addresses.</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="lxEmailIncLines" checked style="width:14px;height:14px;"> My Lines</label>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="lxEmailIncWinning" checked style="width:14px;height:14px;"> Winning Numbers</label>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">To (comma-separated)</div>
+      <input id="lxEmailTo" type="text" placeholder="you@example.com, friend@example.com"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;">
+    </div>
+    <button onclick="lxSendEmail()" id="lxEmailSendBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Lines</button>
+    <div id="lxEmailStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#128172; Payout Assistant</h2>
+    <div class="chat-chips">
+      <span class="chip" onclick="lxQuickAsk('What are the jackpot odds?')">Jackpot odds</span>
+      <span class="chip" onclick="lxQuickAsk('How does the multiplier work?')">Multiplier</span>
+      <span class="chip" onclick="lxQuickAsk('What is EZMatch?')">EZMatch</span>
+      <span class="chip" onclick="lxQuickAsk('How does Double Play work?')">Double Play</span>
+      <span class="chip" onclick="lxQuickAsk('What is the lump sum after taxes?')">Taxes &amp; lump sum</span>
+      <span class="chip" onclick="lxQuickAsk('When is the next drawing?')">Draw schedule</span>
+    </div>
+    <div class="chat-messages" id="lxChatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="lxChatInput" placeholder="Ask about payouts, odds, multiplier, EZMatch...">
+      <button class="chat-send" id="lxChatSend" onclick="lxSendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-cashpop">
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;">&#128176;</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Cash Pop</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">Pick 1 to 15 numbers from 1&#8211;15. Your prize multiplier (5&#215;&#8211;250&#215;) prints on your ticket. Match the single winning number to win. <strong style="color:var(--text);">5 draws every day</strong> &mdash; Morning (7:29 AM), Matinee (11:29 AM), Afternoon (2:29 PM), Evening (6:29 PM) &amp; Late Night (10:29 PM) ET.</div>
+  </div>
+  <div class="draw-banner" id="cpDrawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="cpDrawWhen">&mdash;</div>
+      <div class="draw-sub" id="cpDrawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Draw Name</div>
+      <div class="draw-when" id="cpDrawName" style="font-size:16px;">&mdash;</div>
+      <div class="draw-sub">5 draws daily</div>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="cpCountdown">&mdash;</div>
+      <div class="sales-badge" id="cpSalesBadge">&mdash;</div>
+      <div class="draw-sub" id="cpCloseTimeLabel">&mdash;</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <label for="cpNumCount" style="font-size:12px;color:var(--muted);">How many numbers:</label>
+    <input type="number" id="cpNumCount" value="5" min="1" max="15" oninput="cpUpdateCost()"
+      style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;">
+    <span style="font-size:12px;color:var(--muted);">max 15</span>
+    <label style="font-size:12px;color:var(--muted);">Play amount:</label>
+    <select id="cpPlayAmtGen" onchange="cpUpdateCost()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:8px;font-size:13px;font-weight:700;">
+      <option value="1">$1</option>
+      <option value="2">$2</option>
+      <option value="5" selected>$5</option>
+      <option value="10">$10</option>
+    </select>
+  </div>
+  <div id="cpCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="cpCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="cpCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="cpGenerateBtn" onclick="cpGenerate()">&#128176; Suggest Numbers</button>
+  <div class="status-msg" id="cpStatusMsg"></div>
+  <div id="cpResults" style="display:none;">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Suggested Numbers</h2><span class="badge blue" id="cpOddsBadge"></span></div>
+      <div class="updated-label" id="cpUpdatedLabel"></div>
+      <div id="cpNumbersContainer" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0;"></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;">Scored on frequency &amp; recency across 1,700+ draw-days of official history. All 15 numbers have equal base odds (1 in 15).</div>
+    </div>
+    <div class="card"><h2>&#128197; Recent Winning Numbers</h2><div id="cpHistoryContainer"></div></div>
+    <div class="card">
+      <h2>&#128202; Number Frequency</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#128293; Most Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="cpTopTable"></tbody></table></div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#10052; Least Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="cpBottomTable"></tbody></table></div>
+      </div>
+    </div>
+    <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
+  </div>
+
+  <div class="card" id="cpEmailCard" style="margin-top:12px;display:none;">
+    <h2>&#128140; Email My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Send your suggested numbers to one or more email addresses.</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="cpEmailIncLines" checked style="width:14px;height:14px;"> My Numbers</label>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="cpEmailIncWinning" checked style="width:14px;height:14px;"> Winning Numbers</label>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">To (comma-separated)</div>
+      <input id="cpEmailTo" type="text" placeholder="you@example.com, friend@example.com"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;">
+    </div>
+    <button onclick="cpSendEmail()" id="cpEmailSendBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Numbers</button>
+    <div id="cpEmailStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#127922; Check My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter the winning number drawn and your number to calculate your prize.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Winning Number Drawn</div>
+        <input class="num-input" id="cpWinNum" placeholder="1-15" maxlength="2" style="width:64px;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Your Number</div>
+        <input class="num-input" id="cpYourNum" placeholder="1-15" maxlength="2" style="width:64px;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Play Amount</div>
+        <select id="cpPlayAmt" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+          <option value="1">$1</option>
+          <option value="2">$2</option>
+          <option value="5" selected>$5</option>
+          <option value="10">$10</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Prize Multiplier on ticket</div>
+        <input type="number" id="cpMultiplier" placeholder="5-250" min="5" max="250" style="width:80px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:14px;font-weight:700;">
+      </div>
+    </div>
+    <button class="action-btn primary" onclick="cpCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="cpClearCheck()">&#10005; Reset</button>
+    <div id="cpCheckResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#128172; Payout Assistant</h2>
+    <div class="chat-chips">
+      <span class="chip" onclick="cpQuickAsk('How do I play Cash Pop?')">How to play</span>
+      <span class="chip" onclick="cpQuickAsk('What are the odds?')">Odds</span>
+      <span class="chip" onclick="cpQuickAsk('How does the multiplier work?')">Multiplier</span>
+      <span class="chip" onclick="cpQuickAsk('$5 with 100x')">$5 x 100x prize</span>
+      <span class="chip" onclick="cpQuickAsk('When is the next drawing?')">Draw schedule</span>
+      <span class="chip" onclick="cpQuickAsk('How do taxes work?')">Taxes</span>
+    </div>
+    <div class="chat-messages" id="cpChatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="cpChatInput" placeholder="Ask about prizes, odds, multiplier, draws...">
+      <button class="chat-send" id="cpChatSend" onclick="cpSendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-powerball">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">⚡ Powerball Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Powerball. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-megamillions">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">💫 Mega Millions Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Mega Millions analysis is on the roadmap. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-fantasy5">
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;">&#127775;</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Fantasy 5</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 5 numbers from 1&#8211;36 for $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET.</div>
+  </div>
+  <div class="draw-banner" id="f5DrawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="f5DrawWhen">&mdash;</div>
+      <div class="draw-sub" id="f5DrawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Draw</div>
+      <div class="draw-when" id="f5DrawName" style="font-size:16px;">&mdash;</div>
+      <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/fantasy-5" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="f5Countdown">&mdash;</div>
+      <div class="sales-badge" id="f5SalesBadge">&mdash;</div>
+      <div class="draw-sub" id="f5CloseTimeLabel">&mdash;</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <label for="f5LineCount" style="font-size:12px;color:var(--muted);">Number of tickets:</label>
+    <input type="number" id="f5LineCount" value="6" min="1" max="100" oninput="f5UpdateCost()"
+      style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;">
+    <span style="font-size:12px;color:var(--muted);">max 100</span>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="f5EZMatchGen" onchange="f5UpdateCost()" style="width:14px;height:14px;"> EZMatch (+$1)
+    </label>
+  </div>
+  <div id="f5CostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="f5CostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="f5CostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="f5GenerateBtn" onclick="f5Generate()">&#127775; Generate Lines</button>
+  <div class="press-hint" id="f5PressHint">Generation <span id="f5PressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div class="status-msg" id="f5StatusMsg"></div>
+  <div id="f5Results" style="display:none;">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="f5DrawsBadge"></span></div>
+      <div class="updated-label" id="f5UpdatedLabel"></div>
+      <div id="f5LinesContainer"></div>
+    </div>
+    <div class="card"><h2>&#128197; Recent Winning Numbers</h2><div id="f5HistoryContainer"></div></div>
+    <div class="card">
+      <h2>&#128202; Number Frequency</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#128293; Most Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="f5TopTable"></tbody></table></div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#10052; Least Drawn</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="f5BottomTable"></tbody></table></div>
+      </div>
+    </div>
+    <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#127922; Check My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your line &mdash; we'll look up the winning numbers automatically.</div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
+          <input type="date" id="f5DrawDate" onchange="f5LookupDraw()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw</div>
+          <select id="f5DrawType" onchange="f5LookupDraw()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+            <option value="MIDDAY">Midday</option>
+            <option value="EVENING">Evening</option>
+          </select>
+        </div>
+      </div>
+      <div id="f5DrawnDisplay" style="margin-top:8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Winning Numbers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="f5DrawnBalls"></div>
+      </div>
+      <div id="f5DrawLookupMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Your Lines</div>
+      <input type="number" id="f5CheckLineCount" value="1" min="1" max="30" oninput="f5RebuildCheckLines()" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:13px;font-weight:700;">
+    </div>
+    <div id="f5LinesInputs"></div>
+    <button class="action-btn primary" onclick="f5CheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="f5ClearCheck()">&#10005; Reset</button>
+    <div id="f5CheckResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="f5EmailCard" style="margin-top:12px;display:none;">
+    <h2>&#128140; Email My Lines</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Send your generated lines to one or more email addresses.</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="f5EmailIncLines" checked style="width:14px;height:14px;"> My Lines</label>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="f5EmailIncWinning" checked style="width:14px;height:14px;"> Winning Numbers</label>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">To (comma-separated)</div>
+      <input id="f5EmailTo" type="text" placeholder="you@example.com, friend@example.com"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;">
+    </div>
+    <button onclick="f5SendEmail()" id="f5EmailSendBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Lines</button>
+    <div id="f5EmailStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#128172; Payout Assistant</h2>
+    <div class="chat-chips">
+      <span class="chip" onclick="f5QuickAsk('What are the odds?')">Odds</span>
+      <span class="chip" onclick="f5QuickAsk('What do I win for 4 of 5?')">4 of 5 prize</span>
+      <span class="chip" onclick="f5QuickAsk('How does EZMatch work?')">EZMatch</span>
+      <span class="chip" onclick="f5QuickAsk('Take-home on $500')">Taxes</span>
+      <span class="chip" onclick="f5QuickAsk('When is the next drawing?')">Draw schedule</span>
+      <span class="chip" onclick="f5QuickAsk('How do I claim my prize?')">Claiming prizes</span>
+    </div>
+    <div class="chat-messages" id="f5ChatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="f5ChatInput" placeholder="Ask about payouts, odds, EZMatch, draws...">
+      <button class="chat-send" id="f5ChatSend" onclick="f5SendChat()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-pick5">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🎲 Pick 5 Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 5. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-pick4">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🎯 Pick 4 Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Pick 4 runs twice daily — high frequency means more data to analyze. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-pick3">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🔢 Pick 3 Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 3. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+<div class="game-panel" id="panel-pick2">
+  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
+    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">✌️ Pick 2 Analysis — Coming Soon</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 2. Please consider donating to help us build this game in the near future!</div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  </div>
+</div>
+
+</main>
+<script>
+fetch('/mode').then(function(r){return r.json();}).then(function(m){
+  if(m.local){
+    document.getElementById('refreshBtn').style.display='';
+    var pb=document.getElementById('portBadge');
+    pb.style.display='';
+    pb.textContent='Port '+location.port;
+  } else {
+    document.getElementById('emailSettingsCard').style.display='none';
+  }
+}).catch(function(){});
+var SID = sessionStorage.getItem('jackpot_sid');
+if (!SID) { SID = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); sessionStorage.setItem('jackpot_sid', SID); }
+loadEmailConfig();
+document.getElementById('chatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') sendChat(); });
+
+var statusMsg = document.getElementById('statusMsg');
+var results = document.getElementById('results');
+var generateBtn = document.getElementById('generateBtn');
+var refreshBtn = document.getElementById('refreshBtn');
+var resetBtn = document.getElementById('resetBtn');
+var pressHint = document.getElementById('pressHint');
+var pressCount = 0;
+var countdownInterval = null;
+
+function setStatus(type, text) { statusMsg.className = 'status-msg ' + type; statusMsg.textContent = text; }
+function clearStatus() { statusMsg.style.display = 'none'; }
+function setAllBtns(disabled) { generateBtn.disabled = refreshBtn.disabled = resetBtn.disabled = disabled; }
+
+function startCountdown(data) {
+  var nd = data.nextDraw;
+  document.getElementById('drawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('drawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('closeTimeLabel').textContent = 'Sales close ' + nd.closeTime;
+  var salesBadge = document.getElementById('salesBadge');
+  var banner = document.getElementById('drawBanner');
+  salesBadge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+  salesBadge.className = 'sales-badge' + (nd.salesOpen ? '' : ' closed');
+  banner.className = 'draw-banner' + (nd.salesOpen ? '' : ' sales-closed');
+  if (countdownInterval) clearInterval(countdownInterval);
+  var remaining = nd.msUntilDraw;
+  function tick() {
+    if (remaining <= 0) { document.getElementById('countdown').textContent = 'Drawing now!'; return; }
+    var h = Math.floor(remaining / 3600000);
+    var m = Math.floor((remaining % 3600000) / 60000);
+    var s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('countdown').textContent = h > 0 ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm ' + String(s).padStart(2,'0') + 's');
+    remaining -= 1000;
+  }
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
+function renderLines(lines) {
+  var container = document.getElementById('linesContainer');
+  var existing = container.querySelectorAll('.line-card');
+  for (var i = 0; i < existing.length; i++) existing[i].classList.add('fading');
+  lastLines = lines;
+  document.getElementById('emailCard').style.display = 'block';
+  setTimeout(function() {
+    var html = '';
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      var balls = '';
+      for (var j = 0; j < l.numbers.length; j++) balls += '<div class="ball">' + l.numbers[j] + '</div>';
+      html += '<div class="line-card' + (i === 0 ? ' best' : '') + '"><div class="line-label">' + (i === 0 ? 'Best' : 'Line ' + l.line) + '</div><div class="balls">' + balls + '</div><div class="score-wrap"><div class="score-label">' + l.score + '</div><div class="score-info" title="What is this score?">?<div class="score-tooltip"><strong>What is this score?</strong>Higher = statistically stronger line. Scored on: frequency of each number in all past draws (40 pts), how recently each number appeared (20 pts), how often pairs of numbers appeared together (15 pts), low/high balance (5 pts), and spread across the 1–46 range (10 pts). Higher-scored lines are ranked first. It does NOT predict winners — lottery draws are random.</div></div></div></div>';
+    }
+    container.innerHTML = html;
+  }, 150);
+}
+
+function renderHistory(history) {
+  var html = '';
+  for (var i = 0; i < history.length; i++) {
+    var d = history[i];
+    var balls = '';
+    for (var j = 0; j < d.numbers.length; j++) balls += '<div class="hball">' + d.numbers[j] + '</div>';
+    html += '<div class="history-row"><div class="history-date">' + d.date + '</div><div class="history-balls">' + balls + '</div></div>';
+  }
+  document.getElementById('historyContainer').innerHTML = html;
+}
+
+function renderFreq(top, bottom) {
+  var maxCount = top.length > 0 ? top[0].count : 1;
+  function rows(nums) {
+    var html = '';
+    for (var i = 0; i < nums.length; i++) {
+      var n = nums[i];
+      var pct = Math.round(n.count / maxCount * 100);
+      html += '<tr><td style="color:var(--muted);font-size:11px;">' + (i+1) + '</td><td><span class="num-circle">' + n.number + '</span></td><td><div style="display:flex;align-items:center;gap:6px;"><div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%"></div></div><span style="color:var(--muted);font-size:11px;min-width:24px;text-align:right;">' + n.count + '</span></div></td></tr>';
+    }
+    return html;
+  }
+  document.getElementById('topTable').innerHTML = rows(top);
+  document.getElementById('bottomTable').innerHTML = rows(bottom);
+}
+
+var lastLines = null;
+var lastNextDraw = null;
+var jtpLastWin = null;
+
+// Populate draw banner on page load without requiring Generate
+fetch('/nextdraw')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { startCountdown({ nextDraw: d }); })
+  .catch(function() {});
+
+function renderAll(data) {
+  startCountdown(data);
+  lastNextDraw = data.nextDraw;
+  document.getElementById('drawsBadge').textContent = data.totalDraws + ' draws analyzed';
+  document.getElementById('updatedLabel').textContent = 'Data as of: ' + data.lastUpdated;
+  renderHistory(data.recentHistory);
+  renderFreq(data.topNumbers, data.bottomNumbers);
+  results.classList.add('show');
+}
+
+function generate() {
+  setAllBtns(true);
+  generateBtn.textContent = 'Generating...';
+  clearStatus();
+  var count = Math.min(Math.max(parseInt(document.getElementById('lineCount').value) || 6, 1), 100);
+  fetch('/analyze?count=' + count + '&sid=' + SID)
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      pressCount++;
+      document.getElementById('pressNum').textContent = pressCount;
+      pressHint.style.display = 'block';
+      if (pressCount === 1) renderAll(r.data);
+      else startCountdown(r.data);
+      renderLines(r.data.lines);
+      clearStatus();
+    })
+    .catch(function(err) { setStatus('error', 'Error: ' + err.message); })
+    .finally(function() { setAllBtns(false); generateBtn.textContent = '\u{1F3B1} Generate Lines'; });
+}
+
+function doReset() {
+  setAllBtns(true);
+  fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }) }).catch(function() {}).finally(function() {
+    pressCount = 0;
+    pressHint.style.display = 'none';
+    results.classList.remove('show');
+    document.getElementById('emailCard').style.display = 'none';
+    document.getElementById('emailStatus').textContent = '';
+    lastLines = null;
+    jtpLastWin = null;
+    document.getElementById('linesContainer').innerHTML = '';
+    document.getElementById('historyContainer').innerHTML = '';
+    document.getElementById('topTable').innerHTML = '';
+    document.getElementById('bottomTable').innerHTML = '';
+    document.getElementById('drawsBadge').textContent = '';
+    document.getElementById('updatedLabel').textContent = '';
+    clearStatus();
+    setAllBtns(false);
+  });
+}
+
+function doRefresh() {
+  setAllBtns(true);
+  document.getElementById('refreshSpin').classList.add('spinning');
+  setStatus('loading', 'Downloading latest PDFs from Florida Lottery...');
+  results.classList.remove('show');
+  pressCount = 0;
+  pressHint.style.display = 'none';
+  fetch('/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }) })
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Download failed');
+      pressCount = 1;
+      document.getElementById('pressNum').textContent = pressCount;
+      pressHint.style.display = 'block';
+      renderAll(r.data);
+      renderLines(r.data.lines);
+      clearStatus();
+    })
+    .catch(function(err) { setStatus('error', 'Error: ' + err.message); })
+    .finally(function() { setAllBtns(false); document.getElementById('refreshSpin').classList.remove('spinning'); });
+}
+
+function jtpRebuildCheckLines() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('jtpCheckLineCount').value) || 3, 1), 30);
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="line-input-row" id="lineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+  }
+  document.getElementById('myLinesInputs').innerHTML = html;
+}
+jtpRebuildCheckLines();
+
+function jtpLookupDraw() {
+  var dateVal = document.getElementById('jtpDrawDate').value;
+  var msg = document.getElementById('jtpDrawLookupMsg');
+  var display = document.getElementById('jtpDrawnDisplay');
+  jtpDrawn = [];
+  display.style.display = 'none';
+  document.getElementById('jtpDrawnBalls').innerHTML = '';
+  if (!dateVal) { msg.textContent = ''; return; }
+  var parts = dateVal.split('-');
+  var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0].slice(2);
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Looking up...';
+  fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      jtpDrawn = data.numbers;
+      msg.textContent = '';
+      display.style.display = 'block';
+      document.getElementById('jtpDrawnBalls').innerHTML = data.numbers.map(function(n) {
+        return '<div class="hball" style="background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+      }).join('');
+    })
+    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+}
+
+function checkNumbers() {
+  if (!jtpDrawn.length) {
+    document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Select a draw date first.</div>';
+    return;
+  }
+  var drawn = jtpDrawn;
+  var lines = [];
+  var lineCount = document.querySelectorAll('#myLinesInputs .line-input-row').length;
+  for (var r = 0; r < lineCount; r++) {
+    var row = document.querySelectorAll('#lineRow' + r + ' .num-input');
+    var line = [];
+    for (var j = 0; j < row.length; j++) {
+      var lv = parseInt(row[j].value.trim());
+      if (isNaN(lv) || lv < 1 || lv > 46) {
+        document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Please enter all 6 numbers for Line ' + (r+1) + ' (1-46).</div>';
+        return;
+      }
+      line.push(lv);
+    }
+    lines.push(line);
+  }
+  var hasCombo = document.getElementById('comboCheck').checked;
+  var drawnSet = {};
+  drawn.forEach(function(n) { drawnSet[n] = true; });
+  for (var r = 0; r < lineCount; r++) {
+    var row = document.querySelectorAll('#lineRow' + r + ' .num-input');
+    for (var j = 0; j < row.length; j++) {
+      var hv = parseInt(row[j].value);
+      row[j].className = 'num-input' + (drawnSet[hv] ? ' matched' : '');
+    }
+  }
+  fetch('/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, lines: lines }) })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) { document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
+      var html = '';
+      if (data.jackpotLines > 0) {
+        var lineWord = data.jackpotLines > 1 ? 'lines' : 'line';
+        var note = 'You own all ' + data.jackpotLines + ' winning ' + lineWord + ' on this ticket, so you collect 100% of the jackpot pool. Your payout is only reduced if another player also matched 6 of 6.';
+        html += '<div style="font-size:12px;color:var(--yellow);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:8px 10px;margin-bottom:8px;">' + note + '</div>';
+      }
+      for (var i = 0; i < data.lineResults.length; i++) {
+        var l = data.lineResults[i];
+        var isWinner = typeof l.prize === 'number' && l.prize > 0;
+        var matchedNums = l.matched.join(', ') || 'none';
+        var prizeLabel;
+        if (l.isJackpot) {
+          prizeLabel = 'approx $' + l.prize.toLocaleString() + ' (jackpot pool)';
+        } else if (l.prize > 0) {
+          prizeLabel = 'approx $' + l.prize.toLocaleString();
+        } else {
+          prizeLabel = 'No prize';
+        }
+        html += '<div class="check-line-result' + (isWinner ? ' winner' : '') + '"><span style="font-weight:700;">Line ' + l.line + '</span> &mdash; ' + l.count + ' match' + (l.count !== 1 ? 'es' : '') + ' (' + matchedNums + ') &mdash; <span style="color:' + (isWinner ? 'var(--green)' : 'var(--muted)') + ';font-weight:700;">' + prizeLabel + '</span></div>';
+      }
+      if (hasCombo) {
+        var comboLabel = data.comboPrize === 'FREE' ? 'Free $2 Combo Quick Pick' : (data.comboPrize > 0 ? '$' + data.comboPrize.toLocaleString() : 'No prize');
+        var comboWinner = data.comboPrize > 0 || data.comboPrize === 'FREE';
+        html += '<div class="check-line-result' + (comboWinner ? ' winner' : '') + '" style="margin-top:8px;border-color:var(--accent);"><span style="font-weight:700;">Combo</span> &mdash; ' + data.comboTotal + ' total matches across all 3 lines &mdash; <span style="color:' + (comboWinner ? 'var(--accent)' : 'var(--muted)') + ';font-weight:700;">' + comboLabel + '</span></div>';
+      }
+      var totalWin = data.basePrizeTotal + (hasCombo && typeof data.comboPrize === 'number' ? data.comboPrize : 0);
+      jtpLastWin = totalWin;
+      var totalLabel = totalWin > 0 ? 'Estimated Winnings' : 'No Prize This Draw';
+      var totalDisplay = totalWin > 0 ? 'approx $' + totalWin.toLocaleString() : '$0';
+      html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount">' + totalDisplay + '</div>' + (hasCombo ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Base game + Combo combined</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Jackpot assumes no other winners. Base prizes are pari-mutuel estimates.</div></div>';
+      document.getElementById('checkResult').innerHTML = html;
+    })
+    .catch(function(err) { document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+}
+
+function clearCheck() {
+  document.querySelectorAll('#myLinesInputs .num-input').forEach(function(inp) { inp.value = ''; inp.className = 'num-input'; });
+  document.getElementById('jtpCheckLineCount').value = '3';
+  jtpRebuildCheckLines();
+  document.getElementById('comboCheck').checked = false;
+  document.getElementById('checkResult').innerHTML = '';
+  document.getElementById('jtpDrawDate').value = '';
+  document.getElementById('jtpDrawnDisplay').style.display = 'none';
+  document.getElementById('jtpDrawnBalls').innerHTML = '';
+  document.getElementById('jtpDrawLookupMsg').textContent = '';
+  jtpDrawn = [];
+  jtpLastWin = null;
+  fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }) }).catch(function() {});
+}
+
+var chatMessages = document.getElementById('chatMessages');
+var chatInput = document.getElementById('chatInput');
+var chatSend = document.getElementById('chatSend');
+
+function appendMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return div;
+}
+
+function sendChat() {
+  var msg = chatInput.value.trim();
+  if (!msg) return;
+  chatInput.value = '';
+  chatSend.disabled = true;
+  appendMsg('user', msg);
+  var thinking = appendMsg('thinking', 'Thinking...');
+  var jtpTickets = lastLines ? lastLines.length : 0;
+  var jtpCombo = document.getElementById('jtpComboGen').checked;
+  var jtpSpend = jtpTickets * (jtpCombo ? 2 : 1);
+  var ctx = jtpTickets > 0 ? { spend: jtpSpend, lines: jtpTickets, game: 'jtp', won: jtpLastWin } : null;
+  fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: ctx }) })
+    .then(function(res) { return res.json(); })
+    .then(function(data) { thinking.remove(); appendMsg('bot', data.reply || data.error || 'No response.'); })
+    .catch(function() { thinking.remove(); appendMsg('bot', 'Error reaching server.'); })
+    .finally(function() { chatSend.disabled = false; chatInput.focus(); });
+}
+
+// Load email config on page start and check if configured
+function loadEmailConfig() {
+  fetch('/email/config')
+    .then(function(res) { return res.json(); })
+    .then(function(cfg) {
+      var notConfigured = document.getElementById('emailNotConfigured');
+      if (notConfigured) notConfigured.style.display = cfg.configured ? 'none' : 'block';
+      if (cfg.configured) {
+        document.getElementById('cfgApiKey').placeholder = cfg.keyMasked ? 'Saved (' + cfg.keyMasked + '...)' : 're_xxxxxxxxxxxxxxxxxxxx';
+        if (cfg.from) document.getElementById('cfgFrom').value = cfg.from;
+      }
+    })
+    .catch(function() {});
+}
+
+function toggleEmailSettings() {
+  var body = document.getElementById('emailSettingsBody');
+  var toggle = document.getElementById('emailSettingsToggle');
+  var open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  toggle.textContent = open ? '▲ Hide' : '▼ Configure';
+}
+
+function saveEmailConfig() {
+  var apiKey = document.getElementById('cfgApiKey').value.trim();
+  var from   = document.getElementById('cfgFrom').value.trim();
+  var status = document.getElementById('cfgStatus');
+  if (!apiKey) { status.style.color = 'var(--red)'; status.textContent = 'Resend API key is required.'; return; }
+  var body = { apiKey: apiKey };
+  if (from) body.from = from;
+  fetch('/email/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) { status.style.color = 'var(--red)'; status.textContent = data.error; }
+      else { status.style.color = 'var(--green)'; status.textContent = 'Settings saved.'; loadEmailConfig(); }
+    })
+    .catch(function(err) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + err.message; });
+}
+
+function testEmailConfig() {
+  var status = document.getElementById('cfgStatus');
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Sending test email...';
+  fetch('/email/test', { method: 'POST' })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) { status.style.color = 'var(--red)'; status.textContent = 'Failed: ' + data.error; }
+      else { status.style.color = 'var(--green)'; status.textContent = 'Test email sent to your configured address.'; }
+    })
+    .catch(function(err) { status.style.color = 'var(--red)'; status.textContent = 'Error: ' + err.message; });
+}
+
+function sendEmail() {
+  var to = document.getElementById('emailTo').value.trim();
+  if (!to) {
+    document.getElementById('emailStatus').style.color = 'var(--red)';
+    document.getElementById('emailStatus').textContent = 'Please enter at least one email address.';
+    return;
+  }
+  var incLines = document.getElementById('jtpEmailIncLines').checked && lastLines && lastLines.length > 0;
+  var incWinning = document.getElementById('jtpEmailIncWinning').checked && jtpDrawn.length > 0;
+  if (!incLines && !incWinning) {
+    document.getElementById('emailStatus').style.color = 'var(--red)';
+    document.getElementById('emailStatus').textContent = 'Select at least one option to include.';
+    return;
+  }
+  var btn = document.getElementById('emailSendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  document.getElementById('emailStatus').textContent = '';
+  fetch('/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: to, lines: incLines ? lastLines : [], nextDraw: lastNextDraw, winningNumbers: incWinning ? jtpDrawn : null, winDrawDate: incWinning ? document.getElementById('jtpDrawDate').value : null, winPrize: (incWinning && jtpLastWin != null) ? jtpLastWin : null })
+  })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) {
+        document.getElementById('emailStatus').style.color = 'var(--red)';
+        document.getElementById('emailStatus').textContent = data.error;
+      } else {
+        document.getElementById('emailStatus').style.color = 'var(--green)';
+        document.getElementById('emailStatus').textContent = 'Sent to ' + data.sent + ' recipient' + (data.sent > 1 ? 's' : '') + '.';
+      }
+    })
+    .catch(function(err) {
+      document.getElementById('emailStatus').style.color = 'var(--red)';
+      document.getElementById('emailStatus').textContent = 'Error: ' + err.message;
+    })
+    .finally(function() { btn.disabled = false; btn.textContent = '&#128140; Send Lines'; });
+}
+
+function quickAsk(q) { chatInput.value = q; sendChat(); }
+
+function openFAQ() { document.getElementById('faqModal').classList.add('show'); }
+function closeFAQ() { document.getElementById('faqModal').classList.remove('show'); }
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.game-panel').forEach(function(p) { p.classList.remove('active'); });
+  event.currentTarget.classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+}
+
+// ── Lotto X ───────────────────────────────────────────────────────────────────
+var lxPressCount = 0;
+var lxCountdownInterval = null;
+var lxLastNextDraw = null;
+
+fetch('/nextdraw/lottox')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { lxStartCountdown({ nextDraw: d }); })
+  .catch(function() {});
+
+function lxStartCountdown(data) {
+  var nd = data.nextDraw;
+  document.getElementById('lxDrawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('lxDrawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('lxCloseTimeLabel').textContent = 'Sales close ' + nd.closeTime;
+  var badge = document.getElementById('lxSalesBadge');
+  var banner = document.getElementById('lxDrawBanner');
+  badge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+  badge.className = 'sales-badge' + (nd.salesOpen ? '' : ' closed');
+  banner.className = 'draw-banner' + (nd.salesOpen ? '' : ' sales-closed');
+  if (lxCountdownInterval) clearInterval(lxCountdownInterval);
+  var remaining = nd.msUntilDraw;
+  function tick() {
+    if (remaining <= 0) { document.getElementById('lxCountdown').textContent = 'Drawing now!'; return; }
+    var h = Math.floor(remaining / 3600000);
+    var m = Math.floor((remaining % 3600000) / 60000);
+    var s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('lxCountdown').textContent = h > 0 ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm ' + String(s).padStart(2,'0') + 's');
+    remaining -= 1000;
+  }
+  tick();
+  lxCountdownInterval = setInterval(tick, 1000);
+}
+
+var lxLastLines = null;
+var lxLastWin = null;
+
+function lxRenderLines(lines) {
+  var container = document.getElementById('lxLinesContainer');
+  var existing = container.querySelectorAll('.line-card');
+  for (var i = 0; i < existing.length; i++) existing[i].classList.add('fading');
+  lxLastLines = lines;
+  document.getElementById('lxEmailCard').style.display = 'block';
+  setTimeout(function() {
+    var html = '';
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      var balls = '';
+      for (var j = 0; j < l.numbers.length; j++) balls += '<div class="ball">' + l.numbers[j] + '</div>';
+      html += '<div class="line-card' + (i === 0 ? ' best' : '') + '"><div class="line-label">' + (i === 0 ? 'Best' : 'Line ' + l.line) + '</div><div class="balls">' + balls + '</div><div class="score-wrap"><div class="score-label">' + l.score + '</div><div class="score-info" title="What is this score?">?<div class="score-tooltip"><strong>What is this score?</strong>Higher = statistically stronger line. Scored on: frequency (40 pts), recency in last 50 draws (20 pts), pair co-occurrence (15 pts), low/high balance (5 pts), spread across 1–53 (10 pts). Does NOT predict winners.</div></div></div></div>';
+    }
+    container.innerHTML = html;
+  }, 150);
+}
+
+function lxRenderHistory(history) {
+  var html = '';
+  for (var i = 0; i < history.length; i++) {
+    var d = history[i];
+    var balls = '';
+    for (var j = 0; j < d.numbers.length; j++) balls += '<div class="hball">' + d.numbers[j] + '</div>';
+    html += '<div class="history-row"><div class="history-date">' + d.date + '</div><div class="history-balls">' + balls + '</div></div>';
+  }
+  document.getElementById('lxHistoryContainer').innerHTML = html;
+}
+
+function lxRenderFreq(top, bottom) {
+  var maxCount = top.length > 0 ? top[0].count : 1;
+  function rows(nums) {
+    var html = '';
+    for (var i = 0; i < nums.length; i++) {
+      var n = nums[i];
+      var pct = Math.round(n.count / maxCount * 100);
+      html += '<tr><td style="color:var(--muted);font-size:11px;">' + (i+1) + '</td><td><span class="num-circle">' + n.number + '</span></td><td><div style="display:flex;align-items:center;gap:6px;"><div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%"></div></div><span style="color:var(--muted);font-size:11px;min-width:24px;text-align:right;">' + n.count + '</span></div></td></tr>';
+    }
+    return html;
+  }
+  document.getElementById('lxTopTable').innerHTML = rows(top);
+  document.getElementById('lxBottomTable').innerHTML = rows(bottom);
+}
+
+function lxRenderAll(data) {
+  lxStartCountdown(data);
+  lxLastNextDraw = data.nextDraw;
+  document.getElementById('lxDrawsBadge').textContent = data.totalDraws + ' draws analyzed';
+  document.getElementById('lxUpdatedLabel').textContent = 'Data as of: ' + data.lastUpdated;
+  lxRenderHistory(data.recentHistory);
+  lxRenderFreq(data.topNumbers, data.bottomNumbers);
+  document.getElementById('lxResults').style.display = 'block';
+}
+
+function lxSetStatus(type, text) {
+  var el = document.getElementById('lxStatusMsg');
+  el.className = 'status-msg ' + type;
+  el.textContent = text;
+}
+function lxClearStatus() { document.getElementById('lxStatusMsg').style.display = 'none'; }
+
+function lxGenerate() {
+  var btn = document.getElementById('lxGenerateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  lxClearStatus();
+  var count = Math.min(Math.max(parseInt(document.getElementById('lxLineCount').value) || 6, 1), 100);
+  fetch('/analyze/lottox?count=' + count + '&sid=' + SID)
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      lxPressCount++;
+      document.getElementById('lxPressNum').textContent = lxPressCount;
+      document.getElementById('lxPressHint').style.display = 'block';
+      if (lxPressCount === 1) lxRenderAll(r.data);
+      else lxStartCountdown(r.data);
+      lxRenderLines(r.data.lines);
+      lxClearStatus();
+    })
+    .catch(function(err) { lxSetStatus('error', 'Error: ' + err.message); })
+    .finally(function() { btn.disabled = false; btn.textContent = '🍀 Generate Lines'; });
+}
+
+var lxDrawn = [];
+
+function lxRebuildCheckLines() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('lxCheckLineCount').value) || 1, 1), 30);
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+  }
+  document.getElementById('lxLinesInputs').innerHTML = html;
+}
+lxRebuildCheckLines();
+
+function lxRebuildCheckLines() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('lxCheckLineCount').value) || 1, 1), 30);
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+  }
+  document.getElementById('lxLinesInputs').innerHTML = html;
+}
+lxRebuildCheckLines();
+
+function lxLookupDraw() {
+  var dateVal = document.getElementById('lxDrawDate').value;
+  var msg = document.getElementById('lxDrawLookupMsg');
+  var display = document.getElementById('lxDrawnDisplay');
+  lxDrawn = [];
+  display.style.display = 'none';
+  document.getElementById('lxDrawnBalls').innerHTML = '';
+  if (!dateVal) { msg.textContent = ''; return; }
+  var parts = dateVal.split('-');
+  var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0].slice(2);
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Looking up...';
+  fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      lxDrawn = data.numbers;
+      msg.textContent = '';
+      display.style.display = 'block';
+      document.getElementById('lxDrawnBalls').innerHTML = data.numbers.map(function(n) {
+        return '<div class="hball" style="background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+      }).join('');
+    })
+    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+}
+
+function lxCheckNumbers() {
+  if (!lxDrawn.length) {
+    document.getElementById('lxCheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Select a draw date first.</div>';
+    return;
+  }
+  var drawn = lxDrawn;
+  var lineRows = document.querySelectorAll('#lxLinesInputs .line-input-row');
+  var allLines = [];
+  for (var r = 0; r < lineRows.length; r++) {
+    var rowInputs = lineRows[r].querySelectorAll('.num-input');
+    var line = [];
+    for (var j = 0; j < rowInputs.length; j++) {
+      var lv = parseInt(rowInputs[j].value.trim());
+      if (isNaN(lv) || lv < 1 || lv > 53) {
+        document.getElementById('lxCheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Please enter all 6 numbers for Line ' + (r+1) + ' (1-53).</div>';
+        return;
+      }
+      line.push(lv);
+    }
+    allLines.push(line);
+  }
+  var line = allLines[0];
+  var mult = parseInt(document.getElementById('lxMultiplier').value) || 1;
+  var ezMatch = parseInt(document.getElementById('lxEZMatch').value) || 0;
+  var dpDrawn = null;
+  if (document.getElementById('lxDPCheck').checked) {
+    var dpInputs = document.querySelectorAll('#lxDPDrawnInputs .num-input');
+    dpDrawn = [];
+    for (var k = 0; k < dpInputs.length; k++) {
+      var dpv = parseInt(dpInputs[k].value.trim());
+      if (isNaN(dpv) || dpv < 1 || dpv > 53) {
+        document.getElementById('lxCheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Please enter all 6 Double Play winning numbers (1–53).</div>';
+        return;
+      }
+      dpDrawn.push(dpv);
+    }
+  }
+  var drawnSet = {};
+  drawn.forEach(function(n) { drawnSet[n] = true; });
+  document.querySelectorAll('#lxLinesInputs .num-input').forEach(function(inp) {
+    var v = parseInt(inp.value);
+    inp.className = 'num-input' + (drawnSet[v] ? ' matched' : '');
+  });
+  var lxResultEl = document.getElementById('lxCheckResult');
+  lxResultEl.innerHTML = '';
+  var lxAllResults = [];
+  var lxTotalWinAcc = 0;
+  var lxPending = allLines.length;
+  allLines.forEach(function(lineNums, lineIdx) {
+    fetch('/check/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, multiplier: mult, doublePlayDrawn: lineIdx === 0 ? dpDrawn : null, ezMatch: lineIdx === 0 ? ezMatch : 0 }) })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.error) { lxResultEl.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
+        lxAllResults[lineIdx] = data;
+        lxTotalWinAcc += data.totalWin || 0;
+        lxPending--;
+        if (lxPending > 0) return;
+        var html = '';
+        lxAllResults.forEach(function(d, idx) {
+          var matchedNums = d.matched.join(', ') || 'none';
+          var isWinner = d.isJackpot || d.isFree || d.prize > 0;
+          var prizeColor = d.isJackpot ? 'var(--yellow)' : (isWinner ? 'var(--green)' : 'var(--muted)');
+          var label = lxAllResults.length > 1 ? 'Line ' + (idx+1) : 'Base Game';
+          html += '<div class="check-line-result' + (isWinner ? ' winner' : '') + '">';
+          html += '<span style="font-weight:700;">' + label + '</span> &mdash; ' + d.count + ' match' + (d.count !== 1 ? 'es' : '') + ' (' + matchedNums + ')';
+          if (d.multiplied) html += ' &mdash; <span style="color:var(--accent);font-size:11px;">' + d.multiplier + 'x applied</span>';
+          html += ' &mdash; <span style="color:' + prizeColor + ';font-weight:700;">' + d.prizeDisplay + '</span></div>';
+          if (idx === 0 && d.ezMatch > 0) html += '<div class="check-line-result winner" style="border-color:var(--green);"><span style="font-weight:700;">EZMatch</span> &mdash; <span style="color:var(--green);font-weight:700;">$' + d.ezMatch.toLocaleString() + '</span></div>';
+          if (idx === 0 && d.doublePlay && d.doublePlay.display) {
+            var dpWin = d.doublePlay.prize > 0;
+            html += '<div class="check-line-result' + (dpWin ? ' winner' : '') + '" style="' + (dpWin ? 'border-color:var(--accent);' : '') + '"><span style="font-weight:700;">Double Play</span> &mdash; ' + d.doublePlay.count + ' match' + (d.doublePlay.count !== 1 ? 'es' : '') + ' &mdash; <span style="color:' + (dpWin ? 'var(--accent)' : 'var(--muted)') + ';font-weight:700;">' + d.doublePlay.display + '</span></div>';
+          }
+        });
+        var totalLabel = lxTotalWinAcc > 0 ? 'Estimated Winnings' : 'No Prize This Draw';
+        var totalDisplay = lxTotalWinAcc > 0 ? 'approx $' + lxTotalWinAcc.toLocaleString() : '$0';
+        lxLastWin = lxTotalWinAcc;
+        html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount" style="color:' + (lxTotalWinAcc > 0 ? 'var(--yellow)' : 'var(--muted)') + ';">' + totalDisplay + '</div>';
+        if (lxAllResults.length > 1) html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Total across ' + lxAllResults.length + ' lines. Base prizes are pari-mutuel estimates.</div>';
+        else html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Base prizes are pari-mutuel estimates. Jackpot varies.</div>';
+        html += '</div>';
+        lxResultEl.innerHTML = html;
+      })
+      .catch(function(err) { lxResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+  });
+}
+
+function lxClearCheck() {
+  document.getElementById('lxCheckLineCount').value = '1';
+  lxRebuildCheckLines();
+  document.querySelectorAll('#lxDPDrawnInputs .num-input').forEach(function(inp) { inp.value = ''; inp.className = 'num-input'; });
+  document.getElementById('lxMultiplier').value = '1';
+  document.getElementById('lxEZMatch').value = '0';
+  document.getElementById('lxDPCheck').checked = false;
+  document.getElementById('lxDPInputs').style.display = 'none';
+  document.getElementById('lxCheckResult').innerHTML = '';
+  document.getElementById('lxDrawDate').value = '';
+  document.getElementById('lxDrawnDisplay').style.display = 'none';
+  document.getElementById('lxDrawnBalls').innerHTML = '';
+  document.getElementById('lxDrawLookupMsg').textContent = '';
+  lxDrawn = [];
+  lxLastWin = null;
+}
+
+function lxAppendMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  var msgs = document.getElementById('lxChatMessages');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function lxSendEmail() {
+  var to = document.getElementById('lxEmailTo').value.trim();
+  if (!to) {
+    document.getElementById('lxEmailStatus').style.color = 'var(--red)';
+    document.getElementById('lxEmailStatus').textContent = 'Please enter at least one email address.';
+    return;
+  }
+  var incLines = document.getElementById('lxEmailIncLines').checked && lxLastLines && lxLastLines.length > 0;
+  var incWinning = document.getElementById('lxEmailIncWinning').checked && lxDrawn.length > 0;
+  if (!incLines && !incWinning) {
+    document.getElementById('lxEmailStatus').style.color = 'var(--red)';
+    document.getElementById('lxEmailStatus').textContent = 'Select at least one option to include.';
+    return;
+  }
+  var btn = document.getElementById('lxEmailSendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  document.getElementById('lxEmailStatus').textContent = '';
+  fetch('/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: to, lines: incLines ? lxLastLines : [], nextDraw: lxLastNextDraw, game: 'lottox', winningNumbers: incWinning ? lxDrawn : null, winDrawDate: incWinning ? document.getElementById('lxDrawDate').value : null, winPrize: (incWinning && lxLastWin != null) ? lxLastWin : null })
+  })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) {
+        document.getElementById('lxEmailStatus').style.color = 'var(--red)';
+        document.getElementById('lxEmailStatus').textContent = data.error;
+      } else {
+        document.getElementById('lxEmailStatus').style.color = 'var(--green)';
+        document.getElementById('lxEmailStatus').textContent = 'Sent to ' + data.sent + ' recipient' + (data.sent > 1 ? 's' : '') + '.';
+      }
+    })
+    .catch(function(err) {
+      document.getElementById('lxEmailStatus').style.color = 'var(--red)';
+      document.getElementById('lxEmailStatus').textContent = 'Error: ' + err.message;
+    })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
+}
+
+function lxSendChat() {
+  var input = document.getElementById('lxChatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  var btn = document.getElementById('lxChatSend');
+  btn.disabled = true;
+  lxAppendMsg('user', msg);
+  var thinking = lxAppendMsg('thinking', 'Thinking...');
+  var lxTickets = lxLastLines ? lxLastLines.length : 0;
+  var lxEZ = document.getElementById('lxEZMatchGen').checked;
+  var lxDP = document.getElementById('lxDPGen').checked;
+  var lxSpend = lxTickets * (2 + (lxEZ ? 1 : 0) + (lxDP ? 1 : 0));
+  var lxCtx = lxTickets > 0 ? { spend: lxSpend, lines: lxTickets, game: 'lottox', won: lxLastWin } : null;
+  fetch('/chat/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: lxCtx }) })
+    .then(function(res) { return res.json(); })
+    .then(function(data) { thinking.remove(); lxAppendMsg('bot', data.reply || data.error || 'No response.'); })
+    .catch(function() { thinking.remove(); lxAppendMsg('bot', 'Error reaching server.'); })
+    .finally(function() { btn.disabled = false; input.focus(); });
+}
+
+function lxQuickAsk(q) { document.getElementById('lxChatInput').value = q; lxSendChat(); }
+
+document.getElementById('lxChatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') lxSendChat(); });
+document.getElementById('lxResults').style.display = 'none';
+
+// ── Cash Pop ─────────────────────────────────────────────────────────────────
+var cpCountdownInterval = null;
+var cpLastNumbers = null;
+var cpLastNextDraw = null;
+var cpLastWin = null;
+
+fetch('/nextdraw/cashpop')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { cpStartCountdown(d); })
+  .catch(function() {});
+
+function cpStartCountdown(nd) {
+  document.getElementById('cpDrawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('cpDrawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('cpCloseTimeLabel').textContent = 'Sales close ' + nd.closeTime;
+  document.getElementById('cpDrawName').textContent = nd.drawName;
+  var badge = document.getElementById('cpSalesBadge');
+  var banner = document.getElementById('cpDrawBanner');
+  badge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+  badge.className = 'sales-badge' + (nd.salesOpen ? '' : ' closed');
+  banner.className = 'draw-banner' + (nd.salesOpen ? '' : ' sales-closed');
+  if (cpCountdownInterval) clearInterval(cpCountdownInterval);
+  var remaining = nd.msUntilDraw;
+  function tick() {
+    if (remaining <= 0) { document.getElementById('cpCountdown').textContent = 'Drawing now!'; return; }
+    var h = Math.floor(remaining / 3600000);
+    var m = Math.floor((remaining % 3600000) / 60000);
+    var s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('cpCountdown').textContent = h > 0 ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm ' + String(s).padStart(2,'0') + 's');
+    remaining -= 1000;
+  }
+  tick();
+  cpCountdownInterval = setInterval(tick, 1000);
+}
+
+function cpGenerate() {
+  var btn = document.getElementById('cpGenerateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  document.getElementById('cpStatusMsg').style.display = 'none';
+  var count = Math.min(Math.max(parseInt(document.getElementById('cpNumCount').value) || 5, 1), 15);
+  fetch('/analyze/cashpop?count=' + count + '&sid=' + SID)
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      cpStartCountdown(r.data.nextDraw);
+      var container = document.getElementById('cpNumbersContainer');
+      container.innerHTML = r.data.numbers.map(function(n) {
+        return '<div class="ball" style="background:var(--yellow);color:#000;font-weight:700;font-size:18px;width:48px;height:48px;line-height:48px;">' + n + '</div>';
+      }).join('');
+      document.getElementById('cpOddsBadge').textContent = r.data.totalDraws + ' draw-days analyzed';
+      document.getElementById('cpUpdatedLabel').textContent = 'Data as of: ' + r.data.lastUpdated;
+      if (r.data.recentHistory) cpRenderHistory(r.data.recentHistory);
+      if (r.data.topNumbers) cpRenderFreq(r.data.topNumbers, r.data.bottomNumbers);
+      cpLastNumbers = r.data.numbers;
+      cpLastNextDraw = r.data.nextDraw;
+      document.getElementById('cpEmailCard').style.display = 'block';
+      document.getElementById('cpResults').style.display = 'block';
+    })
+    .catch(function(err) {
+      var el = document.getElementById('cpStatusMsg');
+      el.className = 'status-msg error'; el.textContent = 'Error: ' + err.message; el.style.display = 'block';
+    })
+    .finally(function() { btn.disabled = false; btn.textContent = '\u{1F4B0} Suggest Numbers'; });
+}
+
+function cpRenderHistory(history) {
+  var DRAW_NAMES = ['Morning','Matinee','Afternoon','Evening','Late Night'];
+  var html = '';
+  for (var i = 0; i < history.length; i++) {
+    var d = history[i];
+    var balls = d.numbers.map(function(n, j) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;"><span style="font-size:10px;color:var(--muted);">' + DRAW_NAMES[j] + ':</span><div class="hball">' + n + '</div></span>';
+    }).join('');
+    html += '<div class="history-row"><div class="history-date">' + d.date + '</div><div class="history-balls" style="flex-wrap:wrap;gap:4px;">' + balls + '</div></div>';
+  }
+  document.getElementById('cpHistoryContainer').innerHTML = html;
+}
+
+function cpRenderFreq(top, bottom) {
+  var maxCount = top.length > 0 ? top[0].count : 1;
+  function rows(nums) {
+    var html = '';
+    for (var i = 0; i < nums.length; i++) {
+      var n = nums[i];
+      var pct = Math.round(n.count / maxCount * 100);
+      html += '<tr><td style="color:var(--muted);font-size:11px;">' + (i+1) + '</td><td><span class="num-circle">' + n.number + '</span></td><td><div style="display:flex;align-items:center;gap:6px;"><div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%"></div></div><span style="color:var(--muted);font-size:11px;min-width:24px;text-align:right;">' + n.count + '</span></div></td></tr>';
+    }
+    return html;
+  }
+  document.getElementById('cpTopTable').innerHTML = rows(top);
+  document.getElementById('cpBottomTable').innerHTML = rows(bottom);
+}
+
+function cpCheckNumbers() {
+  var wn = parseInt(document.getElementById('cpWinNum').value);
+  var yn = parseInt(document.getElementById('cpYourNum').value);
+  var pa = parseInt(document.getElementById('cpPlayAmt').value);
+  var pm = parseInt(document.getElementById('cpMultiplier').value);
+  var res = document.getElementById('cpCheckResult');
+  if (isNaN(wn) || wn < 1 || wn > 15 || isNaN(yn) || yn < 1 || yn > 15) {
+    res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter valid numbers (1-15) for both fields.</div>'; return;
+  }
+  if (isNaN(pm) || pm < 5 || pm > 250) {
+    res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter your prize multiplier (5-250) from your ticket.</div>'; return;
+  }
+  fetch('/check/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winningNumber: wn, yourNumber: yn, playAmount: pa, prizeMultiplier: pm }) })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { res.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
+      var html = '';
+      document.getElementById('cpYourNum').className = 'num-input' + (data.matched ? ' matched' : '');
+      if (data.matched) {
+        html += '<div class="check-line-result winner"><span style="font-weight:700;">Match!</span> Your number ' + data.yourNumber + ' = winning number ' + data.winningNumber + ' &mdash; <span style="color:var(--green);font-weight:700;">$' + data.playAmount + ' x ' + data.prizeMultiplier + 'x = $' + data.prize.toLocaleString() + '</span></div>';
+        if (data.withholding > 0) html += '<div class="check-line-result">Federal withholding (24%): -$' + data.withholding.toLocaleString() + '</div>';
+        html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Estimated Take-Home</div><div class="amount" style="color:var(--yellow);">~$' + data.takeHome.toLocaleString() + '</div></div>';
+        cpLastWin = data.takeHome;
+      } else {
+        cpLastWin = 0;
+        html += '<div class="check-line-result"><span style="font-weight:700;">No Match</span> &mdash; Your number: ' + data.yourNumber + ' &mdash; Winning number: ' + data.winningNumber + ' &mdash; <span style="color:var(--muted);font-weight:700;">$0</span></div>';
+        html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">No Prize This Draw</div><div class="amount" style="color:var(--muted);">$0</div></div>';
+      }
+      res.innerHTML = html;
+    })
+    .catch(function(err) { res.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+}
+
+function cpClearCheck() {
+  document.getElementById('cpWinNum').value = '';
+  document.getElementById('cpYourNum').value = '';
+  document.getElementById('cpYourNum').className = 'num-input';
+  document.getElementById('cpMultiplier').value = '';
+  document.getElementById('cpCheckResult').innerHTML = '';
+  cpLastWin = null;
+}
+
+function cpAppendMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  var msgs = document.getElementById('cpChatMessages');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function cpSendChat() {
+  var input = document.getElementById('cpChatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  var btn = document.getElementById('cpChatSend');
+  btn.disabled = true;
+  cpAppendMsg('user', msg);
+  var thinking = cpAppendMsg('thinking', 'Thinking...');
+  var cpNums = cpLastNumbers ? cpLastNumbers.length : 0;
+  var cpAmt = parseInt(document.getElementById('cpPlayAmtGen').value) || 5;
+  var cpSpend = cpNums * cpAmt;
+  var cpCtx = cpNums > 0 ? { spend: cpSpend, lines: cpNums, game: 'cashpop', won: cpLastWin } : null;
+  fetch('/chat/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: cpCtx }) })
+    .then(function(res) { return res.json(); })
+    .then(function(data) { thinking.remove(); cpAppendMsg('bot', data.reply || data.error || 'No response.'); })
+    .catch(function() { thinking.remove(); cpAppendMsg('bot', 'Error reaching server.'); })
+    .finally(function() { btn.disabled = false; input.focus(); });
+}
+
+function cpSendEmail() {
+  var to = document.getElementById('cpEmailTo').value.trim();
+  if (!to) {
+    document.getElementById('cpEmailStatus').style.color = 'var(--red)';
+    document.getElementById('cpEmailStatus').textContent = 'Please enter at least one email address.';
+    return;
+  }
+  var cpWinNum = parseInt(document.getElementById('cpWinNum').value);
+  var incLines = document.getElementById('cpEmailIncLines').checked && cpLastNumbers && cpLastNumbers.length > 0;
+  var incWinning = document.getElementById('cpEmailIncWinning').checked && !isNaN(cpWinNum) && cpWinNum >= 1 && cpWinNum <= 15;
+  if (!incLines && !incWinning) {
+    document.getElementById('cpEmailStatus').style.color = 'var(--red)';
+    document.getElementById('cpEmailStatus').textContent = 'Select at least one option to include.';
+    return;
+  }
+  var btn = document.getElementById('cpEmailSendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  document.getElementById('cpEmailStatus').textContent = '';
+  var lines = incLines ? [{ line: 1, numbers: cpLastNumbers, score: '' }] : [];
+  fetch('/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: to, lines: lines, nextDraw: cpLastNextDraw, game: 'cashpop', winningNumbers: incWinning ? [cpWinNum] : null })
+  })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) {
+        document.getElementById('cpEmailStatus').style.color = 'var(--red)';
+        document.getElementById('cpEmailStatus').textContent = data.error;
+      } else {
+        document.getElementById('cpEmailStatus').style.color = 'var(--green)';
+        document.getElementById('cpEmailStatus').textContent = 'Sent to ' + data.sent + ' recipient' + (data.sent > 1 ? 's' : '') + '.';
+      }
+    })
+    .catch(function(err) {
+      document.getElementById('cpEmailStatus').style.color = 'var(--red)';
+      document.getElementById('cpEmailStatus').textContent = 'Error: ' + err.message;
+    })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
+}
+
+function cpQuickAsk(q) { document.getElementById('cpChatInput').value = q; cpSendChat(); }
+
+document.getElementById('cpChatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') cpSendChat(); });
+
+// ── Cost calculators ──────────────────────────────────────────────────────────
+function jtpUpdateCost() {
+  var tickets = Math.min(Math.max(parseInt(document.getElementById('lineCount').value) || 6, 1), 100);
+  var combo = document.getElementById('jtpComboGen').checked;
+  var base = tickets * 1;
+  var comboAmt = combo ? tickets * 1 : 0;
+  var total = base + comboAmt;
+  var parts = tickets + ' ticket' + (tickets !== 1 ? 's' : '') + ' x $1 = $' + base;
+  if (combo) parts += '  +  Combo ' + tickets + ' x $1 = $' + comboAmt;
+  document.getElementById('jtpCostBreakdown').textContent = parts;
+  document.getElementById('jtpCostTotal').textContent = 'Total: $' + total;
+}
+
+function lxUpdateCost() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('lxLineCount').value) || 6, 1), 100);
+  var ez = document.getElementById('lxEZMatchGen').checked;
+  var dp = document.getElementById('lxDPGen').checked;
+  var base = count * 2;
+  var ezAmt = ez ? count * 1 : 0;
+  var dpAmt = dp ? count * 1 : 0;
+  var total = base + ezAmt + dpAmt;
+  var parts = count + ' ticket' + (count !== 1 ? 's' : '') + ' x $2 = $' + base;
+  if (ez) parts += '  +  EZMatch ' + count + ' x $1 = $' + ezAmt;
+  if (dp) parts += '  +  Double Play ' + count + ' x $1 = $' + dpAmt;
+  document.getElementById('lxCostBreakdown').textContent = parts;
+  document.getElementById('lxCostTotal').textContent = 'Total: $' + total;
+}
+
+function cpUpdateCost() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('cpNumCount').value) || 5, 1), 15);
+  var amt = parseInt(document.getElementById('cpPlayAmtGen').value) || 5;
+  var total = count * amt;
+  document.getElementById('cpCostBreakdown').textContent = count + ' number' + (count !== 1 ? 's' : '') + ' x $' + amt + ' each';
+  document.getElementById('cpCostTotal').textContent = 'Total: $' + total;
+}
+
+jtpUpdateCost();
+lxUpdateCost();
+cpUpdateCost();
+
+// ── Fantasy 5 ─────────────────────────────────────────────────────────────────
+var f5PressCount = 0;
+var f5CountdownInterval = null;
+var f5LastLines = null;
+var f5LastNextDraw = null;
+var f5LastWin = null;
+
+fetch('/nextdraw/fantasy5')
+  .then(function(r) { return r.json(); })
+  .then(function(d) { f5StartCountdown(d); })
+  .catch(function() {});
+
+function f5StartCountdown(nd) {
+  document.getElementById('f5DrawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('f5DrawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('f5CloseTimeLabel').textContent = 'Sales close ' + nd.closeTime;
+  document.getElementById('f5DrawName').textContent = nd.drawName;
+  var badge = document.getElementById('f5SalesBadge');
+  var banner = document.getElementById('f5DrawBanner');
+  badge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+  badge.className = 'sales-badge' + (nd.salesOpen ? '' : ' closed');
+  banner.className = 'draw-banner' + (nd.salesOpen ? '' : ' sales-closed');
+  if (f5CountdownInterval) clearInterval(f5CountdownInterval);
+  var remaining = nd.msUntilDraw;
+  function tick() {
+    if (remaining <= 0) { document.getElementById('f5Countdown').textContent = 'Drawing now!'; return; }
+    var h = Math.floor(remaining / 3600000);
+    var m = Math.floor((remaining % 3600000) / 60000);
+    var s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('f5Countdown').textContent = h > 0 ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm ' + String(s).padStart(2,'0') + 's');
+    remaining -= 1000;
+  }
+  tick();
+  f5CountdownInterval = setInterval(tick, 1000);
+}
+
+function f5RenderLines(lines) {
+  var container = document.getElementById('f5LinesContainer');
+  var existing = container.querySelectorAll('.line-card');
+  for (var i = 0; i < existing.length; i++) existing[i].classList.add('fading');
+  f5LastLines = lines;
+  document.getElementById('f5EmailCard').style.display = 'block';
+  setTimeout(function() {
+    var html = '';
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      var balls = '';
+      for (var j = 0; j < l.numbers.length; j++) balls += '<div class="ball">' + l.numbers[j] + '</div>';
+      html += '<div class="line-card' + (i === 0 ? ' best' : '') + '"><div class="line-label">' + (i === 0 ? 'Best' : 'Line ' + l.line) + '</div><div class="balls">' + balls + '</div><div class="score-wrap"><div class="score-label">' + l.score + '</div><div class="score-info" title="What is this score?">?<div class="score-tooltip"><strong>What is this score?</strong>Higher = statistically stronger line. Scored on: frequency (40 pts), recency in last 50 draws (20 pts), pair co-occurrence (15 pts), low/high balance (5 pts), spread across 1-36 (10 pts). Does NOT predict winners.</div></div></div></div>';
+    }
+    container.innerHTML = html;
+  }, 150);
+}
+
+function f5RenderHistory(history) {
+  var html = '';
+  for (var i = 0; i < history.length; i++) {
+    var d = history[i];
+    var balls = '';
+    for (var j = 0; j < d.numbers.length; j++) balls += '<div class="hball">' + d.numbers[j] + '</div>';
+    var label = d.drawType ? '<span style="font-size:10px;color:var(--muted);margin-left:4px;">' + d.drawType.charAt(0).toUpperCase() + d.drawType.slice(1).toLowerCase() + '</span>' : '';
+    html += '<div class="history-row"><div class="history-date">' + d.date + label + '</div><div class="history-balls">' + balls + '</div></div>';
+  }
+  document.getElementById('f5HistoryContainer').innerHTML = html;
+}
+
+function f5RenderFreq(top, bottom) {
+  var maxCount = top.length > 0 ? top[0].count : 1;
+  function rows(nums) {
+    var html = '';
+    for (var i = 0; i < nums.length; i++) {
+      var n = nums[i];
+      var pct = Math.round(n.count / maxCount * 100);
+      html += '<tr><td style="color:var(--muted);font-size:11px;">' + (i+1) + '</td><td><span class="num-circle">' + n.number + '</span></td><td><div style="display:flex;align-items:center;gap:6px;"><div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%"></div></div><span style="color:var(--muted);font-size:11px;min-width:24px;text-align:right;">' + n.count + '</span></div></td></tr>';
+    }
+    return html;
+  }
+  document.getElementById('f5TopTable').innerHTML = rows(top);
+  document.getElementById('f5BottomTable').innerHTML = rows(bottom);
+}
+
+function f5RenderAll(data) {
+  f5StartCountdown(data.nextDraw);
+  f5LastNextDraw = data.nextDraw;
+  document.getElementById('f5DrawsBadge').textContent = data.totalDraws + ' draws analyzed';
+  document.getElementById('f5UpdatedLabel').textContent = 'Data as of: ' + data.lastUpdated;
+  f5RenderHistory(data.recentHistory);
+  f5RenderFreq(data.topNumbers, data.bottomNumbers);
+  document.getElementById('f5Results').style.display = 'block';
+}
+
+function f5Generate() {
+  var btn = document.getElementById('f5GenerateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  var el = document.getElementById('f5StatusMsg');
+  el.className = 'status-msg loading';
+  el.textContent = 'Analyzing complete draw history -- Fantasy 5 has 2 draws per day so this can take a minute or two. Hang tight!';
+  el.style.display = 'block';
+  var count = Math.min(Math.max(parseInt(document.getElementById('f5LineCount').value) || 6, 1), 100);
+  fetch('/analyze/fantasy5?count=' + count + '&sid=' + SID)
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      f5PressCount++;
+      document.getElementById('f5PressNum').textContent = f5PressCount;
+      document.getElementById('f5PressHint').style.display = 'block';
+      if (f5PressCount === 1) f5RenderAll(r.data);
+      else f5StartCountdown(r.data.nextDraw);
+      f5RenderLines(r.data.lines);
+    })
+    .catch(function(err) {
+      var el = document.getElementById('f5StatusMsg');
+      el.className = 'status-msg error'; el.textContent = 'Error: ' + err.message; el.style.display = 'block';
+    })
+    .finally(function() { btn.disabled = false; btn.textContent = '\u2728 Generate Lines'; });
+}
+
+function f5RebuildCheckLines() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('f5CheckLineCount').value) || 1, 1), 30);
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="line-input-row" id="f5LineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"></div>';
+  }
+  document.getElementById('f5LinesInputs').innerHTML = html;
+}
+f5RebuildCheckLines();
+
+var f5Drawn = [];
+
+function f5LookupDraw() {
+  var dateVal = document.getElementById('f5DrawDate').value;
+  var drawType = document.getElementById('f5DrawType').value;
+  var msg = document.getElementById('f5DrawLookupMsg');
+  var display = document.getElementById('f5DrawnDisplay');
+  f5Drawn = [];
+  display.style.display = 'none';
+  document.getElementById('f5DrawnBalls').innerHTML = '';
+  if (!dateVal) { msg.textContent = ''; return; }
+  var parts = dateVal.split('-');
+  var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0].slice(2);
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Looking up...';
+  fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyy) + '&draw=' + drawType)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      f5Drawn = data.numbers;
+      msg.textContent = '';
+      display.style.display = 'block';
+      document.getElementById('f5DrawnBalls').innerHTML = data.numbers.map(function(n) {
+        return '<div class="hball" style="background:rgba(79,142,247,0.15);color:var(--accent);border-color:rgba(79,142,247,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+      }).join('');
+    })
+    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+}
+
+function f5CheckNumbers() {
+  if (!f5Drawn.length) {
+    document.getElementById('f5CheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Select a draw date first.</div>'; return;
+  }
+  var drawn = f5Drawn;
+  var f5LineRows = document.querySelectorAll('#f5LinesInputs .line-input-row');
+  var f5AllLines = [];
+  for (var r = 0; r < f5LineRows.length; r++) {
+    var rowInputs = f5LineRows[r].querySelectorAll('.num-input');
+    var line = [];
+    for (var j = 0; j < rowInputs.length; j++) {
+      var lv = parseInt(rowInputs[j].value.trim());
+      if (isNaN(lv) || lv < 1 || lv > 36) {
+        document.getElementById('f5CheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Please enter all 5 numbers for Line ' + (r+1) + ' (1-36).</div>'; return;
+      }
+      line.push(lv);
+    }
+    f5AllLines.push(line);
+  }
+  var drawnSet = {};
+  drawn.forEach(function(n) { drawnSet[n] = true; });
+  document.querySelectorAll('#f5LinesInputs .num-input').forEach(function(inp) {
+    var v = parseInt(inp.value);
+    inp.className = 'num-input' + (drawnSet[v] ? ' matched' : '');
+  });
+  var f5ResultEl = document.getElementById('f5CheckResult');
+  f5ResultEl.innerHTML = '';
+  var f5AllResults = [];
+  var f5TotalWinAcc = 0;
+  var f5Pending = f5AllLines.length;
+  f5AllLines.forEach(function(lineNums, lineIdx) {
+    fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums }) })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.error) { f5ResultEl.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
+        f5AllResults[lineIdx] = data;
+        f5TotalWinAcc += data.isFree ? 0 : (data.prize || 0);
+        f5Pending--;
+        if (f5Pending > 0) return;
+        var html = '';
+        f5AllResults.forEach(function(d, idx) {
+          var matchedNums = d.matched.join(', ') || 'none';
+          var isWinner = d.isJackpot || d.isFree || d.prize > 0;
+          var prizeColor = d.isJackpot ? 'var(--yellow)' : (isWinner ? 'var(--green)' : 'var(--muted)');
+          var label = f5AllResults.length > 1 ? 'Line ' + (idx+1) : 'Your Line';
+          html += '<div class="check-line-result' + (isWinner ? ' winner' : '') + '">';
+          html += '<span style="font-weight:700;">' + label + '</span> &mdash; ' + d.count + ' match' + (d.count !== 1 ? 'es' : '') + ' (' + matchedNums + ')';
+          html += ' &mdash; <span style="color:' + prizeColor + ';font-weight:700;">' + d.prizeDisplay + '</span></div>';
+        });
+        var anyJackpot = f5AllResults.some(function(d) { return d.isJackpot; });
+        var anyFree = f5AllResults.some(function(d) { return d.isFree; }) && f5TotalWinAcc === 0;
+        var totalLabel = anyJackpot ? 'JACKPOT!' : (f5TotalWinAcc > 0 ? 'Estimated Winnings' : (anyFree ? 'Free Quick Pick' : 'No Prize This Draw'));
+        var totalDisplay = anyJackpot ? 'JACKPOT' : (anyFree ? 'Free Quick Pick' : (f5TotalWinAcc > 0 ? 'approx $' + f5TotalWinAcc.toLocaleString() : '$0'));
+        f5LastWin = f5TotalWinAcc;
+        html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount" style="color:' + (f5TotalWinAcc > 0 || anyJackpot ? 'var(--yellow)' : 'var(--muted)') + ';">' + totalDisplay + '</div>';
+        if (f5AllResults.length > 1) html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Total across ' + f5AllResults.length + ' lines. Prizes are pari-mutuel estimates.</div>';
+        else html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Prizes are pari-mutuel estimates and vary by number of winners.</div>';
+        html += '</div>';
+        f5ResultEl.innerHTML = html;
+      })
+      .catch(function(err) { f5ResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+  });
+}
+setInterval(function() {
+  fetch('/nextdraw').then(function(r){return r.json();}).then(function(d){startCountdown({nextDraw:d});}).catch(function(){});
+  fetch('/nextdraw/lottox').then(function(r){return r.json();}).then(function(d){lxStartCountdown({nextDraw:d});}).catch(function(){});
+  fetch('/nextdraw/cashpop').then(function(r){return r.json();}).then(function(d){cpStartCountdown(d);}).catch(function(){});
+  fetch('/nextdraw/fantasy5').then(function(r){return r.json();}).then(function(d){f5StartCountdown(d);}).catch(function(){});
+}, 60000);
+</script>
+
+<!-- FAQ Modal -->
+<div class="modal-overlay" id="faqModal" onclick="if(event.target===this)closeFAQ()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeFAQ()">&times;</button>
+    <h2>&#10067; Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <div class="faq-q">What is Florida Jackpot Analyzer?</div>
+      <div class="faq-a">A free statistical analysis tool that reads the <strong>complete official Florida Lottery draw history</strong> and uses AI-driven scoring to suggest lines with the strongest historical patterns. It covers <strong>Jackpot Triple Play</strong> and <strong>Florida Lotto (Lotto X)</strong>. It is <strong>not affiliated with the Florida Lottery</strong>.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Can this tool guarantee I'll win?</div>
+      <div class="faq-a"><strong>No.</strong> Lottery draws are random. No system, AI, or historical analysis can predict or improve your odds of winning. This tool is for <strong>entertainment purposes only</strong>.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is the score number shown on each line?</div>
+      <div class="faq-a">Each line gets a composite score based on four factors from the full draw history:<br><br>
+        <strong>&bull; Frequency (up to 40 pts)</strong> &mdash; how often each number has appeared across all past draws.<br>
+        <strong>&bull; Recency (up to 20 pts)</strong> &mdash; how recently each number appeared in the last 50 draws.<br>
+        <strong>&bull; Pair co-occurrence (up to 15 pts)</strong> &mdash; how often pairs of numbers in the line appeared together in the same draw.<br>
+        <strong>&bull; Balance &amp; spread (up to 15 pts)</strong> &mdash; whether the line has a good mix of low/high numbers and is spread across the full range.<br><br>
+        Lines are ranked highest-to-lowest. The top-ranked line is labeled <strong>Best</strong>. A higher score means stronger historical patterns &mdash; it does <strong>not</strong> mean a higher chance of winning.
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How do I use the Generate Lines button?</div>
+      <div class="faq-a">Click <strong>Generate Lines</strong> to analyze the latest draw data and get your recommended lines. Each press produces a fresh unique set &mdash; previously shown lines are penalized so you never see repeats.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How current is the draw data?</div>
+      <div class="faq-a">The draw history is sourced directly from the <strong>official Florida Lottery PDFs</strong>. Data is refreshed automatically on the first line generation of each day, so you always see the most up-to-date results &mdash; no action needed on your part.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Are the draw countdowns and Sales Open/Closed badges live?</div>
+      <div class="faq-a">Yes. Every game panel automatically refreshes its next draw time, countdown, and sales status every <strong>60 seconds</strong> in the background &mdash; no page reload needed. This keeps the banners accurate across draw boundaries, which is especially important for high-frequency games like <strong>Cash Pop</strong> (5 draws/day), <strong>Fantasy 5</strong> (2 draws/day), and upcoming games like <strong>Pick 5, Pick 4, Pick 3, and Pick 2</strong> which also draw multiple times daily.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How does Jackpot Triple Play work?</div>
+      <div class="faq-a">Each <strong>$1 ticket</strong> gives you 3 lines of 6 numbers from 1&ndash;46. <strong>You choose 1 line</strong> &mdash; the other 2 are always auto Quick Pick. Drawings are every <strong>Tuesday &amp; Friday at 11:15 PM ET</strong>; sales close at 10:55 PM ET.<br><br>
+        The jackpot starts at <strong>$250,000</strong> (paid as a 25-year annuity or one-time cash lump sum). When the jackpot pool reaches its cap, any excess rolls down to boost the 2nd, 3rd, and 4th prize tiers.<br><br>
+        Add <strong>Combo (+$1)</strong> to combine matches across all 3 lines for extra fixed prizes up to $10,000.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What are the Jackpot Triple Play odds?</div>
+      <div class="faq-a">Per line (pari-mutuel game &mdash; prizes vary by number of winners):<br><br>
+        &bull; 6 of 6 (Jackpot): <strong>1 in 3,122,273</strong><br>
+        &bull; 5 of 6: 1 in 13,009<br>
+        &bull; 4 of 6: 1 in 267<br>
+        &bull; 3 of 6: 1 in 16.14<br>
+        &bull; Any base prize: <strong>1 in 15.24</strong><br><br>
+        Combo add-on (all 3 lines combined): any Combo prize <strong>1 in 5.28</strong>; top prize ($10,000) 1 in 323,322.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is the Combo add-on?</div>
+      <div class="faq-a">Combo costs <strong>+$1</strong> (ticket becomes $2 total). It counts total matches across <em>all three lines combined</em> for a separate fixed prize &mdash; you can win both a base game prize and a Combo prize on the same ticket.<br><br>
+        &bull; 10+ matches: $10,000 &nbsp;&bull; 9: $500 &nbsp;&bull; 8: $50 &nbsp;&bull; 7: $20<br>
+        &bull; 6: $10 &nbsp;&bull; 5: $5 &nbsp;&bull; 4: Free $2 Combo Quick Pick<br><br>
+        Combo prizes are <strong>fixed</strong> and are not affected by rolldowns. Duplicate numbers across lines each count as a separate match.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How does Florida Lotto (Lotto X) work?</div>
+      <div class="faq-a">Each <strong>$2 ticket</strong> has 1 line of 6 numbers chosen from 1&ndash;53. Every ticket automatically gets a random <strong>Multiplier (2&times;, 3&times;, 4&times;, 5&times;, or 10&times;)</strong> that boosts 2nd, 3rd, and 4th prizes. Drawings are every <strong>Wednesday &amp; Saturday at 11:15 PM ET</strong>; sales close at 10:55 PM ET.<br><br>
+        The jackpot rolls until someone wins (no cap). Optional add-ons:<br>
+        &bull; <strong>EZMatch (+$1)</strong> &mdash; instant win up to $500 at purchase<br>
+        &bull; <strong>Double Play (+$1)</strong> &mdash; bonus drawing using your same numbers, top prize $250,000 fixed</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What are the Florida Lotto (Lotto X) odds?</div>
+      <div class="faq-a">Per ticket:<br><br>
+        &bull; 6 of 6 (Jackpot): <strong>1 in 22,957,480</strong><br>
+        &bull; 5 of 6: 1 in 81,409 (starting $3,000 &times; multiplier)<br>
+        &bull; 4 of 6: 1 in 1,415 (starting $50 &times; multiplier)<br>
+        &bull; 3 of 6: 1 in 70.79 (starting $5 &times; multiplier)<br>
+        &bull; 2 of 6: 1 in 8.58 (Free Ticket &mdash; not multiplied)<br>
+        &bull; Any prize: <strong>1 in 7.61</strong></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How does the Lotto X Multiplier work?</div>
+      <div class="faq-a">Every Florida Lotto ticket gets one random Multiplier printed on it at purchase: <strong>2&times;, 3&times;, 4&times;, 5&times;, or 10&times;</strong>. It automatically multiplies the 2nd, 3rd, and 4th prize amounts. The Jackpot (6-of-6) and Free Ticket (2-of-6) are <strong>not</strong> multiplied.<br><br>
+        Example: 5-of-6 starts at $3,000 &mdash; with a 10&times; multiplier that becomes <strong>$30,000</strong>.<br><br>
+        Multiplier odds: 10&times; is 1 in 26 &nbsp;&bull;&nbsp; 5&times; is 1 in 8.67 &nbsp;&bull;&nbsp; 2&times; is most common at 1 in 2.89.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is EZMatch?</div>
+      <div class="faq-a">EZMatch is an <strong>instant-win add-on (+$1)</strong> for Florida Lotto. At purchase, 6 EZMatch numbers are printed on your ticket. If any EZMatch number matches any of your 6 Lotto numbers, you win the corresponding prize instantly &mdash; no drawing required.<br><br>
+        Prizes range from $2 to $500. Overall EZMatch odds: <strong>1 in 4.71</strong>. EZMatch prizes are separate from the main game and Double Play and can be claimed up to 180 days from the first draw date on the ticket.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is Double Play?</div>
+      <div class="faq-a">Double Play is a <strong>bonus drawing add-on (+$1)</strong> for Florida Lotto. It uses your same 6 numbers and Multiplier in a separate drawing held immediately after the main Lotto draw.<br><br>
+        Double Play prizes are all <strong>fixed</strong> (not pari-mutuel):<br>
+        &bull; 6 of 6: <strong>$250,000</strong> (fixed, not multiplied)<br>
+        &bull; 5 of 6: $3,500 &times; multiplier (up to $35,000)<br>
+        &bull; 4 of 6: $60 &times; multiplier (up to $600)<br>
+        &bull; 3 of 6: $7 &times; multiplier (up to $70)<br>
+        &bull; 2 of 6: Free Ticket<br><br>
+        Overall Double Play odds: <strong>1 in 7.61</strong>. If you win both a base game prize and a Double Play prize, they are combined into one payment.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How much does it cost to play? (Estimated)</div>
+      <div class="faq-a">The cost estimator shown on each game panel is based on the known Florida Lottery price structure at the time this tool was built. <strong>These are estimates only &mdash; actual prices are set by the Florida Lottery and are subject to change without notice.</strong> Always confirm the current price at your retailer before purchasing.<br><br>
+        <strong>Jackpot Triple Play</strong><br>
+        &bull; Base ticket: <strong>$1</strong> per ticket (you pick 1 line; 2 more auto Quick Pick lines included)<br>
+        &bull; Combo add-on: <strong>+$1</strong> per ticket<br>
+        &bull; Example: 6 tickets = $6 base; with Combo = $12<br><br>
+        <strong>Florida Lotto (Lotto X)</strong><br>
+        &bull; Base ticket: <strong>$2</strong> per ticket (1 line)<br>
+        &bull; EZMatch add-on: <strong>+$1</strong> per ticket<br>
+        &bull; Double Play add-on: <strong>+$1</strong> per ticket<br>
+        &bull; Example: 6 tickets = $12 base; with both add-ons = $24<br><br>
+        <strong>Cash Pop</strong><br>
+        &bull; Play amount: <strong>$1, $2, $5, or $10</strong> per number selected<br>
+        &bull; Example: 5 numbers at $5 each = $25<br><br>
+        <em>Prices sourced from official Florida Lottery materials. Subject to change. This tool is not affiliated with the Florida Lottery.</em>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How does Cash Pop work and when are the draws?</div>
+      <div class="faq-a">Cash Pop is a simple pick-and-match game. Pick <strong>1 to 15 numbers</strong> from 1&ndash;15 and choose a play amount ($1, $2, $5, or $10 per number). One winning number is drawn &mdash; if it matches any of yours, you win your play amount &times; your prize multiplier.<br><br>
+        There are <strong>5 draws every day</strong>:<br>
+        &bull; Morning: <strong>7:29 AM ET</strong><br>
+        &bull; Matinee: <strong>11:29 AM ET</strong><br>
+        &bull; Afternoon: <strong>2:29 PM ET</strong><br>
+        &bull; Evening: <strong>6:29 PM ET</strong><br>
+        &bull; Late Night: <strong>10:29 PM ET</strong><br><br>
+        Sales close approximately 5 minutes before each draw. You can play multiple consecutive draws in advance.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is the Prize Multiplier on a Cash Pop ticket?</div>
+      <div class="faq-a">When you buy a Cash Pop ticket, the terminal randomly assigns a <strong>Prize Multiplier (5&times; to 250&times;)</strong> and prints it on your ticket. This multiplier has <strong>no effect on the cost</strong> of your ticket &mdash; cost is always <em>numbers &times; play amount</em>.<br><br>
+        If you match the winning number, your prize is: <strong>play amount &times; multiplier</strong>.<br><br>
+        Examples with a $5 play:<br>
+        &bull; 5&times; multiplier &rarr; $25<br>
+        &bull; 50&times; multiplier &rarr; $250<br>
+        &bull; 250&times; multiplier &rarr; $1,250<br><br>
+        You know your potential prize before the draw. Higher multipliers are rarer &mdash; the Florida Lottery does not publish the exact multiplier odds. Use the <strong>Check My Numbers</strong> section to calculate your exact prize and estimated take-home.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Is my data collected or stored?</div>
+      <div class="faq-a"><strong>No.</strong> No account, no tracking, zero data collected. Your session ID is stored only in your browser's session storage and is used solely to avoid showing you duplicate lines.</div>
+    </div>
+  </div>
+</div>
+
+  <div style="margin-top:16px;padding:20px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;text-align:center;">
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:10px;">&#127921; Free Lottery Analytics &mdash; Powered by AI</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px;max-width:480px;margin-left:auto;margin-right:auto;">
+      No gimmicks &mdash; just AI-driven statistical analysis on the complete official Florida Lottery draw history,
+      giving you the best mathematical edge possible. Free to use, no account, no tracking, zero data collected ever.
+      <br><br>
+      This is just the beginning. Florida Jackpot is game one.
+      <strong style="color:var(--text);">Powerball, Mega Millions, Lotto X, Cash POP, Fantasy 5, Pick 5, Pick 4, Pick 3, Pick 2 — all on the roadmap.</strong>
+      Every donation directly funds the next game.
+    </div>
+    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00"
+       target="_blank" rel="noopener"
+       style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700;letter-spacing:0.02em;">
+      &#128147; Donate &amp; Unlock the Next Game
+    </a>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;">
+      Secure payment via Stripe &nbsp;&middot;&nbsp; No account required &nbsp;&middot;&nbsp; No data collected
+      <br>
+      Powered by <a href="https://allaml.ai" target="_blank" rel="noopener" style="color:var(--accent);">allaml.ai</a>
+    </div>
+  </div>
+  </div>
+</div><!-- end panel-jtp -->
+
+
+<!-- Sticky disclaimer bar -->
+<div class="disclaimer-bar">
+  <a onclick="toggleDisclaimer(event)" onmouseenter="showDisclaimer()" id="disclaimerLink">
+    &#9432; Legal Disclaimer &amp; Responsible Gambling Notice
+  </a>
+</div>
+
+<!-- Disclaimer popup -->
+<div class="disclaimer-popup" id="disclaimerPopup">
+  <button class="close-btn" onclick="hideDisclaimer()" title="Close">&times;</button>
+  <h3>&#9432; Legal Disclaimer &amp; Responsible Gambling</h3>
+  <p>
+    Florida Jackpot Analyzer is an independent statistical analysis tool and is
+    <strong>not affiliated with, endorsed by, or connected to the Florida Lottery</strong> or any government agency.
+    All analysis is based on publicly available historical draw data and is provided
+    <strong>for entertainment purposes only.</strong>
+  </p>
+  <p style="margin-top:8px;">
+    Lottery outcomes are determined by random number draws.
+    <strong>No statistical system, AI model, or historical analysis can predict, guarantee, or improve
+    the odds of winning any lottery game.</strong> Past draw patterns have no influence on future results.
+  </p>
+  <p style="margin-top:8px;">
+    By using this tool you acknowledge that: (1) you are of legal gambling age in your jurisdiction,
+    (2) you assume full responsibility for any tickets purchased,
+    (3) no refunds or compensation will be provided for any reason, and
+    (4) the creators of this tool accept no liability for losses of any kind.
+  </p>
+  <div class="helpline">
+    &#128222; <strong>Problem Gambling Helpline:</strong> 1-800-522-4700 &mdash; Free, confidential, available 24/7.
+    <br>Florida: <strong>1-888-ADMIT-IT (1-888-236-4848)</strong>
+  </div>
+</div>
+
+<script>
+var disclaimerPopup = document.getElementById('disclaimerPopup');
+var hideTimer = null;
+
+function showDisclaimer() {
+  clearTimeout(hideTimer);
+  disclaimerPopup.classList.add('show');
+}
+function hideDisclaimer() {
+  disclaimerPopup.classList.remove('show');
+}
+function toggleDisclaimer(e) {
+  e.preventDefault();
+  disclaimerPopup.classList.contains('show') ? hideDisclaimer() : showDisclaimer();
+}
+
+// Hide when clicking outside
+document.addEventListener('click', function(e) {
+  if (!disclaimerPopup.contains(e.target) && e.target.id !== 'disclaimerLink') {
+    hideDisclaimer();
+  }
+});
+
+// Hide on mouse leave (with small delay so user can read)
+disclaimerPopup.addEventListener('mouseleave', function() {
+  hideTimer = setTimeout(hideDisclaimer, 1500);
+});
+disclaimerPopup.addEventListener('mouseenter', function() {
+  clearTimeout(hideTimer);
+});
+document.getElementById('disclaimerLink').addEventListener('mouseleave', function() {
+  hideTimer = setTimeout(hideDisclaimer, 1500);
+});
+</script>
+</body>
+</html>

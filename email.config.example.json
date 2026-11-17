@@ -1,0 +1,17 @@
+{
+  "_comment": "Fill in your SMTP provider details and save as email.config.json",
+  "host": "smtp.your-provider.com",
+  "port": 587,
+  "secure": false,
+  "user": "your@email.com",
+  "pass": "your-password-or-app-password",
+
+  "_examples": {
+    "Gmail":        { "host": "smtp.gmail.com",        "port": 587, "note": "Requires an App Password from myaccount.google.com/apppasswords" },
+    "Outlook/365":  { "host": "smtp.office365.com",    "port": 587 },
+    "Yahoo":        { "host": "smtp.mail.yahoo.com",   "port": 587, "note": "Requires an App Password from account security settings" },
+    "iCloud":       { "host": "smtp.mail.me.com",      "port": 587, "note": "Requires an App-Specific Password from appleid.apple.com" },
+    "Zoho":         { "host": "smtp.zoho.com",         "port": 587 },
+    "SendGrid":     { "host": "smtp.sendgrid.net",     "port": 587, "note": "Use 'apikey' as user and your SendGrid API key as pass" }
+  }
+}
