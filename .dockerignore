@@ -1,0 +1,34 @@
+# Sensitive config — never commit
+email.config.json
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# PDFs — large binary files, downloaded at runtime
+*.pdf
+
+# Backups — local only
+backups/
+
+# Obsidian vault — local docs only
+vault/
+
+# Windows / local scripts — not needed on server
+tray.ps1
+start_jackpot.bat
+start_jackpot.ps1
+startup_public.ps1
+xcopy_exclude.txt
+test_out.txt
+patch_chat2.js
+%BDIR%/
+
+# Cloudflare tunnel config — contains credentials
+jackpot-tunnel-config.yml
+
+# Fly.io will generate its own
+.fly/
