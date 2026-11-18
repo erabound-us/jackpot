@@ -1989,19 +1989,8 @@ app.get('/latestdraw/jtp', async (req, res) => {
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const pdfLatest = draws[0];
-    // Check if scraper has something newer than the PDF
-    const scraperDates = await getAvailableDates('jtp');
-    if (scraperDates.length) {
-      const scraperLatest = scraperDates[0]; // MM/DD/YYYY, newest first
-      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
-      const pdfTs = pdfLatest.ts;
-      if (scraperTs > pdfTs) {
-        const scraped = await scrapeFlDraws('jtp', scraperLatest, null);
-        if (scraped) return res.json({ date: scraperLatest, numbers: scraped.numbers });
-      }
-    }
-    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2009,17 +1998,8 @@ app.get('/latestdraw/lottox', async (req, res) => {
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const pdfLatest = draws[0];
-    const scraperDates = await getAvailableDates('lottox');
-    if (scraperDates.length) {
-      const scraperLatest = scraperDates[0];
-      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
-      if (scraperTs > pdfLatest.ts) {
-        const scraped = await scrapeFlDraws('lottox', scraperLatest, null);
-        if (scraped) return res.json({ date: scraperLatest, numbers: scraped.numbers });
-      }
-    }
-    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2028,25 +2008,13 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
     const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const now = Date.now();
-    const validDraws = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
-    let evening = validDraws.find(d => d.drawType === 'EVENING');
-    let midday  = validDraws.find(d => d.drawType === 'MIDDAY');
-    // Check if scraper has something newer
-    const scraperDates = await getAvailableDates('fantasy5');
-    if (scraperDates.length) {
-      const scraperLatest = scraperDates[0];
-      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
-      const pdfTs = evening ? evening.ts : (midday ? midday.ts : 0);
-      if (scraperTs > pdfTs) {
-        const eve = await scrapeFlDraws('fantasy5', scraperLatest, 'EVENING');
-        const mid = await scrapeFlDraws('fantasy5', scraperLatest, 'MIDDAY');
-        if (eve || mid) return res.json({
-          evening: eve ? { date: scraperLatest, numbers: eve.numbers } : null,
-          midday:  mid ? { date: scraperLatest, numbers: mid.numbers } : null
-        });
-      }
-    }
-    res.json({ evening: evening ? { date: evening.date, numbers: evening.numbers } : null, midday: midday ? { date: midday.date, numbers: midday.numbers } : null });
+    const valid = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
+    const evening = valid.find(d => d.drawType === 'EVENING');
+    const midday  = valid.find(d => d.drawType === 'MIDDAY');
+    res.json({
+      evening: evening ? { date: evening.date, numbers: evening.numbers } : null,
+      midday:  midday  ? { date: midday.date,  numbers: midday.numbers  } : null
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2054,20 +2022,8 @@ app.get('/latestdraw/cashpop', async (req, res) => {
   try {
     const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const pdfLatest = draws[0];
-    // Check if scraper has something newer
-    const scraperDates = await getAvailableDates('cashpop');
-    if (scraperDates.length) {
-      const scraperLatest = scraperDates[0];
-      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
-      if (scraperTs >= pdfLatest.ts) {
-        const scraped = await scrapeFlDraws('cashpop', scraperLatest, null);
-        if (scraped && scraped.sessions && scraped.sessions.length) {
-          return res.json({ date: scraperLatest, numbers: pdfLatest.numbers, latestSession: scraped.sessions[scraped.sessions.length-1], sessions: scraped.sessions });
-        }
-      }
-    }
-    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
