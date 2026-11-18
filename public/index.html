@@ -995,7 +995,7 @@ function jtpLookupDraw() {
   var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
-  fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy))
+  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
@@ -1396,7 +1396,7 @@ function lxLookupDraw() {
   var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
-  fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy))
+  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
@@ -1760,7 +1760,7 @@ function cpLookupDraw() {
   var mmddyyyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
-  fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy))
+  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error && !data.allSessions) {
@@ -2080,8 +2080,8 @@ function f5LookupDraw() {
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
   Promise.all([
-    fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=MIDDAY').then(function(r){return r.json();}).catch(function(){return null;}),
-    fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=EVENING').then(function(r){return r.json();}).catch(function(){return null;})
+    (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=MIDDAY',{signal:_ac.signal});})().then(function(r){return r.json();}).catch(function(){return null;}),
+    (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=EVENING',{signal:_ac.signal});})().then(function(r){return r.json();}).catch(function(){return null;})
   ]).then(function(results) {
     var midday  = results[0] && !results[0].error ? results[0] : null;
     var evening = results[1] && !results[1].error ? results[1] : null;
