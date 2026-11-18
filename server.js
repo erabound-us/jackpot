@@ -1268,6 +1268,24 @@ async function start() {
     console.log('╚══════════════════════════════════════════════════════╝');
     console.log('');
     console.log('Press Ctrl+C to stop.\n');
+    // Pre-seed scrape cache for all games so first user request is instant
+    setTimeout(async function() {
+      try {
+        const dates = {};
+        for (const g of ['jtp','lottox','fantasy5','cashpop']) {
+          const d = await getAvailableDates(g);
+          if (d && d[0]) dates[g] = d[0];
+        }
+        if (dates.jtp) await scrapeFlDraws('jtp', dates.jtp, null);
+        if (dates.lottox) await scrapeFlDraws('lottox', dates.lottox, null);
+        if (dates.fantasy5) {
+          await scrapeFlDraws('fantasy5', dates.fantasy5, 'MIDDAY');
+          await scrapeFlDraws('fantasy5', dates.fantasy5, 'EVENING');
+        }
+        if (dates.cashpop) await scrapeFlDraws('cashpop', dates.cashpop, null);
+        console.log('Scrape cache seeded.');
+      } catch(e) { console.warn('Cache seed failed:', e.message); }
+    }, 3000);
     openBrowser(localUrl);
   });
 }
