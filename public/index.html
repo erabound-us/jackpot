@@ -1205,7 +1205,7 @@ function sendEmail() {
       document.getElementById('emailStatus').style.color = 'var(--red)';
       document.getElementById('emailStatus').textContent = 'Error: ' + err.message;
     })
-    .finally(function() { btn.disabled = false; btn.textContent = '&#128140; Send Lines'; });
+    .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
 }
 
 function quickAsk(q) { chatInput.value = q; sendChat(); }
