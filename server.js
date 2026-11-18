@@ -1870,9 +1870,17 @@ function normDateForPDF(date) {
   return p[0] + '/' + p[1] + '/' + (p[2].length === 4 ? p[2].slice(2) : p[2]);
 }
 
+function isValidDrawDay(dateStr, days) {
+  const p = dateStr.split('/');
+  if (p.length !== 3) return true; // can't parse, let it through
+  const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+  return days.includes(d.getDay());
+}
+
 app.get('/draws/jtp', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No JTP draw on that date (draws Tue & Fri).', resultsUrl: FL_RESULTS_URLS.jtp });
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
@@ -1888,6 +1896,7 @@ app.get('/draws/jtp', async (req, res) => {
 app.get('/draws/lottox', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  if (!isValidDrawDay(date, [3, 6])) return res.status(404).json({ error: 'No Lotto X draw on that date (draws Wed & Sat).', resultsUrl: FL_RESULTS_URLS.lottox });
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
