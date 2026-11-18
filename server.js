@@ -1979,17 +1979,43 @@ async function getAvailableDates(game) {
   return [];
 
 }
+function expandYear(date) {
+  const p = date.split('/');
+  if (p.length !== 3) return date;
+  return p[0] + '/' + p[1] + '/' + (p[2].length === 2 ? '20' + p[2] : p[2]);
+}
+
 app.get('/draws/jtp/available', async (req, res) => {
-  res.json({ dates: await getAvailableDates('jtp') });
+  try {
+    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+  } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/lottox/available', async (req, res) => {
-  res.json({ dates: await getAvailableDates('lottox') });
+  try {
+    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+  } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/fantasy5/available', async (req, res) => {
-  res.json({ dates: await getAvailableDates('fantasy5') });
+  try {
+    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const now = Date.now();
+    const valid = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
+    const seen = new Set(); const dates = [];
+    for (const d of valid) {
+      const key = d.date; if (seen.has(key)) continue; seen.add(key);
+      dates.push(expandYear(d.date));
+      if (dates.length >= 5) break;
+    }
+    res.json({ dates });
+  } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/cashpop/available', async (req, res) => {
-  res.json({ dates: await getAvailableDates('cashpop') });
+  try {
+    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+  } catch(e) { res.json({ dates: [] }); }
 });
 
 app.get('/draws/cashpop', async (req, res) => {
