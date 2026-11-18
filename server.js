@@ -1771,6 +1771,7 @@ app.post('/refresh/fantasy5', async (req, res) => {
 
 // Puppeteer browser instance cache — reuse across requests
 let _browser = null;
+const _scrapeCache = {};
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
     _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--no-zygote'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
