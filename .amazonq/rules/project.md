@@ -3,10 +3,18 @@
 ## Stack
 - **Backend**: Node.js + Express 5, single file `server.js` (~1,850 lines)
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~1,750 lines)
-- **Process manager**: PM2 (`ecosystem.config.js`)
-- **Tunnel**: cloudflared → `jackpot.allaml.ai` (`jackpot-tunnel-config.yml`)
-- **Port**: 7000 (scans 7000–7020 on startup)
-- **Email**: Resend API, config in `email.config.json` (never commit)
+- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`
+- **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`)
+- **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
+- **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
+
+## Architecture
+```
+Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
+```
+- PDFs are downloaded at runtime by the server on first `/analyze` call each day
+- No cloudflared tunnel in production — that was a previous architecture, now obsolete
+- `jackpot-tunnel-config.yml` and `start_jackpot.ps1` are local-only dev tools
 
 ## Coding Standards
 - Keep all backend logic in `server.js` — no module splitting unless >1500 lines
@@ -264,6 +272,9 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - Subject format: `{Game Name} — {Day} {Date} Best Odds Lines`
 - Email card shown after line generation in all game panels
 - Local mode: Email Settings card visible for API key config; hidden in public mode
+- **`getEmailConfig()` reads `email.config.json` first, then falls back to `process.env.EMAIL_API_KEY` + `EMAIL_FROM`**
+- **`/email/config` GET route MUST call `getEmailConfig()` — never check `fs.existsSync` directly**, otherwise the env var fallback is bypassed and the route incorrectly returns `configured: false` in production
+- Production email secret: `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg` (no redeploy needed — Fly restarts the machine automatically)
 
 ### Email Card — Content Checkboxes (all games)
 - Two checkboxes: **My Lines** (checked by default) and **Winning Numbers** (checked by default)
@@ -327,7 +338,8 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - If the file grows unexpectedly (e.g. ~90 KB ballooning to ~150 KB+), encoding corruption is the likely cause
 - Always verify encoding in your editor before saving; in VS Code the encoding is shown in the status bar (bottom right)
 
-## PM2 / Startup
+## PM2 / Local Dev
+- PM2 is for **local development only** — not used in production (Fly.io runs `node server.js` directly)
 - On Windows, `EPERM \\.\pipe\rpc.sock` on restart means a zombie PM2 daemon node process is still holding the named pipe
 - Fix: kill ALL `node` processes **before** attempting socket file cleanup or `pm2 kill` -- not after
 - Correct order in `start_jackpot.ps1`: (1) kill node+cloudflared, (2) sleep, (3) delete socket files, (4) `pm2 kill`, (5) kill node again, (6) final socket cleanup

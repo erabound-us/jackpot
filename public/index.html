@@ -1177,9 +1177,9 @@ function sendEmail() {
   }
   var incLines = document.getElementById('jtpEmailIncLines').checked && lastLines && lastLines.length > 0;
   var incWinning = document.getElementById('jtpEmailIncWinning').checked && jtpDrawn.length > 0;
-  if (!incLines && !incWinning) {
+  if (!incLines) {
     document.getElementById('emailStatus').style.color = 'var(--red)';
-    document.getElementById('emailStatus').textContent = 'Select at least one option to include.';
+    document.getElementById('emailStatus').textContent = 'Generate lines first before sending.';
     return;
   }
   var btn = document.getElementById('emailSendBtn');
@@ -1510,9 +1510,9 @@ function lxSendEmail() {
   }
   var incLines = document.getElementById('lxEmailIncLines').checked && lxLastLines && lxLastLines.length > 0;
   var incWinning = document.getElementById('lxEmailIncWinning').checked && lxDrawn.length > 0;
-  if (!incLines && !incWinning) {
+  if (!incLines) {
     document.getElementById('lxEmailStatus').style.color = 'var(--red)';
-    document.getElementById('lxEmailStatus').textContent = 'Select at least one option to include.';
+    document.getElementById('lxEmailStatus').textContent = 'Generate lines first before sending.';
     return;
   }
   var btn = document.getElementById('lxEmailSendBtn');
@@ -1743,9 +1743,9 @@ function cpSendEmail() {
   var cpWinNum = parseInt(document.getElementById('cpWinNum').value);
   var incLines = document.getElementById('cpEmailIncLines').checked && cpLastNumbers && cpLastNumbers.length > 0;
   var incWinning = document.getElementById('cpEmailIncWinning').checked && !isNaN(cpWinNum) && cpWinNum >= 1 && cpWinNum <= 15;
-  if (!incLines && !incWinning) {
+  if (!incLines) {
     document.getElementById('cpEmailStatus').style.color = 'var(--red)';
-    document.getElementById('cpEmailStatus').textContent = 'Select at least one option to include.';
+    document.getElementById('cpEmailStatus').textContent = 'Generate numbers first before sending.';
     return;
   }
   var btn = document.getElementById('cpEmailSendBtn');
@@ -1818,6 +1818,49 @@ function cpUpdateCost() {
 jtpUpdateCost();
 lxUpdateCost();
 cpUpdateCost();
+
+function f5SendEmail() {
+  var to = document.getElementById('f5EmailTo').value.trim();
+  if (!to) {
+    document.getElementById('f5EmailStatus').style.color = 'var(--red)';
+    document.getElementById('f5EmailStatus').textContent = 'Please enter at least one email address.';
+    return;
+  }
+  var incLines = document.getElementById('f5EmailIncLines').checked && f5LastLines && f5LastLines.length > 0;
+  var incWinning = document.getElementById('f5EmailIncWinning').checked && f5Drawn.length > 0;
+  if (!incLines) {
+    document.getElementById('f5EmailStatus').style.color = 'var(--red)';
+    document.getElementById('f5EmailStatus').textContent = 'Generate lines first before sending.';
+    return;
+  }
+  var btn = document.getElementById('f5EmailSendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  document.getElementById('f5EmailStatus').textContent = '';
+  var tickets = f5LastLines ? f5LastLines.length : 0;
+  var ez = document.getElementById('f5EZMatchGen').checked;
+  var context = { spend: tickets * (ez ? 2 : 1), lines: tickets, game: 'fantasy5', won: f5LastWin };
+  fetch('/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to: to, lines: incLines ? f5LastLines : [], nextDraw: f5LastNextDraw, game: 'fantasy5', winningNumbers: incWinning ? f5Drawn : null, winDrawDate: incWinning ? document.getElementById('f5DrawDate').value : null, winDrawType: incWinning ? document.getElementById('f5DrawType').value : null, winPrize: (incWinning && f5LastWin != null) ? f5LastWin : null })
+  })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) {
+        document.getElementById('f5EmailStatus').style.color = 'var(--red)';
+        document.getElementById('f5EmailStatus').textContent = data.error;
+      } else {
+        document.getElementById('f5EmailStatus').style.color = 'var(--green)';
+        document.getElementById('f5EmailStatus').textContent = 'Sent to ' + data.sent + ' recipient' + (data.sent > 1 ? 's' : '') + '.';
+      }
+    })
+    .catch(function(err) {
+      document.getElementById('f5EmailStatus').style.color = 'var(--red)';
+      document.getElementById('f5EmailStatus').textContent = 'Error: ' + err.message;
+    })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
+}
 
 // ── Fantasy 5 ─────────────────────────────────────────────────────────────────
 var f5PressCount = 0;

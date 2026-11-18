@@ -1,79 +1,80 @@
 # Jackpot Analyzer — Deployment Guide
-# jackpot.allaml.ai via Cloudflare Tunnel + PM2
 
 ## Architecture
 ```
-Windows PC
-  └─ PM2  →  node server.js  (port 7000, 0.0.0.0)
-  └─ cloudflared  →  Cloudflare edge  →  jackpot.allaml.ai
+Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 ```
-No router port forwarding. No static IP required.
+- Hosted on Fly.io, app name `jackpot-ixupbg`, region `iad`
+- Docker image built from `Dockerfile` (node:22-alpine)
+- PDFs downloaded at runtime on first `/analyze` call each day — not baked into image
+- No cloudflared tunnel in production (previous architecture, now obsolete)
 
 ---
 
-## Step 1: Install cloudflared (Windows)
-Download: https://github.com/cloudflare/cloudflared/releases/latest
-Get: `cloudflared-windows-amd64.msi` — installs cloudflared.exe to PATH.
+## Deploying
 
-## Step 2: Authenticate
-```powershell
-cloudflared tunnel login
-```
-Browser opens → select allaml.ai → authorize.
-
-## Step 3: Create the tunnel
-```powershell
-cloudflared tunnel create jackpot
-```
-Note the Tunnel ID shown.
-
-## Step 4: Configure the tunnel
-Copy `jackpot-tunnel-config.yml` to:
-`C:\Users\Upstairs\.cloudflared\config.yml`
-
-## Step 5: Add DNS record
-```powershell
-cloudflared tunnel route dns jackpot jackpot.allaml.ai
-```
-
-## Step 6: Install PM2
-```powershell
-npm install -g pm2
-npm install -g pm2-windows-startup
-pm2-startup install
-```
-
-## Step 7: Start everything
 ```powershell
 cd C:\Jackpot
-npm start                          # starts PM2
-cloudflared tunnel run jackpot     # or: cloudflared service start
+.\deploy.ps1
 ```
 
-## Step 8: Configure email (optional)
-Edit `email.config.json` (copy from `email.config.example.json`):
-```json
-{
-  "provider": "resend",
-  "apiKey": "re_xxxxxxxxxxxxxxxxxxxx",
-  "from": "Florida Jackpot Analyzer <noreply@allaml.ai>"
-}
-```
-Or use the Email Settings card in the UI (local mode only).
+This runs `git push` then `fly deploy` and scales to 1 machine. Done.
 
 ---
 
-## Useful Commands
+## Secrets (environment variables on Fly.io)
+
+`email.config.json` is excluded from Docker. Email is configured via Fly secret:
+
 ```powershell
-pm2 status                  # check app status
-pm2 logs jackpot            # tail logs
-pm2 restart jackpot         # restart server
-pm2 save                    # persist after reboot
-cloudflared tunnel list     # list tunnels
+fly secrets set EMAIL_API_KEY=re_xxxxxxxxxxxxxxxxxxxx -a jackpot-ixupbg
+fly secrets set EMAIL_FROM="Florida Jackpot Analyzer <noreply@allaml.ai>" -a jackpot-ixupbg
 ```
 
-## Logs
-`logs/out.log` | `logs/error.log` | `logs/combined.log`
+No redeploy needed — Fly restarts the machine automatically when secrets are updated.
+
+To verify:
+```powershell
+fly secrets list -a jackpot-ixupbg
+```
+
+---
+
+## Useful Fly.io Commands
+
+```powershell
+fly status -a jackpot-ixupbg          # machine status
+fly logs -a jackpot-ixupbg            # tail live logs
+fly ssh console -a jackpot-ixupbg     # shell into running container
+fly deploy                             # redeploy current code
+fly secrets list -a jackpot-ixupbg    # list secrets
+fly secrets set KEY=value -a jackpot-ixupbg
+```
+
+---
+
+## Local Development
+
+```powershell
+cd C:\Jackpot
+.\start_jackpot.ps1     # starts PM2 on port 7000
+```
+
+Local runs on `http://localhost:7000`. Email uses `email.config.json` locally.
+PM2 is local-only — Fly.io runs `node server.js` directly.
+
+---
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `fly.toml` | Fly.io app config (port 8080, region iad, 1 machine) |
+| `Dockerfile` | Docker image definition |
+| `.dockerignore` | Excludes `email.config.json`, PDFs, logs, backups, vault |
+| `deploy.ps1` | One-command deploy: git push + fly deploy |
+| `ecosystem.config.js` | PM2 config for local dev (port 7000) |
+| `start_jackpot.ps1` | Local dev startup script |
 
 ---
 
@@ -84,4 +85,3 @@ Steering rules: `.amazonq/rules/project.md`
 
 ## Backups
 Stable snapshots: `backups/stable-YYYY-MM-DD/`
-Current stable: `backups/stable-2025-07-14/`
