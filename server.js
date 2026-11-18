@@ -1988,13 +1988,15 @@ function expandYear(date) {
 app.get('/draws/jtp/available', async (req, res) => {
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
-    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1])).getDay(); return day===2||day===5; });
+    res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/lottox/available', async (req, res) => {
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
-    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1])).getDay(); return day===3||day===6; });
+    res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/fantasy5/available', async (req, res) => {
@@ -2021,6 +2023,18 @@ app.get('/draws/cashpop/available', async (req, res) => {
 app.get('/draws/cashpop', async (req, res) => {
   const { date, session } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  // PDF fallback first - has 5 numbers per date (one per session)
+  try {
+    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    const pdfDate = normDateForPDF(date);
+    const match = draws.find(d => d.date === date || d.date === pdfDate);
+    if (match) {
+      const sessions = ['Morning','Matinee','Afternoon','Evening','Late Night'];
+      const allSessions = match.numbers.map((n, i) => ({ name: sessions[i], number: n }));
+      const target = session ? allSessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : allSessions[allSessions.length-1];
+      if (target) return res.json({ date, session: target.name, number: target.number, allSessions });
+    }
+  } catch(e) {}
   const scraped = await scrapeFlDraws('cashpop', date, session || null);
   if (scraped && scraped.sessions && scraped.sessions.length) {
     const target = session ? scraped.sessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : scraped.sessions[scraped.sessions.length-1];
