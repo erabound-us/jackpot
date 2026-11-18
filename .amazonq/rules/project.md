@@ -282,7 +282,8 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - **Winning Numbers** is only included if the winning number data is actually present:
   - JTP, Lotto X, Fantasy 5: `drawn` array populated via the Check My Numbers date lookup (`jtpDrawn`, `lxDrawn`, `f5Drawn`)
   - Cash Pop: the "Winning Number Drawn" field (`cpWinNum`) is filled with a valid 1–15 value
-- If both checkboxes resolve to nothing (lines not generated AND no winning numbers available), send is blocked with an error
+- **Winning Numbers checked but unavailable must NOT block sending** — silently omit them and send lines only. Only block if lines themselves haven't been generated.
+- Frontend validation pattern for every `xSendEmail()`: error if `!incLines`, never error solely because `!incWinning`
 - `winningNumbers` field in POST body: array when included, `null` when not
 - Server renders a green "Winning" row at the top of the HTML email table when `winningNumbers` is present; also appended to plain-text body
 - Server validates: if `lines` is empty array AND `winningNumbers` is null/missing → 400 error
@@ -321,7 +322,20 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
 ```
 
-Apply this to every game's `xSendEmail()` function when building a new game.
+- **`textContent` with HTML entities like `&#128140;` renders as literal text** — the entity is never parsed. Always use `innerHTML` for any string containing `&#...;` entities.
+- Raw emoji chars (e.g. `'🍀'`) and Unicode escapes (e.g. `'\u{1F4B0}'`) are safe with `textContent`.
+- Apply `innerHTML` to every game's `xSendEmail()` `.finally()` reset when building a new game.
+
+### When Adding a New Game — Email Checklist
+1. Add `xEmailCard` div (hidden by default, shown after line generation)
+2. Add `xEmailIncLines` and `xEmailIncWinning` checkboxes (both checked by default)
+3. Add `xEmailTo` input and send button calling `xSendEmail()`
+4. Implement `xSendEmail()` following this pattern:
+   - Block only if `!incLines` (lines not generated) — never block solely on `!incWinning`
+   - Pass `winningNumbers: incWinning ? xDrawn : null` in POST body
+   - Use `btn.innerHTML` (not `btn.textContent`) in `.finally()` reset
+5. Set `xLastWin` from Check My Numbers result; clear on form reset
+6. Pass `context: { spend, lines, game, won: xLastWin }` in `xSendChat()` POST body
 
 ## Never Modify
 `email.config.json` | `*.pdf` | `logs/*`
@@ -337,6 +351,7 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - Never open/save it with Windows-1252 (or any non-UTF-8 encoding) — doing so remaps bytes 0x80-0x9F to wrong Unicode codepoints, bloating the file and corrupting all emojis and special chars (-- v ^ etc.)
 - If the file grows unexpectedly (e.g. ~90 KB ballooning to ~150 KB+), encoding corruption is the likely cause
 - Always verify encoding in your editor before saving; in VS Code the encoding is shown in the status bar (bottom right)
+- **Recovery**: if emojis appear as mojibake (e.g. `ðŸŽ±` instead of 🎱), the file was decoded as Windows-1252 then re-encoded as UTF-8. Fix by reversing the cp1252 mapping: read as UTF-8, map each codepoint back to its original byte using the cp1252 reverse table, write as UTF-8. See `fix_encoding.js` pattern used in Nov 2026.
 
 ## PM2 / Local Dev
 - PM2 is for **local development only** — not used in production (Fly.io runs `node server.js` directly)

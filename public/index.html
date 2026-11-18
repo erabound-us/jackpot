@@ -883,6 +883,7 @@ function renderFreq(top, bottom) {
 var lastLines = null;
 var lastNextDraw = null;
 var jtpLastWin = null;
+var jtpDrawn = [];
 
 // Populate draw banner on page load without requiring Generate
 fetch('/nextdraw')
@@ -1170,16 +1171,19 @@ function testEmailConfig() {
 
 function sendEmail() {
   var to = document.getElementById('emailTo').value.trim();
+  var statusEl = document.getElementById('emailStatus');
   if (!to) {
-    document.getElementById('emailStatus').style.color = 'var(--red)';
-    document.getElementById('emailStatus').textContent = 'Please enter at least one email address.';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Please enter at least one email address.';
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
   var incLines = document.getElementById('jtpEmailIncLines').checked && lastLines && lastLines.length > 0;
-  var incWinning = document.getElementById('jtpEmailIncWinning').checked && jtpDrawn.length > 0;
+  var incWinning = document.getElementById('jtpEmailIncWinning').checked && jtpDrawn && jtpDrawn.length > 0;
   if (!incLines) {
-    document.getElementById('emailStatus').style.color = 'var(--red)';
-    document.getElementById('emailStatus').textContent = 'Generate lines first before sending.';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Generate lines first before sending.';
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
   var btn = document.getElementById('emailSendBtn');
