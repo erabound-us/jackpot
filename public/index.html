@@ -990,7 +990,14 @@ function jtpLookupDraw() {
   fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy))
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      if (data.error) {
+        msg.style.color = 'var(--red)';
+        msg.textContent = data.error;
+        if (data.resultsUrl) {
+          msg.innerHTML = data.error + ' <a href="' + data.resultsUrl + '" target="_blank" style="color:var(--accent);">View official results</a>';
+        }
+        return;
+      }
       jtpDrawn = data.numbers;
       msg.textContent = '';
       display.style.display = 'block';
@@ -1381,7 +1388,14 @@ function lxLookupDraw() {
   fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy))
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      if (data.error) {
+        msg.style.color = 'var(--red)';
+        msg.textContent = data.error;
+        if (data.resultsUrl) {
+          msg.innerHTML = data.error + ' <a href="' + data.resultsUrl + '" target="_blank" style="color:var(--accent);">View official results</a>';
+        }
+        return;
+      }
       lxDrawn = data.numbers;
       msg.textContent = '';
       display.style.display = 'block';
@@ -2012,7 +2026,14 @@ function f5LookupDraw() {
   fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyy) + '&draw=' + drawType)
     .then(function(r) { return r.json(); })
     .then(function(data) {
-      if (data.error) { msg.style.color = 'var(--red)'; msg.textContent = data.error; return; }
+      if (data.error) {
+        msg.style.color = 'var(--red)';
+        msg.textContent = data.error;
+        if (data.resultsUrl) {
+          msg.innerHTML = data.error + ' <a href="' + data.resultsUrl + '" target="_blank" style="color:var(--accent);">View official results</a>';
+        }
+        return;
+      }
       f5Drawn = data.numbers;
       msg.textContent = '';
       display.style.display = 'block';

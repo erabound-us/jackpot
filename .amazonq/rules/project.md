@@ -369,3 +369,20 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - Fix: kill ALL `node` processes **before** attempting socket file cleanup or `pm2 kill` -- not after
 - Correct order in `start_jackpot.ps1`: (1) kill node+cloudflared, (2) sleep, (3) delete socket files, (4) `pm2 kill`, (5) kill node again, (6) final socket cleanup
 - `Remove-Item` on `.sock` files does NOT release a Windows named pipe -- only killing the owning process does
+
+## Draw Date Lookup (/draws/* routes)
+- **Never parse the full PDF just to look up a single draw date** — it's too slow and times out on Fly.io
+- All `/draws/<game>` routes use a 3-step lookup strategy:
+  1. Check the already-parsed in-memory PDF cache first (instant, no extra I/O)
+  2. If not found, scrape the FL Lottery API (`scrapeFlDraws(game, date, drawType)`) — fast, no PDF parse
+  3. If still not found, return `{ error, resultsUrl }` — frontend shows the error + a clickable "View official results" link
+- `scrapeFlDraws(game, dateStr, drawType)` hits `https://www.floridalottery.com/api/v1/winning-numbers` with game label + ISO date
+- `FL_RESULTS_URLS` maps game keys to their official FL Lottery results pages
+- Frontend error handler for all three lookup routes must check `data.resultsUrl` and render it as an `<a>` tag when present
+- **When adding a new game**: add its game label to `GAME_IDS` in `scrapeFlDraws`, add its URL to `FL_RESULTS_URLS`, and follow the same 3-step pattern in the new `/draws/<game>` route
+
+## Log Rotation
+- PM2 log files in `logs/` are trimmed automatically: any file over 1 MB is truncated to the last 500 lines
+- Rotation runs on server startup and every 24 hours via `setInterval`
+- Fly.io has no local log files — rotation only affects local PM2 logs (`combined.log`, `out.log`, `error.log`)
+- Never use `fly logs` in an agent tool call — it never completes and produces too much output; check logs via the Fly.io dashboard instead

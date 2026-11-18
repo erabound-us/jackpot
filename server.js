@@ -1762,42 +1762,91 @@ app.post('/refresh/fantasy5', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/draws/fantasy5', async (req, res) => {
+// ── Draw lookup via scrape (fast, no PDF parse) ───────────────────────────────
+// Scrapes the FL Lottery winning numbers page for a specific date.
+// Falls back with a link to the official page if not found.
+
+function scrapeFlDraws(game, dateStr, drawType) {
+  // dateStr: MM/DD/YYYY, game: 'jtp'|'lottox'|'fantasy5'
+  // Returns Promise<{ numbers, drawType } | null>
+  const GAME_IDS = { jtp: 'JACKPOT TRIPLE PLAY', lottox: 'FLORIDA LOTTO', fantasy5: 'FANTASY 5' };
+  const label = GAME_IDS[game];
+  // Convert MM/DD/YYYY to YYYY-MM-DD for the FL Lottery API
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return Promise.resolve(null);
+  const isoDate = parts[2] + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
+  const url = 'https://www.floridalottery.com/api/v1/winning-numbers?game=' + encodeURIComponent(label) + '&drawDate=' + isoDate;
+  return new Promise(resolve => {
+    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const results = Array.isArray(json) ? json : (json.results || json.data || []);
+          if (!results.length) return resolve(null);
+          // For Fantasy 5 filter by draw type if specified
+          const row = drawType
+            ? results.find(r => (r.drawType || r.draw_type || '').toUpperCase() === drawType.toUpperCase()) || results[0]
+            : results[0];
+          if (!row) return resolve(null);
+          // Numbers may be in various fields
+          const nums = (row.winningNumbers || row.winning_numbers || row.numbers || '')
+            .toString().split(/[,\s]+/).map(Number).filter(n => n > 0);
+          if (!nums.length) return resolve(null);
+          resolve({ numbers: nums, drawType: (row.drawType || row.draw_type || drawType || '').toUpperCase() });
+        } catch (e) { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+const FL_RESULTS_URLS = {
+  jtp:      'https://www.floridalottery.com/games/draw-games/jackpot-triple-play',
+  lottox:   'https://www.floridalottery.com/games/draw-games/florida-lotto',
+  fantasy5: 'https://www.floridalottery.com/games/draw-games/fantasy-5'
+};
+
+app.get('/draws/jtp', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  // Try cached PDF first (fast, already in memory)
   try {
-    const text = await getFantasy5Text();
-    const draws = parseFantasy5HistoryPDF(text);
-    const { date, draw } = req.query;
-    if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-    const type = (draw || '').toUpperCase();
-    const match = draws.find(d => d.date === date && (!type || d.drawType === type));
-    if (!match) return res.status(404).json({ error: 'No draw found for that date' + (type ? '/' + type : '') + '.' });
-    res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    const match = draws.find(d => d.date === date);
+    if (match) return res.json({ date: match.date, numbers: match.numbers });
+  } catch (e) {}
+  // Try scrape
+  const scraped = await scrapeFlDraws('jtp', date, null);
+  if (scraped) return res.json({ date, numbers: scraped.numbers });
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
 });
 
 app.get('/draws/lottox', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   try {
-    const text = await getLottoXText();
-    const draws = parseLottoXHistoryPDF(text);
-    const { date } = req.query;
-    if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+    const draws = parseLottoXHistoryPDF(await getLottoXText());
     const match = draws.find(d => d.date === date);
-    if (!match) return res.status(404).json({ error: 'No draw found for that date.' });
-    res.json({ date: match.date, numbers: match.numbers });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    if (match) return res.json({ date: match.date, numbers: match.numbers });
+  } catch (e) {}
+  const scraped = await scrapeFlDraws('lottox', date, null);
+  if (scraped) return res.json({ date, numbers: scraped.numbers });
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
 
-app.get('/draws/jtp', async (req, res) => {
+app.get('/draws/fantasy5', async (req, res) => {
+  const { date, draw } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  const type = (draw || '').toUpperCase();
   try {
-    const histBuf = fs.readFileSync(PDF_PATHS.history);
-    const histText = await extractPDFText(histBuf);
-    const draws = parseHistoryPDF(histText);
-    const { date } = req.query;
-    if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-    const match = draws.find(d => d.date === date);
-    if (!match) return res.status(404).json({ error: 'No draw found for that date.' });
-    res.json({ date: match.date, numbers: match.numbers });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const match = draws.find(d => d.date === date && (!type || d.drawType === type));
+    if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
+  } catch (e) {}
+  const scraped = await scrapeFlDraws('fantasy5', date, type);
+  if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
 });
 
 app.get('/latestdraw/jtp', async (req, res) => {
@@ -1901,4 +1950,24 @@ function schedulePostDrawRefreshes() {
 }
 
 schedulePostDrawRefreshes();
+
+// ── Log rotation (local only — trim PM2 log files > 1 MB every 24h) ────────────────
+function rotateLogs() {
+  const logDir = path.join(__dirname, 'logs');
+  if (!fs.existsSync(logDir)) return;
+  const MAX = 1 * 1024 * 1024; // 1 MB
+  for (const f of ['combined.log', 'out.log', 'error.log']) {
+    const p = path.join(logDir, f);
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).size > MAX) {
+        const lines = fs.readFileSync(p, 'utf8').split('\n');
+        fs.writeFileSync(p, lines.slice(-500).join('\n'));
+        console.log('Rotated ' + f + ' (kept last 500 lines)');
+      }
+    } catch (e) {}
+  }
+}
+rotateLogs();
+setInterval(rotateLogs, 24 * 60 * 60 * 1000);
+
 start().catch(err => { console.error(err); process.exit(1); });
