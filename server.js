@@ -1801,7 +1801,13 @@ async function scrapeFlDraws(game, dateStr, drawType) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const t = req.resourceType();
+      if (t === 'document') req.continue();
+      else req.abort();
+    });
+    await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
@@ -1941,7 +1947,13 @@ async function getAvailableDates(game) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.goto(GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.setRequestInterception(true);
+    page.on('request', req => {
+      const t = req.resourceType();
+      if (t === 'document') req.continue();
+      else req.abort();
+    });
+    await page.goto(GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 15000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
