@@ -90,8 +90,8 @@
   .num-input { width:44px; height:38px; text-align:center; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; font-size:14px; font-weight:700; }
   .num-input:focus { outline:none; border-color:var(--accent); }
   .num-input.matched { border-color:var(--green); background:rgba(34,197,94,0.1); color:var(--green); }
-  .line-input-row { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
-  .line-row-label { font-size:11px; font-weight:700; color:var(--muted); min-width:38px; }
+  .line-input-row { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
+  .line-row-label { font-size:11px; font-weight:700; color:var(--muted); }
   .check-line-result { padding:8px 10px; border-radius:8px; background:var(--bg); border:1px solid var(--border); margin-bottom:6px; font-size:13px; }
   .check-line-result.winner { border-color:var(--green); background:rgba(34,197,94,0.05); }
   .check-total { padding:12px; border-radius:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); text-align:center; margin-top:8px; }
@@ -977,7 +977,7 @@ function jtpRebuildCheckLines() {
   var count = Math.min(Math.max(parseInt(document.getElementById('jtpCheckLineCount').value) || 3, 1), 30);
   var html = '';
   for (var i = 0; i < count; i++) {
-    html += '<div class="line-input-row" id="lineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+    html += '<div class="line-input-row" id="lineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><div style="display:flex;gap:6px;flex-wrap:wrap;"><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div></div>';
   }
   document.getElementById('myLinesInputs').innerHTML = html;
 }
@@ -1368,7 +1368,7 @@ function lxRebuildCheckLines() {
   var count = Math.min(Math.max(parseInt(document.getElementById('lxCheckLineCount').value) || 1, 1), 30);
   var html = '';
   for (var i = 0; i < count; i++) {
-    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><div style="display:flex;gap:6px;flex-wrap:wrap;"><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div></div>';
   }
   document.getElementById('lxLinesInputs').innerHTML = html;
 }
@@ -1378,7 +1378,7 @@ function lxRebuildCheckLines() {
   var count = Math.min(Math.max(parseInt(document.getElementById('lxCheckLineCount').value) || 1, 1), 30);
   var html = '';
   for (var i = 0; i < count; i++) {
-    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div>';
+    html += '<div class="line-input-row" id="lxLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><div style="display:flex;gap:6px;flex-wrap:wrap;"><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"><input class="num-input" placeholder="#6" maxlength="2"></div></div>';
   }
   document.getElementById('lxLinesInputs').innerHTML = html;
 }
@@ -2058,7 +2058,7 @@ function f5RebuildCheckLines() {
   var count = Math.min(Math.max(parseInt(document.getElementById('f5CheckLineCount').value) || 1, 1), 30);
   var html = '';
   for (var i = 0; i < count; i++) {
-    html += '<div class="line-input-row" id="f5LineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"></div>';
+    html += '<div class="line-input-row" id="f5LineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><div style="display:flex;gap:6px;flex-wrap:wrap;"><input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2"></div></div>';
   }
   document.getElementById('f5LinesInputs').innerHTML = html;
 }

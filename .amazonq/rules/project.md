@@ -563,3 +563,18 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - Date chips show `MM/DD` format, clickable, above the date input
 - `xLookupDraw()` always sends 4-digit year (`parts[0]` not `parts[0].slice(2)`)
 - Error handler always checks `data.resultsUrl` and renders as clickable link
+
+## Mobile Layout — Line Input Rows
+- `.line-input-row` uses `flex-direction:column` so the line label sits **above** the number inputs, not beside them — prevents wrapping on narrow screens (iPhone 12 etc.)
+- `.line-row-label` has no `min-width` — label is just text above the inputs
+- The number inputs inside each row are wrapped in `<div style="display:flex;gap:6px;flex-wrap:wrap;">` so they stay horizontal as a group
+- This pattern applies to games with **5+ inputs per row** — JTP (6 inputs), Lotto X (6 inputs), Fantasy 5 (5 inputs)
+- **Do NOT apply to games with 1-2 inputs per row** (e.g. Cash Pop) — label beside input is fine and more compact on those
+- When adding a new game, build line rows with this structure:
+```js
+html += '<div class="line-input-row" id="xLineRow' + i + '">' +
+  '<span class="line-row-label">Line ' + (i+1) + '</span>' +
+  '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+  '<input class="num-input" placeholder="#1" maxlength="2">...' +
+  '</div></div>';
+```
