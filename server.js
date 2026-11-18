@@ -735,12 +735,12 @@ async function sendViaResend(cfg, to, subject, text, html) {
 
 // Get current email config (API key masked)
 app.get('/email/config', (req, res) => {
-  if (!fs.existsSync(EMAIL_CFG_PATH)) return res.json({ configured: false });
-  const cfg = JSON.parse(fs.readFileSync(EMAIL_CFG_PATH, 'utf8'));
+  const cfg = getEmailConfig();
+  if (!cfg || !cfg.apiKey || cfg.apiKey === 'PASTE_YOUR_RESEND_API_KEY_HERE') return res.json({ configured: false });
   res.json({
-    configured: !!(cfg.apiKey && cfg.apiKey !== 'PASTE_YOUR_RESEND_API_KEY_HERE'),
+    configured: true,
     from: cfg.from || '',
-    keyMasked: cfg.apiKey ? cfg.apiKey.slice(0, 8) + '...' : ''
+    keyMasked: cfg.apiKey.slice(0, 8) + '...'
   });
 });
 
