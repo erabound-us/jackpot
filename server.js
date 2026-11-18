@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const PDFParser = require('pdf2json');
 const path = require('path');
 const http = require('http');
@@ -7,6 +7,7 @@ const net = require('net');
 const fs = require('fs');
 const https = require('https');
 const nodemailer = require('nodemailer');
+const puppeteer = require('puppeteer');
 
 const app = express();
 
@@ -1766,72 +1767,132 @@ app.post('/refresh/fantasy5', async (req, res) => {
 // Scrapes the FL Lottery winning numbers page for a specific date.
 // Falls back with a link to the official page if not found.
 
-function scrapeFlDraws(game, dateStr, drawType) {
-  // dateStr: MM/DD/YYYY, game: 'jtp'|'lottox'|'fantasy5'
-  // Returns Promise<{ numbers, drawType } | null>
-  const GAME_IDS = { jtp: 'JACKPOT TRIPLE PLAY', lottox: 'FLORIDA LOTTO', fantasy5: 'FANTASY 5' };
-  const label = GAME_IDS[game];
-  // Convert MM/DD/YYYY to YYYY-MM-DD for the FL Lottery API
+// Puppeteer browser instance cache — reuse across requests
+let _browser = null;
+async function getBrowser() {
+  if (!_browser || !_browser.connected) {
+    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
+  }
+  return _browser;
+}
+
+async function scrapeFlDraws(game, dateStr, drawType) {
+  const GAME_URLS = {
+    jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+    lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',
+    fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5',
+    cashpop: 'https://floridalottery.com/games/draw-games/cash-pop'
+  };
+  const GAME_IDS = { jtp: 'jackpottripleplay', lottox: 'lotto', fantasy5: 'fantasy5', cashpop: 'cashpop' };
+  const url = GAME_URLS[game];
+  const gameId = GAME_IDS[game];
+  if (!url) return null;
   const parts = dateStr.split('/');
-  if (parts.length !== 3) return Promise.resolve(null);
+  if (parts.length !== 3) return null;
   const isoDate = parts[2] + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
-  const url = 'https://www.floridalottery.com/api/v1/winning-numbers?game=' + encodeURIComponent(label) + '&drawDate=' + isoDate;
-  return new Promise(resolve => {
-    https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } }, res => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          const results = Array.isArray(json) ? json : (json.results || json.data || []);
-          if (!results.length) return resolve(null);
-          // For Fantasy 5 filter by draw type if specified
-          const row = drawType
-            ? results.find(r => (r.drawType || r.draw_type || '').toUpperCase() === drawType.toUpperCase()) || results[0]
-            : results[0];
-          if (!row) return resolve(null);
-          // Numbers may be in various fields
-          const nums = (row.winningNumbers || row.winning_numbers || row.numbers || '')
-            .toString().split(/[,\s]+/).map(Number).filter(n => n > 0);
-          if (!nums.length) return resolve(null);
-          resolve({ numbers: nums, drawType: (row.drawType || row.draw_type || drawType || '').toUpperCase() });
-        } catch (e) { resolve(null); }
-      });
-    }).on('error', () => resolve(null));
-  });
+  const articleId = isoDate + '-' + gameId;
+  const pageUrl = url;
+  for (let _try = 0; _try < 2; _try++) {
+  try {
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+    await page.setCacheEnabled(false);
+    await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
+    const html = await page.content();
+    await page.close();
+    const idx = html.indexOf(articleId);
+    if (idx === -1) return null;
+    const chunk = html.slice(idx, idx + (game === 'fantasy5' ? 4000 : 2000));
+    // For Lotto X: strip Double Play section before extracting numbers
+    const searchChunk = game === 'lottox'
+      ? (chunk.includes('Double Play') ? chunk.slice(0, chunk.indexOf('Double Play')) : chunk)
+      : chunk;
+    if (game === 'fantasy5') {
+      // Article has both Midday and Evening — slice between the two labels
+      const dtLabel = (!drawType || drawType === 'MIDDAY') ? 'Midday' : 'Evening';
+      const otherLabel = dtLabel === 'Midday' ? 'Evening' : 'Midday';
+      const dtIdx = chunk.indexOf(dtLabel);
+      if (dtIdx === -1) return null;
+      const otherIdx = chunk.indexOf(otherLabel, dtIdx + dtLabel.length);
+      const block = chunk.slice(dtIdx, otherIdx !== -1 ? otherIdx : dtIdx + 600);
+      const numRe2 = /class="game-numbers__number"><span>(\d+)<\/span>/g;
+      const nums2 = []; let m2;
+      while ((m2 = numRe2.exec(block)) !== null) nums2.push(parseInt(m2[1]));
+      const resolvedType = dtLabel.toUpperCase();
+      if (nums2.length) return { numbers: nums2, drawType: resolvedType };
+    }
+    const numRe = /class="game-numbers__number"><span>(\d+)<\/span>/g;
+    const nums = []; let m;
+    while ((m = numRe.exec(searchChunk)) !== null) nums.push(parseInt(m[1]));
+    if (game === 'cashpop') {
+      // Cash Pop: each session is a <li> with draw name + number
+      const liRe = /<li[^>]*>.*?<div[^>]*>([^<]+)<\/div>.*?game-numbers__number[^>]*>(\d+)/gs;
+      const sessions = []; let ms;
+      while ((ms = liRe.exec(searchChunk)) !== null) {
+        const name = ms[1].trim();
+        const num = parseInt(ms[2]);
+        if (name && num >= 1 && num <= 15) sessions.push({ name, number: num });
+      }
+      if (sessions.length) {
+        // Return most recent session (last in list) or match drawType if specified
+        const session = drawType ? sessions.find(s => s.name.toUpperCase() === drawType.toUpperCase()) || sessions[sessions.length-1] : sessions[sessions.length-1];
+        return { numbers: [session.number], drawType: session.name, sessions };
+      }
+      return null;
+    }
+    if (!nums.length) return null;
+    return { numbers: nums, drawType: drawType || '' };
+  } catch (e) {
+    console.warn('Puppeteer scrape attempt ' + (_try+1) + ' failed:', e.message);
+    if (_try === 0) { _browser = null; } // reset so getBrowser() relaunches fresh
+    continue;
+  }
+  break; // success — exit retry loop
+  } // end retry loop
 }
 
 const FL_RESULTS_URLS = {
   jtp:      'https://www.floridalottery.com/games/draw-games/jackpot-triple-play',
   lottox:   'https://www.floridalottery.com/games/draw-games/florida-lotto',
-  fantasy5: 'https://www.floridalottery.com/games/draw-games/fantasy-5'
+  fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5',
+  cashpop: 'https://floridalottery.com/games/draw-games/cash-pop'
 };
+
+// Normalize date from MM/DD/YYYY (picker) to MM/DD/YY (PDF format)
+function normDateForPDF(date) {
+  const p = date.split('/');
+  if (p.length !== 3) return date;
+  return p[0] + '/' + p[1] + '/' + (p[2].length === 4 ? p[2].slice(2) : p[2]);
+}
 
 app.get('/draws/jtp', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  // Try cached PDF first (fast, already in memory)
-  try {
-    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
-    const match = draws.find(d => d.date === date);
-    if (match) return res.json({ date: match.date, numbers: match.numbers });
-  } catch (e) {}
-  // Try scrape
   const scraped = await scrapeFlDraws('jtp', date, null);
   if (scraped) return res.json({ date, numbers: scraped.numbers });
+  const pdfDate = normDateForPDF(date);
+  try {
+    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    const match = draws.find(d => d.date === pdfDate || d.date === date);
+    if (match) return res.json({ date: match.date, numbers: match.numbers });
+  } catch (e) {}
+  delete _availCache['jtp']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
 });
 
 app.get('/draws/lottox', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  try {
-    const draws = parseLottoXHistoryPDF(await getLottoXText());
-    const match = draws.find(d => d.date === date);
-    if (match) return res.json({ date: match.date, numbers: match.numbers });
-  } catch (e) {}
   const scraped = await scrapeFlDraws('lottox', date, null);
   if (scraped) return res.json({ date, numbers: scraped.numbers });
+  const pdfDate = normDateForPDF(date);
+  try {
+    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    const match = draws.find(d => d.date === pdfDate || d.date === date);
+    if (match) return res.json({ date: match.date, numbers: match.numbers });
+  } catch (e) {}
+  delete _availCache['lottox']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
 
@@ -1839,22 +1900,104 @@ app.get('/draws/fantasy5', async (req, res) => {
   const { date, draw } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   const type = (draw || '').toUpperCase();
-  try {
-    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
-    const match = draws.find(d => d.date === date && (!type || d.drawType === type));
-    if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
-  } catch (e) {}
   const scraped = await scrapeFlDraws('fantasy5', date, type);
   if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
+  const pdfDate = normDateForPDF(date);
+  try {
+    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const match = draws.find(d => (d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
+    if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
+  } catch (e) {}
+  delete _availCache['fantasy5']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
+});
+
+// Available dates cache (10 min TTL per game)
+const _availCache = {};
+async function getAvailableDates(game) {
+  const now = Date.now();
+  if (_availCache[game] && now - _availCache[game].ts < 5 * 60 * 1000) return _availCache[game].dates;
+  const GAME_URLS = {
+    jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+    lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',
+    fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5',
+    cashpop: 'https://floridalottery.com/games/draw-games/cash-pop'
+  };
+  const GAME_IDS = { jtp: 'jackpottripleplay', lottox: 'lotto', fantasy5: 'fantasy5', cashpop: 'cashpop' };
+  for (let _try = 0; _try < 2; _try++) {
+  try {
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+    await page.goto(GAME_URLS[game], { waitUntil: 'networkidle2', timeout: 30000 });
+    try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
+    const html = await page.content();
+    await page.close();
+    const re = new RegExp('(\\d{4}-\\d{2}-\\d{2})-' + GAME_IDS[game], 'g');
+    const dates = [];
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      if (!dates.includes(m[1])) dates.push(m[1]);
+    }
+    // Convert YYYY-MM-DD to MM/DD/YYYY for frontend
+    const converted = dates.map(d => {
+      const [y, mo, day] = d.split('-');
+      return mo + '/' + day + '/' + y;
+    });
+    if (converted.length) _availCache[game] = { dates: converted, ts: now };
+    return converted;
+  } catch (e) {
+    if (_try === 0) { _browser = null; continue; } // reset so getBrowser() relaunches fresh
+    return [];
+  }
+  break;
+  } // end retry loop
+  return [];
+
+}
+app.get('/draws/jtp/available', async (req, res) => {
+  res.json({ dates: await getAvailableDates('jtp') });
+});
+app.get('/draws/lottox/available', async (req, res) => {
+  res.json({ dates: await getAvailableDates('lottox') });
+});
+app.get('/draws/fantasy5/available', async (req, res) => {
+  res.json({ dates: await getAvailableDates('fantasy5') });
+});
+app.get('/draws/cashpop/available', async (req, res) => {
+  res.json({ dates: await getAvailableDates('cashpop') });
+});
+
+app.get('/draws/cashpop', async (req, res) => {
+  const { date, session } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  const scraped = await scrapeFlDraws('cashpop', date, session || null);
+  if (scraped && scraped.sessions && scraped.sessions.length) {
+    const target = session ? scraped.sessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : scraped.sessions[scraped.sessions.length-1];
+    if (target) return res.json({ date, session: target.name, number: target.number, allSessions: scraped.sessions });
+    // Session requested but not yet drawn
+    return res.status(404).json({ error: 'That session has not drawn yet for this date.', allSessions: scraped.sessions, resultsUrl: FL_RESULTS_URLS.cashpop });
+  }
+  delete _availCache['cashpop'];
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
 });
 
 app.get('/latestdraw/jtp', async (req, res) => {
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const d = draws[0];
-    res.json({ date: d.date, numbers: d.numbers });
+    const pdfLatest = draws[0];
+    // Check if scraper has something newer than the PDF
+    const scraperDates = await getAvailableDates('jtp');
+    if (scraperDates.length) {
+      const scraperLatest = scraperDates[0]; // MM/DD/YYYY, newest first
+      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
+      const pdfTs = pdfLatest.ts;
+      if (scraperTs > pdfTs) {
+        const scraped = await scrapeFlDraws('jtp', scraperLatest, null);
+        if (scraped) return res.json({ date: scraperLatest, numbers: scraped.numbers });
+      }
+    }
+    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1862,8 +2005,17 @@ app.get('/latestdraw/lottox', async (req, res) => {
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const d = draws[0];
-    res.json({ date: d.date, numbers: d.numbers });
+    const pdfLatest = draws[0];
+    const scraperDates = await getAvailableDates('lottox');
+    if (scraperDates.length) {
+      const scraperLatest = scraperDates[0];
+      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
+      if (scraperTs > pdfLatest.ts) {
+        const scraped = await scrapeFlDraws('lottox', scraperLatest, null);
+        if (scraped) return res.json({ date: scraperLatest, numbers: scraped.numbers });
+      }
+    }
+    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1871,9 +2023,25 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
   try {
     const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    // Return most recent of each draw type
-    const evening = draws.find(d => d.drawType === 'EVENING');
-    const midday  = draws.find(d => d.drawType === 'MIDDAY');
+    const now = Date.now();
+    const validDraws = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
+    let evening = validDraws.find(d => d.drawType === 'EVENING');
+    let midday  = validDraws.find(d => d.drawType === 'MIDDAY');
+    // Check if scraper has something newer
+    const scraperDates = await getAvailableDates('fantasy5');
+    if (scraperDates.length) {
+      const scraperLatest = scraperDates[0];
+      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
+      const pdfTs = evening ? evening.ts : (midday ? midday.ts : 0);
+      if (scraperTs > pdfTs) {
+        const eve = await scrapeFlDraws('fantasy5', scraperLatest, 'EVENING');
+        const mid = await scrapeFlDraws('fantasy5', scraperLatest, 'MIDDAY');
+        if (eve || mid) return res.json({
+          evening: eve ? { date: scraperLatest, numbers: eve.numbers } : null,
+          midday:  mid ? { date: scraperLatest, numbers: mid.numbers } : null
+        });
+      }
+    }
     res.json({ evening: evening ? { date: evening.date, numbers: evening.numbers } : null, midday: midday ? { date: midday.date, numbers: midday.numbers } : null });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1882,8 +2050,20 @@ app.get('/latestdraw/cashpop', async (req, res) => {
   try {
     const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const d = draws[0];
-    res.json({ date: d.date, numbers: d.numbers });
+    const pdfLatest = draws[0];
+    // Check if scraper has something newer
+    const scraperDates = await getAvailableDates('cashpop');
+    if (scraperDates.length) {
+      const scraperLatest = scraperDates[0];
+      const scraperTs = (function(d){const p=d.split('/');return new Date(parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1])).getTime();})(scraperLatest);
+      if (scraperTs >= pdfLatest.ts) {
+        const scraped = await scrapeFlDraws('cashpop', scraperLatest, null);
+        if (scraped && scraped.sessions && scraped.sessions.length) {
+          return res.json({ date: scraperLatest, numbers: pdfLatest.numbers, latestSession: scraped.sessions[scraped.sessions.length-1], sessions: scraped.sessions });
+        }
+      }
+    }
+    res.json({ date: pdfLatest.date, numbers: pdfLatest.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

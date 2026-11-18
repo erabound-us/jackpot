@@ -239,18 +239,20 @@ Florida has no state income tax.
 - When adding a new game, add its `/nextdraw/<game>` fetch to the shared poll interval
 
 ## API Surface
-GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid`
+GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid`
 POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
-- Return the most recent draw from the already-parsed PDF — no query params needed
+- Return the most recent draw — checks scraper first if scraper has something newer than the PDF
+- Strategy: get PDF latest date, get scraper available dates, if scraper[0] is newer than PDF latest, scrape it and return that; otherwise return PDF latest
+- This ensures the gold balls always show the truly latest draw even when the PDF lags behind
 - `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw)
 - `/latestdraw/lottox` → `{ date, numbers }` (6 numbers, most recent draw)
 - `/latestdraw/fantasy5` → `{ evening: { date, numbers } | null, midday: { date, numbers } | null }` (most recent of each type)
 - `/latestdraw/cashpop` → `{ date, numbers }` (5 numbers, one per draw session for that date)
-- On page load the frontend fetches all four and auto-populates `xDrawn`, the date input, and the drawn balls display
-- `/latestdraw/*` excluded from rate limiting (pure PDF read, no I/O side effects)
-- When adding a new game, add a `/latestdraw/<game>` endpoint and a page-load fetch that populates `xDrawn` + the date input + drawn balls display
+- On page load the frontend fetches all four and auto-populates `xDrawn`, the date input, and the drawn balls display in **gold**
+- `/latestdraw/*` excluded from rate limiting
+- When adding a new game, add a `/latestdraw/<game>` endpoint following the same scraper-first pattern
 
 ### POST /check/lottox body
 ```json
@@ -371,18 +373,193 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - `Remove-Item` on `.sock` files does NOT release a Windows named pipe -- only killing the owning process does
 
 ## Draw Date Lookup (/draws/* routes)
-- **Never parse the full PDF just to look up a single draw date** — it's too slow and times out on Fly.io
-- All `/draws/<game>` routes use a 3-step lookup strategy:
-  1. Check the already-parsed in-memory PDF cache first (instant, no extra I/O)
-  2. If not found, scrape the FL Lottery API (`scrapeFlDraws(game, date, drawType)`) — fast, no PDF parse
-  3. If still not found, return `{ error, resultsUrl }` — frontend shows the error + a clickable "View official results" link
-- `scrapeFlDraws(game, dateStr, drawType)` hits `https://www.floridalottery.com/api/v1/winning-numbers` with game label + ISO date
-- `FL_RESULTS_URLS` maps game keys to their official FL Lottery results pages
-- Frontend error handler for all three lookup routes must check `data.resultsUrl` and render it as an `<a>` tag when present
-- **When adding a new game**: add its game label to `GAME_IDS` in `scrapeFlDraws`, add its URL to `FL_RESULTS_URLS`, and follow the same 3-step pattern in the new `/draws/<game>` route
+
+### Lookup strategy — 3 steps in this order
+1. **Puppeteer scraper** — fetches the FL Lottery game page with headless Chrome, finds the article by ISO date ID (e.g. `2026-11-17-jackpottripleplay`), extracts numbers from `class="game-numbers__number"><span>(\d+)<\/span>` elements. Covers the last ~5 draws shown on the page.
+2. **In-memory PDF cache fallback** — uses the already-parsed daily PDF (no re-download) for historical dates not on the live page. Uses `normDateForPDF(date)` to convert `MM/DD/YYYY` to `MM/DD/YY` for matching.
+3. **Official site link** — if neither finds it, return `{ error, resultsUrl }`. Frontend renders as a clickable "View official results" link.
+
+### Why puppeteer is required
+- The FL Lottery website is **JavaScript-rendered** — a plain `https.get()` returns an empty shell with no draw data
+- The FL Lottery Azure API (`apim-website-prod-eastus.azure-api.net`) requires browser-generated auth tokens — cannot be called server-side
+- Only headless Chrome (puppeteer) gets the fully rendered HTML with draw results
+
+### Puppeteer setup
+- Package: `puppeteer` (full, not `puppeteer-core`) — bundles its own Chrome locally
+- Dockerfile: `node:22-slim` + `apt-get install chromium`; env var `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`
+- `getBrowser()` keeps a single reusable `_browser` instance — re-launched if disconnected
+- Launch args: `--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage`; `executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined`
+- Both `scrapeFlDraws` and `getAvailableDates` use a **2-attempt retry loop** — on first failure, reset `_browser = null` (do NOT call `_browser.close()` — that would kill concurrent requests) then retry with a fresh instance via `getBrowser()`
+- Never cache empty results from `getAvailableDates` — only cache when `converted.length > 0`
+- **Concurrency**: multiple simultaneous requests each open their own `page` via `browser.newPage()` and close it after — pages are isolated. The shared `_browser` instance is safe for concurrent use. Never close `_browser` from within a request handler.
+
+### scrapeFlDraws(game, dateStr, drawType)
+- Converts `MM/DD/YYYY` to `YYYY-MM-DD`, builds article ID `YYYY-MM-DD-<gameId>`
+- Fetches game page, slices 2000 chars around article ID (4000 for Fantasy 5), extracts numbers
+- Uses a **2-attempt retry loop** — on failure resets `_browser` and retries once
+- **Lotto X**: slice chunk to before `'Double Play'` string before extracting numbers — the article contains both main draw and Double Play numbers; stripping must happen BEFORE the regex runs, not after
+- **Fantasy 5**: chunk size 4000; find draw type label (`Midday`/`Evening`), slice to next label occurrence to isolate that draw's numbers
+- **CRITICAL**: the regex `/class="game-numbers__number"><span>(\d+)<\/span>/g` must be a real JS regex literal — never write it through a template or patch script that HTML-encodes `>` to `&gt;` or `<` to `&lt;`
+- When patching server.js regex lines, always use `node -e` with `split().join()` or a `.js` patch file — never PowerShell string replacement
+
+### FL Lottery game IDs (confirmed)
+| Game | Page URL | Article game ID | Notes |
+|------|----------|-----------------|-------|
+| JTP | `/games/draw-games/jackpot-triple-play` | `jackpottripleplay` | Single draw per date |
+| Lotto X | `/games/draw-games/florida-lotto` | `lotto` | Has Double Play — strip it (see below) |
+| Fantasy 5 | `/games/draw-games/fantasy5` | `fantasy5` | Two draws per date (Midday + Evening) |
+
+### Game-specific scraper notes
+- **Lotto X**: article contains both main draw AND Double Play numbers. Slice chunk to before `'Double Play'` to get only the 6 main draw numbers. Chunk size 2000 is sufficient.
+- **Fantasy 5**: article contains both Midday and Evening draws. Use chunk size 4000 (Evening label appears ~2583 chars in). Find the target draw type label (`Midday` or `Evening`), then slice to the next occurrence of the other label to isolate that draw's numbers. Default to Midday if no drawType specified.
+- **Fantasy 5 latestdraw**: filter draws to `ts > 2019-01-01` to exclude corrupt sentinel entries (e.g. `12/31/99`) that appear at the top of the PDF.
+- **Fantasy 5 available dates**: use `/games/draw-games/fantasy5` (no hyphen) — `/games/draw-games/fantasy-5` returns 404.
+
+### Available dates cache
+- `getAvailableDates(game)` scrapes the page and caches results for 5 min in `_availCache`
+- Endpoints `/draws/<game>/available` return `{ dates: ['MM/DD/YYYY', ...] }`
+- Frontend renders these as clickable chips above the date picker on page load
+- **Never cache empty results** from `getAvailableDates` — only cache when `converted.length > 0`
+- **Cache invalidation on 404**: when `/draws/<game>` returns 404 (date not found in scraper or PDF), `delete _availCache[game]` so stale chips clear on next page load
+- The FL Lottery page shows only the last ~5 draws; PDFs lag by days/weeks after each draw. Dates in the gap between page rotation and PDF update will return 404 — this is expected and the cache invalidation handles it automatically
+
+### Date format rules — CRITICAL
+- PDFs store dates as `MM/DD/YY` (2-digit year)
+- `<input type="date">` returns `YYYY-MM-DD` — frontend converts to `MM/DD/YYYY` using `parts[0]` (NOT `parts[0].slice(2)`)
+- `normDateForPDF(date)` converts `MM/DD/YYYY` to `MM/DD/YY` for PDF matching
+- Scraper converts `MM/DD/YYYY` to `YYYY-MM-DD` for article ID matching
+- **Never use `.slice(2)` on the year** — always send 4-digit year to the server
+
+### Frontend date chips pattern (all games)
+- Add `<div id="xDateChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>` above the date input
+- Add `xPickDate(d)` function: splits `MM/DD/YYYY`, sets input value as `YYYY-MM-DD`, calls `xLookupDraw()`
+- On page load: `fetch('/draws/<game>/available').then(...).then(function(d){ renderDateChips('xDateChips', d.dates, 'xPickDate'); })`
+- `renderDateChips` builds spans with `onclick="pickFn('MM/DD/YYYY')"` — single quotes inside double-quoted attribute
+- **onclick quote rule**: the date arg uses single quotes inside the double-quoted onclick attr: `'<span onclick="' + pickFn + '(\'' + d + '\')">'`
+
+### When adding a new game
+1. Add to `GAME_URLS` and `GAME_IDS` in both `scrapeFlDraws` and `getAvailableDates`
+2. Add to `FL_RESULTS_URLS`
+3. Add `/draws/<game>/available` endpoint
+4. Add `/draws/<game>` route: scraper first, PDF cache fallback, official link last
+5. Frontend: add `<div id="xDateChips">`, `xPickDate()`, and page-load fetch for available dates
+6. Frontend date conversion: `parts[0]` not `parts[0].slice(2)`
 
 ## Log Rotation
 - PM2 log files in `logs/` are trimmed automatically: any file over 1 MB is truncated to the last 500 lines
 - Rotation runs on server startup and every 24 hours via `setInterval`
 - Fly.io has no local log files — rotation only affects local PM2 logs (`combined.log`, `out.log`, `error.log`)
 - Never use `fly logs` in an agent tool call — it never completes and produces too much output; check logs via the Fly.io dashboard instead
+
+## Check My Numbers — Winning Ball Colors
+- **Gold** (`rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)`) — latest draw auto-populated on page load via `/latestdraw/*`, AND when the user selects that same date via chip or calendar
+- **Green** (`rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4)`) — any other date the user looks up
+- This applies to ALL games consistently — never use blue (accent) for winning number balls in Check My Numbers
+- The color decision happens in `xLookupDraw()` by comparing the selected date against `xLatestDate` (set during page-load latestdraw fetch)
+
+### Implementation pattern (must follow for every game)
+1. Declare `var xLatestDate = null;` alongside other game state variables
+2. In the `/latestdraw/<game>` page-load fetch, store the date: `xLatestDate = mmddyyToInputDate(d.date);` before setting the input value
+3. In `xLookupDraw()`, after getting data back, compare dates to pick color:
+```js
+var _isLatest = xLatestDate && document.getElementById('xDrawDate').value === xLatestDate;
+var _ballStyle = _isLatest
+  ? 'background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)'
+  : 'background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4)';
+document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) {
+  return '<div class="hball" style="' + _ballStyle + ';width:36px;height:36px;font-size:13px;">' + n + '</div>';
+}).join('');
+```
+4. The `/latestdraw/<game>` page-load fetch always renders gold directly (hardcoded, no comparison needed)
+5. For multi-draw-per-day games (Fantasy 5): `xLatestDate` stores the date of the most recent draw regardless of draw type
+
+## Check My Numbers — Full Checklist (when adding a new game)
+1. Add `<div id="xDateChips">` above the date input
+2. Add `xPickDate(d)` function — converts `MM/DD/YYYY` to `YYYY-MM-DD` for the input, calls `xLookupDraw()`
+3. On page load: fetch `/draws/<game>/available` → `renderDateChips('xDateChips', d.dates, 'xPickDate')`
+4. Declare `var xLatestDate = null;` alongside other game state vars
+5. On page load: fetch `/latestdraw/<game>` → store `xLatestDate = mmddyyToInputDate(d.date)`, populate `xDrawn`, date input, drawn balls in **gold** (hardcoded)
+6. `xLookupDraw()` — converts date picker value to `MM/DD/YYYY` using `parts[0]` (4-digit year, never `.slice(2)`), fetches `/draws/<game>?date=...`, compares selected date to `xLatestDate` to pick **gold** (latest) or **green** (other)
+7. Error handler checks `data.resultsUrl` and renders as `<a>` link when present
+8. Server `/draws/<game>` route: scraper first, PDF cache fallback, official link last
+9. Server `/draws/<game>/available`: calls `getAvailableDates('<game>')` — add game to both `GAME_URLS` and `GAME_IDS` inside that function
+10. Server `/latestdraw/<game>`: filter draws to `ts > new Date('2019-01-01').getTime()` to exclude corrupt PDF sentinel dates
+11. Add game to `scrapeFlDraws` `GAME_URLS` and `GAME_IDS`; add to `FL_RESULTS_URLS`
+12. For multi-draw-per-day games (like Fantasy 5): use chunk size 4000; slice between draw type labels to isolate numbers; strip secondary draw data (like Lotto X Double Play) before extracting numbers
+
+## Scraper Verification
+- Always verify scraper output against known correct values from the FL Lottery website before deploying
+- Use a standalone `.js` test script with hardcoded expected values for each game/date/drawType
+- Fantasy 5 requires 6 tests minimum: 3 dates x 2 draw types (Midday + Evening)
+- Lotto X requires verifying Double Play numbers are NOT included (only 6 numbers returned, not 12)
+- Delete test scripts after verification (`del verify_*.js`)
+
+## Cash Pop Check My Numbers
+- Cash Pop has 5 draws per day — Check My Numbers uses a date picker + session selector (Morning/Matinee/Afternoon/Evening/Late Night)
+- `/draws/cashpop?date=MM/DD/YYYY&session=Morning` — scrapes the FL Lottery page for that date/session, returns `{ date, session, number, allSessions }`
+- When a session hasn't drawn yet, the route returns `{ error, allSessions, resultsUrl }` — frontend shows "Available: Morning, Matinee" etc. instead of a generic error
+- **Frontend always fetches without session param first** to get `allSessions`, then picks the requested session or falls back to the latest available. This prevents "session not drawn yet" errors when the user picks a date from the calendar.
+- For Fantasy 5: frontend fetches both MIDDAY and EVENING in parallel, then picks the requested draw type or falls back to whichever has drawn. This prevents errors when Evening hasn't drawn yet.
+- `/draws/cashpop/available` — returns available dates from scraper (same pattern as other games)
+- `/latestdraw/cashpop` — scraper-first: checks if scraper has something newer than PDF, returns `{ date, numbers, latestSession, sessions }` when scraper succeeds
+- Frontend on page load: sets date input + session dropdown to latest draw, shows winning number in **gold**
+- Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
+- Cash Pop article structure differs from other games: numbers are in `<span class="game-numbers__number mt-2 text-black">3</span>` (no inner `<span>`) — use regex `/<li[^>]*>.*?<div[^>]*>([^<]+)<\/div>.*?game-numbers__number[^>]*>(\d+)/gs` to extract session name + number
+- The cashpop block in `scrapeFlDraws` must come **before** the `if (!nums.length) return null` check — Cash Pop numbers don't match the standard `game-numbers__number><span>` regex so `nums` will be empty
+
+## Draw Session / Draw Type Selectors — Rules
+- **Never add a "Latest" option** to any draw type or session dropdown — it confuses players who expect to see results for a specific draw
+- All dropdowns must list only the actual named sessions/draw types for that game
+- Fantasy 5: `Midday` | `Evening` (labeled "Session", no default/latest option)
+- Cash Pop: `Morning` | `Matinee` | `Afternoon` | `Evening` | `Late Night` (labeled "Session", no default/latest option)
+- On page load, set the dropdown to the actual latest draw's session/type name (from `/latestdraw/<game>`)
+- Reset button must restore to the latest draw's date + session/type, not clear to blank
+
+## Patching index.html — Safety Rules
+- **Never use string slicing (`src.slice(start, end)`) to replace a function** — if the start marker appears at position 0 (file corrupted) or the end marker isn't found, the entire file gets replaced with just the new function
+- **Always verify the file starts with `<!DOCTYPE html>`** after any patch: `node -e "const s=require('fs').readFileSync('public/index.html','utf8');console.log(s.slice(0,20))"`
+- **Use line-number replacement** (`lines.splice(startIdx, count, ...newLines)`) for replacing entire functions — safer than string matching
+- **Use `src.replace(exactString, newString)`** only for small targeted changes where the exact string is unique and verified to exist first
+- **Always read and write in one script** — never split into multiple scripts that each read/write the same file, or intermediate saves will be lost
+- **After any patch, verify key strings are present**: `node -e "const s=require('fs').readFileSync('public/index.html','utf8');console.log(s.includes('renderDateChips'), s.slice(0,20))"`
+- **Keep git as the recovery mechanism** — `git show <commit>:public/index.html > public/index.html` restores the last deployed version
+
+## When Adding a New Game — Complete Checklist
+
+### Server (server.js)
+1. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
+2. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
+3. Add game URL to `FL_RESULTS_URLS`
+4. Add `/draws/<game>/available` endpoint calling `getAvailableDates('<game>')`
+5. Add `/draws/<game>` route: scraper first, PDF cache fallback (`normDateForPDF`), `delete _availCache['<game>']` + official link on 404
+6. Add `/latestdraw/<game>` endpoint: scraper-first (check if scraper has newer date than PDF), filter sentinel dates (`ts > 2019-01-01`), return `{ date, numbers }`
+7. Add `/nextdraw/<game>` endpoint (pure date math, no scraping)
+8. Add `/analyze/<game>`, `/refresh/<game>`, `/check/<game>`, `/chat/<game>` endpoints
+9. Add game to `schedulePostDrawRefreshes()` if it has multiple draws per day
+10. For multi-draw games: handle draw type in `scrapeFlDraws` (slice between labels, use chunk size 4000)
+11. For games with secondary draw data (like Lotto X Double Play): strip before extracting numbers
+12. For games with non-standard number HTML (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`
+
+### Frontend (public/index.html)
+1. Add `var xLatestDate = null;` and `var xLastWin = null;` with other game state vars
+2. Add `<div id="xDateChips">` above the date input in Check My Numbers
+3. Add session/draw-type selector if game has multiple draws per day — label it **"Session"**, never "Draw" or "Latest"
+4. Add `xPickDate(d)` function — converts `MM/DD/YYYY` to `YYYY-MM-DD`, calls `xLookupDraw()`
+5. Add `xLookupDraw()` — fetches without session param first to get all available sessions, then picks requested or falls back to latest; uses `_isLatest` comparison for gold/green color
+6. For multi-session games: fetch all sessions in parallel (like Fantasy 5) or fetch without session and use `allSessions` (like Cash Pop)
+7. On page load: fetch `/draws/<game>/available` → `renderDateChips('xDateChips', d.dates, 'xPickDate')`
+8. On page load: fetch `/latestdraw/<game>` → store `xLatestDate`, set date input + session dropdown, show gold balls
+9. Reset button restores to latest draw (not blank) using `xLatestDate` and `xLatestSession`
+10. Add `xEmailCard`, `xEmailIncLines`, `xEmailIncWinning`, `xSendEmail()` following email checklist
+11. Add `xSendChat()` with `context: { spend, lines, game, won: xLastWin }`
+12. Add `/nextdraw/<game>` fetch to the shared `setInterval` poll
+
+### Consistency Rules (apply to every game)
+- Gold balls = latest draw (page load + when user selects that same date)
+- Green balls = any other date user looks up
+- Session/draw-type label always says **"Session"** not "Draw"
+- No "Latest" option in any dropdown
+- Reset always restores to latest, never clears to blank
+- Date chips show `MM/DD` format, clickable, above the date input
+- `xLookupDraw()` always sends 4-digit year (`parts[0]` not `parts[0].slice(2)`)
+- Error handler always checks `data.resultsUrl` and renders as clickable link

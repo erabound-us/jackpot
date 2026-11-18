@@ -1,0 +1,12 @@
+.cmp-accordion__header{margin:0}
+.cmp-accordion__button{display:block;width:100%;text-align:left}
+.cmp-accordion__panel--hidden{display:none}
+.cmp-accordion__panel--expanded{display:block}
+.cmp-image__image{width:100%}
+.cmp-breadcrumb{display:inline-block;list-style:none;padding:0}
+.cmp-breadcrumb__item{display:inline-block;vertical-align:top}
+.cmp-form-text .cmp-form-text__validation-message{visibility:hidden}
+.cmp-form-text :invalid + .cmp-form-text__validation-message{visibility:visible}
+.cmp-pdfviewer__content{height:500px}
+.pdfviewer:not(.cq-Editable-dom) .cmp-pdfviewer__full-window-borderless{height:100vh;position:fixed;width:100vw;top:0;left:0;z-index:9999}
+.pdfviewer.cq-Editable-dom .cmp-pdfviewer__full-window-borderless{height:500px}
