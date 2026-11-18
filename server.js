@@ -1775,7 +1775,7 @@ app.post('/refresh/fantasy5', async (req, res) => {
 let _browser = null;
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
+    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--no-zygote'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
   }
   return _browser;
 }
@@ -1796,12 +1796,13 @@ async function scrapeFlDraws(game, dateStr, drawType) {
   const isoDate = parts[2] + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
   const articleId = isoDate + '-' + gameId;
   const pageUrl = url;
+  const _ck = game + '|' + dateStr + '|' + (drawType || '');
+  if (_scrapeCache[_ck]) return _scrapeCache[_ck];
   for (let _try = 0; _try < 2; _try++) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.setCacheEnabled(false);
-    await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
@@ -1824,7 +1825,7 @@ async function scrapeFlDraws(game, dateStr, drawType) {
       const nums2 = []; let m2;
       while ((m2 = numRe2.exec(block)) !== null) nums2.push(parseInt(m2[1]));
       const resolvedType = dtLabel.toUpperCase();
-      if (nums2.length) return { numbers: nums2, drawType: resolvedType };
+      if (nums2.length) { const _r = { numbers: nums2, drawType: resolvedType }; _scrapeCache[_ck] = _r; return _r; }
     }
     const numRe = /class="game-numbers__number"><span>(\d+)<\/span>/g;
     const nums = []; let m;
@@ -1841,12 +1842,12 @@ async function scrapeFlDraws(game, dateStr, drawType) {
       if (sessions.length) {
         // Return most recent session (last in list) or match drawType if specified
         const session = drawType ? sessions.find(s => s.name.toUpperCase() === drawType.toUpperCase()) || sessions[sessions.length-1] : sessions[sessions.length-1];
-        return { numbers: [session.number], drawType: session.name, sessions };
+        const _r = { numbers: [session.number], drawType: session.name, sessions }; _scrapeCache[_ck] = _r; return _r;
       }
       return null;
     }
     if (!nums.length) return null;
-    return { numbers: nums, drawType: drawType || '' };
+    const _r = { numbers: nums, drawType: drawType || '' }; _scrapeCache[_ck] = _r; return _r;
   } catch (e) {
     console.warn('Puppeteer scrape attempt ' + (_try+1) + ' failed:', e.message);
     if (_try === 0) { _browser = null; } // reset so getBrowser() relaunches fresh
@@ -1932,7 +1933,7 @@ async function getAvailableDates(game) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.goto(GAME_URLS[game], { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 30000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
