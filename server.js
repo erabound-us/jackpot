@@ -1778,6 +1778,9 @@ async function getBrowser() {
   }
   return _browser;
 }
+async function closeBrowser() {
+  if (_browser) { try { await _browser.close(); } catch(_) {} _browser = null; }
+}
 
 async function scrapeFlDraws(game, dateStr, drawType) {
   const GAME_URLS = {
@@ -1811,6 +1814,7 @@ async function scrapeFlDraws(game, dateStr, drawType) {
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
+    await closeBrowser();
     const idx = html.indexOf(articleId);
     if (idx === -1) return null;
     const chunk = html.slice(idx, idx + (game === 'fantasy5' ? 4000 : 2000));
@@ -1957,6 +1961,7 @@ async function getAvailableDates(game) {
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
+    await closeBrowser();
     const re = new RegExp('(\\d{4}-\\d{2}-\\d{2})-' + GAME_IDS[game], 'g');
     const dates = [];
     let m;
