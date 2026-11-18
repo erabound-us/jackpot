@@ -1258,6 +1258,8 @@ async function start() {
       failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`));
     }
 
+    getBrowser().catch(() => {});
+
     const localUrl = `http://localhost:${port}`;
     console.log('');
     console.log('╔══════════════════════════════════════════════════════╗');
