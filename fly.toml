@@ -19,7 +19,7 @@ primary_region = "iad"
     grace_period = "10s"
     interval = "15s"
     method = "GET"
-    path = "/"
+    path = "/health"
     timeout = "5s"
 
   [http_service.concurrency]

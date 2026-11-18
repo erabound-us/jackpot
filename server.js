@@ -414,6 +414,8 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 app.get('/nextdraw', (req, res) => res.json(getNextDraw()));
 
+app.get('/health', (req, res) => res.sendStatus(200));
+
 app.get('/mode', (req, res) => {
   const isPublic = !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
   res.json({ local: !isPublic });
