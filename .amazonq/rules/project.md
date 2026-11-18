@@ -239,8 +239,18 @@ Florida has no state income tax.
 - When adding a new game, add its `/nextdraw/<game>` fetch to the shared poll interval
 
 ## API Surface
-GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid`
+GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid`
 POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/email` `/email/config` `/email/test`
+
+### /latestdraw/* endpoints
+- Return the most recent draw from the already-parsed PDF — no query params needed
+- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw)
+- `/latestdraw/lottox` → `{ date, numbers }` (6 numbers, most recent draw)
+- `/latestdraw/fantasy5` → `{ evening: { date, numbers } | null, midday: { date, numbers } | null }` (most recent of each type)
+- `/latestdraw/cashpop` → `{ date, numbers }` (5 numbers, one per draw session for that date)
+- On page load the frontend fetches all four and auto-populates `xDrawn`, the date input, and the drawn balls display
+- `/latestdraw/*` excluded from rate limiting (pure PDF read, no I/O side effects)
+- When adding a new game, add a `/latestdraw/<game>` endpoint and a page-load fetch that populates `xDrawn` + the date input + drawn balls display
 
 ### POST /check/lottox body
 ```json
@@ -291,7 +301,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 ## Rate Limits (per IP/min)
 `/analyze` 10 | `/refresh` 3 | `/email` 5 | `/check` 20 | `/chat` 30 | global cap 120 (all routes combined)
 - Request body size capped at 20 KB — oversized payloads rejected with 413
-- `/nextdraw/*` excluded from per-route limits but still subject to global cap
+- `/nextdraw/*` and `/latestdraw/*` excluded from per-route limits but still subject to global cap
 - Auto-blacklist: 5 rate-limit strikes within 10 min → 24h IP ban → 403 on all requests
 - Blacklist bans and expirations are logged (`console.log`); blacklist is in-memory and resets on server restart
 

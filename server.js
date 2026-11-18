@@ -1800,6 +1800,44 @@ app.get('/draws/jtp', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/latestdraw/jtp', async (req, res) => {
+  try {
+    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/latestdraw/lottox', async (req, res) => {
+  try {
+    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/latestdraw/fantasy5', async (req, res) => {
+  try {
+    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    // Return most recent of each draw type
+    const evening = draws.find(d => d.drawType === 'EVENING');
+    const midday  = draws.find(d => d.drawType === 'MIDDAY');
+    res.json({ evening: evening ? { date: evening.date, numbers: evening.numbers } : null, midday: midday ? { date: midday.date, numbers: midday.numbers } : null });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/latestdraw/cashpop', async (req, res) => {
+  try {
+    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/check/fantasy5', (req, res) => {
   const { drawn, line } = req.body;
   if (!Array.isArray(drawn) || drawn.length !== 5 || !Array.isArray(line) || line.length !== 5)

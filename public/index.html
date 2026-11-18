@@ -2092,6 +2092,55 @@ setInterval(function() {
   fetch('/nextdraw/cashpop').then(function(r){return r.json();}).then(function(d){cpStartCountdown(d);}).catch(function(){});
   fetch('/nextdraw/fantasy5').then(function(r){return r.json();}).then(function(d){f5StartCountdown(d);}).catch(function(){});
 }, 60000);
+
+// Auto-populate latest winning numbers on page load
+function mmddyyToInputDate(d) {
+  var p = d.split('/');
+  var yr = parseInt(p[2]); if (yr < 100) yr += 2000;
+  return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+}
+
+fetch('/latestdraw/jtp').then(function(r){return r.json();}).then(function(d){
+  if (d.error) return;
+  jtpDrawn = d.numbers;
+  document.getElementById('jtpDrawDate').value = mmddyyToInputDate(d.date);
+  document.getElementById('jtpDrawnDisplay').style.display = 'block';
+  document.getElementById('jtpDrawnBalls').innerHTML = d.numbers.map(function(n){
+    return '<div class="hball" style="background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+  }).join('');
+}).catch(function(){});
+
+fetch('/latestdraw/lottox').then(function(r){return r.json();}).then(function(d){
+  if (d.error) return;
+  lxDrawn = d.numbers;
+  document.getElementById('lxDrawDate').value = mmddyyToInputDate(d.date);
+  document.getElementById('lxDrawnDisplay').style.display = 'block';
+  document.getElementById('lxDrawnBalls').innerHTML = d.numbers.map(function(n){
+    return '<div class="hball" style="background:rgba(79,142,247,0.15);color:var(--accent);border-color:rgba(79,142,247,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+  }).join('');
+}).catch(function(){});
+
+fetch('/latestdraw/fantasy5').then(function(r){return r.json();}).then(function(d){
+  if (d.error) return;
+  var latest = d.evening || d.midday;
+  if (!latest) return;
+  f5Drawn = latest.numbers;
+  document.getElementById('f5DrawDate').value = mmddyyToInputDate(latest.date);
+  document.getElementById('f5DrawType').value = d.evening ? 'EVENING' : 'MIDDAY';
+  document.getElementById('f5DrawnDisplay').style.display = 'block';
+  document.getElementById('f5DrawnBalls').innerHTML = latest.numbers.map(function(n){
+    return '<div class="hball" style="background:rgba(79,142,247,0.15);color:var(--accent);border-color:rgba(79,142,247,0.4);width:36px;height:36px;font-size:13px;">' + n + '</div>';
+  }).join('');
+}).catch(function(){});
+
+fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d){
+  if (d.error) return;
+  // numbers[0] is the most recent draw's winning number
+  var winNum = d.numbers[0];
+  cpWinNum = winNum;
+  var inp = document.getElementById('cpWinNum');
+  if (inp) inp.value = winNum;
+}).catch(function(){});
 </script>
 
 <!-- FAQ Modal -->
