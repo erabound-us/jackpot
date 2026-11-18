@@ -1873,14 +1873,14 @@ function normDateForPDF(date) {
 app.get('/draws/jtp', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  const scraped = await scrapeFlDraws('jtp', date, null);
-  if (scraped) return res.json({ date, numbers: scraped.numbers });
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
     const match = draws.find(d => d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
+  const scraped = await scrapeFlDraws('jtp', date, null);
+  if (scraped) return res.json({ date, numbers: scraped.numbers });
   delete _availCache['jtp']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
 });
@@ -1888,14 +1888,14 @@ app.get('/draws/jtp', async (req, res) => {
 app.get('/draws/lottox', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  const scraped = await scrapeFlDraws('lottox', date, null);
-  if (scraped) return res.json({ date, numbers: scraped.numbers });
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
     const match = draws.find(d => d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
+  const scraped = await scrapeFlDraws('lottox', date, null);
+  if (scraped) return res.json({ date, numbers: scraped.numbers });
   delete _availCache['lottox']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
@@ -1904,14 +1904,14 @@ app.get('/draws/fantasy5', async (req, res) => {
   const { date, draw } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   const type = (draw || '').toUpperCase();
-  const scraped = await scrapeFlDraws('fantasy5', date, type);
-  if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
     const match = draws.find(d => (d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
+  const scraped = await scrapeFlDraws('fantasy5', date, type);
+  if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
   delete _availCache['fantasy5']; // invalidate chips cache so stale dates clear
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
 });
