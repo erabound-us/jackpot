@@ -250,14 +250,15 @@ function getNextDraw() {
 
 // ── PDF parsing ───────────────────────────────────────────────────────────────
 
-function extractPDFText(buffer) {
+function extractPDFText(pathOrBuffer) {
   return new Promise((resolve, reject) => {
     const p = new PDFParser(null, 1);
     const _warn = console.warn;
     console.warn = () => {};
-    p.on('pdfParser_dataReady', () => { console.warn = _warn; resolve(p.getRawTextContent()); });
+    p.on('pdfParser_dataReady', () => { console.warn = _warn; resolve(p.getRawTextContent()); p.destroy(); });
     p.on('pdfParser_dataError', e => { console.warn = _warn; reject(new Error(e.parserError)); });
-    p.parseBuffer(buffer);
+    if (typeof pathOrBuffer === 'string') p.loadPDF(pathOrBuffer);
+    else p.parseBuffer(pathOrBuffer);
   });
 }
 
@@ -454,16 +455,59 @@ app.get('/analyze', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/refresh', async (req, res) => {
-  try {
-    const dl = await downloadPDFs();
+// ── Serialized refresh queue ─────────────────────────────────────────────────
+// All PDF downloads go through a single queue -- one at a time, no concurrent
+// parses, no OOM from simultaneous 2.7MB Fantasy 5 + 1MB Lotto X loads.
+
+const _refreshQueue = [];
+let _refreshRunning = false;
+const _refreshStatus = {}; // game -> { state: 'queued'|'running'|'done'|'error', ts, detail }
+
+function enqueueRefresh(game, downloadFn, onDone) {
+  _refreshStatus[game] = { state: 'queued', ts: Date.now() };
+  _refreshQueue.push({ game, downloadFn, onDone });
+  processRefreshQueue();
+}
+
+function processRefreshQueue() {
+  if (_refreshRunning || !_refreshQueue.length) return;
+  _refreshRunning = true;
+  const { game, downloadFn, onDone } = _refreshQueue.shift();
+  _refreshStatus[game] = { state: 'running', ts: Date.now() };
+  console.log('Refresh queue: starting ' + game);
+  downloadFn()
+    .catch(err => {
+      console.warn('Refresh queue: ' + game + ' failed, retrying in 30s: ' + err.message);
+      _refreshStatus[game] = { state: 'retrying', ts: Date.now(), detail: err.message };
+      return new Promise(resolve => setTimeout(resolve, 30000)).then(() => downloadFn());
+    })
+    .then(() => {
+      _refreshStatus[game] = { state: 'done', ts: Date.now() };
+      console.log('Refresh queue: done ' + game);
+      if (onDone) onDone(null);
+    })
+    .catch(err => {
+      _refreshStatus[game] = { state: 'error', ts: Date.now(), detail: err.message };
+      console.warn('Refresh queue: ' + game + ' failed after retry: ' + err.message);
+      if (onDone) onDone(err);
+    })
+    .finally(() => {
+      _refreshRunning = false;
+      processRefreshQueue();
+    });
+}
+
+app.get('/refresh/status', (req, res) => res.json(_refreshStatus));
+
+app.post('/refresh', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  enqueueRefresh('jtp', () => downloadPDFs().then(dl => {
     const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-    if (failed.length)
-      return res.status(502).json({ error: `Download failed: ${failed.map(([k, v]) => `${k}: ${v}`).join(', ')}` });
-    const sid = req.body && req.body.sid ? req.body.sid : null;
-    clearSession(sid);
-    res.json(await runAnalysis(6, sid));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    if (failed.length) throw new Error('Download failed: ' + failed.map(([k,v]) => k+': '+v).join(', '));
+    lastAutoRefreshDate = null;
+  }));
+  clearSession(sid);
+  res.json({ queued: true, game: 'jtp' });
 });
 
 app.post('/reset', (req, res) => { clearSession(req.body && req.body.sid ? req.body.sid : null); res.json({ ok: true }); });
@@ -1169,13 +1213,13 @@ app.get('/analyze/lottox', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/refresh/lottox', async (req, res) => {
-  try {
-    await downloadFile(PDF_URLS_LX, PDF_PATH_LX);
-    const sid = req.body && req.body.sid ? req.body.sid : null;
-    clearSession(sid);
-    res.json(await runAnalysisLottoX(6, sid));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+app.post('/refresh/lottox', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => {
+    lastAutoRefreshLottoX = null; lxCache = null;
+  }));
+  clearSession(sid);
+  res.json({ queued: true, game: 'lottox' });
 });
 
 app.post('/check/lottox', (req, res) => {
@@ -1407,13 +1451,13 @@ app.get('/analyze/cashpop', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/refresh/cashpop', async (req, res) => {
-  try {
-    await downloadFile(PDF_URL_CP, PDF_PATH_CP);
-    const sid = req.body && req.body.sid ? req.body.sid : null;
-    clearSession(sid);
-    res.json(await runAnalysisCashPop(5, sid));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+app.post('/refresh/cashpop', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => {
+    lastAutoRefreshCP = null;
+  }));
+  clearSession(sid);
+  res.json({ queued: true, game: 'cashpop' });
 });
 
 app.post('/check/cashpop', (req, res) => {
@@ -1775,13 +1819,13 @@ app.get('/analyze/fantasy5', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/refresh/fantasy5', async (req, res) => {
-  try {
-    await downloadFile(PDF_URL_F5, PDF_PATH_F5);
-    const sid = req.body && req.body.sid ? req.body.sid : null;
-    clearSession(sid);
-    res.json(await runAnalysisFantasy5(6, sid));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+app.post('/refresh/fantasy5', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => {
+    lastAutoRefreshF5 = null; f5Cache = null;
+  }));
+  clearSession(sid);
+  res.json({ queued: true, game: 'fantasy5' });
 });
 
 // ── Draw lookup via scrape (fast, no PDF parse) ───────────────────────────────
@@ -2175,29 +2219,24 @@ function schedulePostDrawRefreshes() {
   const lxDays   = [3, 6];
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
-    downloadFile(PDF_URL_F5, PDF_PATH_F5)
-      .then(() => { lastAutoRefreshF5 = null; console.log('Post-draw refresh: Fantasy 5 PDF updated'); })
-      .catch(err => console.warn('Post-draw refresh failed (Fantasy 5): ' + err.message));
+    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; f5Cache = null; }));
+    console.log('Post-draw refresh queued: Fantasy 5');
   }));
 
   cpTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
-    downloadFile(PDF_URL_CP, PDF_PATH_CP)
-      .then(() => { lastAutoRefreshCP = null; console.log('Post-draw refresh: Cash Pop PDF updated'); })
-      .catch(err => console.warn('Post-draw refresh failed (Cash Pop): ' + err.message));
+    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; }));
+    console.log('Post-draw refresh queued: Cash Pop');
   }));
 
-  // JTP & Lotto X: schedule daily at 11:20 PM ET but only download on valid draw days
   scheduleDaily(23, 20, () => {
     const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
     if (jtpDays.includes(day)) {
-      downloadPDFs()
-        .then(() => { lastAutoRefreshDate = null; console.log('Post-draw refresh: JTP PDFs updated'); })
-        .catch(err => console.warn('Post-draw refresh failed (JTP): ' + err.message));
+      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; }));
+      console.log('Post-draw refresh queued: JTP');
     }
     if (lxDays.includes(day)) {
-      downloadFile(PDF_URLS_LX, PDF_PATH_LX)
-        .then(() => { lastAutoRefreshLottoX = null; lxCache = null; console.log('Post-draw refresh: Lotto X PDF updated'); })
-        .catch(err => console.warn('Post-draw refresh failed (Lotto X): ' + err.message));
+      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; lxCache = null; }));
+      console.log('Post-draw refresh queued: Lotto X');
     }
   });
 }
