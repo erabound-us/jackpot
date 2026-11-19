@@ -11,6 +11,7 @@ deploy.ps1
 xcopy_exclude.txt
 test_out.txt
 patch_chat2.js
+generate_draw_cache.js
 jackpot-tunnel-config.yml
 %BDIR%
 .amazonq

@@ -335,14 +335,42 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
 - **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
 
-- PDFs > 1 MB (currently Lotto X ~1 MB, Fantasy 5 ~2.7 MB) use an mtime-based in-memory parse cache with **serialized parsing**
-- Cache stores `{ text, mtime }` — invalidates automatically when `fs.statSync().mtimeMs` changes
-- **Serialized parse**: `lxParsePromise` and `f5ParsePromise` prevent concurrent parses — if a parse is already in progress, subsequent requests wait for it instead of starting a new one. This prevents OOM from multiple simultaneous 2.7MB PDF parses.
-- Pattern: `if (cache && cache.mtime === mtime) return cache.text; if (!parsePromise) { parsePromise = extractPDFText(...).then(text => { cache = {text, mtime}; parsePromise = null; return text; }); } return parsePromise;`
-- `downloadFile()` writes atomically via `.tmp` rename so mtime only updates when the full file is committed — no partial-read risk
-- PDFs under 1 MB (JTP, JTP frequency, Cash Pop) are read and parsed fresh on every request — no cache
-- Cache invalidation is logged (`console.log`) so stale-data issues are traceable; never silently serve stale
-- When adding a new game with a PDF > 1 MB, add a `getXxxText()` cache function with serialized parse following the same pattern
+## JSON Draw Cache (Lotto X and Fantasy 5)
+Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Instead:
+
+### Architecture
+- **Local machine** parses the full PDF history once using `generate_draw_cache.js`, producing `lottox_draws.json` and `fantasy5_draws.json` (500 draws each, ~70KB each)
+- **JSON files are committed to the repo** and included in the Docker image -- Fly reads JSON at startup (instant, no PDF parse, no OOM risk)
+- **After each draw**: server downloads PDF, parses only rows newer than `draws[0].ts` (delta), prepends to JSON, saves, caps at 500
+- **History is immutable** -- older draws never change, so the JSON never needs a full re-parse unless you run `generate_draw_cache.js` locally
+
+### Key functions
+- `getLottoXDraws()` -- reads `lottox_draws.json` into memory (cached in `lxDrawsCache`), returns draw array instantly
+- `getFantasy5Draws()` -- reads `fantasy5_draws.json` into memory (cached in `f5DrawsCache`), returns draw array instantly
+- `appendLottoXDeltas()` -- downloads PDF, parses only new rows since last JSON entry, prepends + saves JSON
+- `appendFantasy5Deltas()` -- same for Fantasy 5
+
+### Startup sequence
+1. `server.listen()` -- health check passes immediately
+2. `downloadPDFs()` -- downloads all PDFs including LX + F5 (needed for delta detection)
+3. `appendLottoXDeltas()` -- picks up any draws since last JSON build (usually 0-2 rows, fast)
+4. `appendFantasy5Deltas()` -- same
+5. `_serverReady = true` -- gate opens, users can access all routes
+
+### When to run generate_draw_cache.js locally
+- When adding a new game (initial JSON build)
+- After a long outage where many draws were missed and the delta would be large
+- Never needs to run on Fly -- JSON is always current via deltas
+
+### When adding a new game with PDF > 1 MB
+1. Run `generate_draw_cache.js` locally to build initial JSON (add the game's parser to the script)
+2. Add `getXxxDraws()` and `appendXxxDeltas()` functions following the LX/F5 pattern
+3. Add `appendXxxDeltas()` to the startup chain before `_serverReady = true`
+4. Commit the JSON file -- it will be included in the Docker image
+5. No `getXxxText()` cache function needed -- JSON replaces it entirely
+
+### PDFs under 1 MB (JTP, JTP frequency, Cash Pop)
+- Still parsed fresh on every request via direct `extractPDFText(path)` -- fast enough, no JSON cache needed
 
 - JTP History PDF: `https://files.floridalottery.com/exptkt/jtp.pdf`
 - JTP Frequency PDF: `https://files.floridalottery.com/exptkt/jackpot-triple-play_number-frequency-chart.pdf`

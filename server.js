@@ -170,8 +170,8 @@ async function downloadPDFs() {
     catch (e) { results[key] = e.message; }
   }
   await Promise.all([
-    downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { results.lottox  = 'ok'; lxCache = null; }).catch(e => { results.lottox  = e.message; }),
-    downloadFile(PDF_URL_F5,  PDF_PATH_F5).then(() => { results.fantasy5 = 'ok'; f5Cache = null; }).catch(e => { results.fantasy5 = e.message; }),
+    downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { results.lottox  = 'ok'; lxDrawsCache = null; }).catch(e => { results.lottox  = e.message; }),
+    downloadFile(PDF_URL_F5,  PDF_PATH_F5).then(() => { results.fantasy5 = 'ok'; f5DrawsCache = null; }).catch(e => { results.fantasy5 = e.message; }),
     downloadFile(PDF_URL_CP,  PDF_PATH_CP).then(() => { results.cashpop  = 'ok'; }).catch(e => { results.cashpop  = e.message; }),
   ]);
   return results;
@@ -1054,29 +1054,36 @@ function generateLottoXLines(freq, draws, count = 6, seenLines = new Set()) {
   return lines.slice(0, count);
 }
 
-// mtime-based parse cache for PDFs > 1 MB -- never stale: invalidates when file changes on disk
-let lxCache = null;
-let lxParsePromise = null;
+// JSON draw cache -- replaces PDF text cache for large PDFs
+// Reads from committed JSON file (instant), appends deltas after each refresh
+const JSON_PATH_LX = path.join(__dirname, 'lottox_draws.json');
+let lxDrawsCache = null;
 
-async function getLottoXText() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_LX).mtimeMs; } catch(e) { throw new Error('Lotto X PDF not yet downloaded. Try again in a moment.'); }
-  if (lxCache && lxCache.mtime === mtime) return lxCache.text;
-  if (!lxParsePromise) {
-    lxParsePromise = extractPDFText(PDF_PATH_LX).then(text => {
-      lxCache = { text, mtime };
-      lxParsePromise = null;
-      console.log('Lotto X PDF cache refreshed (mtime changed)');
-      return text;
-    });
-  }
-  return lxParsePromise;
+function getLottoXDraws() {
+  if (lxDrawsCache) return lxDrawsCache;
+  try {
+    lxDrawsCache = JSON.parse(fs.readFileSync(JSON_PATH_LX, 'utf8'));
+    return lxDrawsCache;
+  } catch(e) { throw new Error('Lotto X draw cache not found. Run generate_draw_cache.js locally.'); }
+}
+
+async function appendLottoXDeltas() {
+  const existing = getLottoXDraws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await extractPDFText(PDF_PATH_LX); } catch(e) { return; }
+  const all = parseLottoXHistoryPDF(text);
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log('Lotto X: no new draws in PDF.'); return; }
+  const merged = newDraws.concat(existing).slice(0, 500);
+  lxDrawsCache = merged;
+  fs.writeFileSync(JSON_PATH_LX, JSON.stringify(merged, null, 2));
+  console.log('Lotto X: appended ' + newDraws.length + ' new draw(s). Total: ' + merged.length);
 }
 
 async function runAnalysisLottoX(count = 6, sid = null) {
-  const text = await getLottoXText();
-  const draws = parseLottoXHistoryPDF(text);
-  if (draws.length < 10) throw new Error(`Only ${draws.length} Lotto X draws parsed.`);
+  const draws = getLottoXDraws();
+  if (draws.length < 10) throw new Error(`Only ${draws.length} Lotto X draws in cache.`);
   const freq = {};
   draws.forEach(d => d.numbers.forEach(n => { freq[n] = (freq[n] || 0) + 1; }));
   const sess = sid ? getSession(sid) : { lines: new Set() };
@@ -1088,7 +1095,7 @@ async function runAnalysisLottoX(count = 6, sid = null) {
     recentHistory: draws.slice(0, 10),
     lines: lines.map((l, i) => ({ line: i + 1, numbers: l.nums, score: Math.round(l.score * 10) / 10 })),
     topNumbers: freqStats.slice(0, 10), bottomNumbers: freqStats.slice(-10).reverse(),
-    lastUpdated: fs.statSync(PDF_PATH_LX).mtime.toLocaleString()
+    lastUpdated: draws[0] ? draws[0].date : 'unknown'
   };
 }
 
@@ -1233,7 +1240,7 @@ app.get('/analyze/lottox', async (req, res) => {
 app.post('/refresh/lottox', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
   enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => {
-    lastAutoRefreshLottoX = null; lxCache = null;
+    lastAutoRefreshLottoX = null; return appendLottoXDeltas();
   }));
   clearSession(sid);
   res.json({ queued: true, game: 'lottox' });
@@ -1332,7 +1339,7 @@ async function start() {
     console.log('Press Ctrl+C to stop.\n');
     openBrowser(localUrl);
     // Download all PDFs after server is listening so health checks pass immediately
-    // Then warm the large PDF caches (LX + F5) so first user request hits cache not cold parse
+    // Then append any new draws since the committed JSON cache (fast -- delta only)
     process.stdout.write('Downloading latest PDFs from Florida Lottery...');
     // Hard timeout: mark server ready after 90s regardless of warming state
     setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
@@ -1344,9 +1351,9 @@ async function start() {
           if (!failed.length) { console.log(' done.'); }
           else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
         }
-        return getLottoXText().then(() => console.log('Lotto X cache warmed.')).catch(() => {});
+        return appendLottoXDeltas().catch(() => {});
       })
-      .then(() => getFantasy5Text().then(() => console.log('Fantasy 5 cache warmed.')).catch(() => {}))
+      .then(() => appendFantasy5Deltas().catch(() => {}))
       .then(() => { _serverReady = true; console.log('Server ready.'); })
       .catch(() => { _serverReady = true; console.log('Server ready (with errors).'); });
   });
@@ -1705,28 +1712,34 @@ function generateFantasy5Lines(freq, draws, count = 6, seenLines = new Set()) {
   return lines.slice(0, count);
 }
 
-let f5Cache = null;
-let f5ParsePromise = null;
+const JSON_PATH_F5 = path.join(__dirname, 'fantasy5_draws.json');
+let f5DrawsCache = null;
 
-async function getFantasy5Text() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_F5).mtimeMs; } catch(e) { throw new Error('Fantasy 5 PDF not yet downloaded. Try again in a moment.'); }
-  if (f5Cache && f5Cache.mtime === mtime) return f5Cache.text;
-  if (!f5ParsePromise) {
-    f5ParsePromise = extractPDFText(PDF_PATH_F5).then(text => {
-      f5Cache = { text, mtime };
-      f5ParsePromise = null;
-      console.log('Fantasy 5 PDF cache refreshed (mtime changed)');
-      return text;
-    });
-  }
-  return f5ParsePromise;
+function getFantasy5Draws() {
+  if (f5DrawsCache) return f5DrawsCache;
+  try {
+    f5DrawsCache = JSON.parse(fs.readFileSync(JSON_PATH_F5, 'utf8'));
+    return f5DrawsCache;
+  } catch(e) { throw new Error('Fantasy 5 draw cache not found. Run generate_draw_cache.js locally.'); }
+}
+
+async function appendFantasy5Deltas() {
+  const existing = getFantasy5Draws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await extractPDFText(PDF_PATH_F5); } catch(e) { return; }
+  const all = parseFantasy5HistoryPDF(text).filter(d => d.ts <= Date.now() && d.ts > new Date('2000-01-01').getTime());
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log('Fantasy 5: no new draws in PDF.'); return; }
+  const merged = newDraws.concat(existing).slice(0, 500);
+  f5DrawsCache = merged;
+  fs.writeFileSync(JSON_PATH_F5, JSON.stringify(merged, null, 2));
+  console.log('Fantasy 5: appended ' + newDraws.length + ' new draw(s). Total: ' + merged.length);
 }
 
 async function runAnalysisFantasy5(count = 6, sid = null) {
-  const text = await getFantasy5Text();
-  const draws = parseFantasy5HistoryPDF(text);
-  if (draws.length < 10) throw new Error('Only ' + draws.length + ' Fantasy 5 draws parsed.');
+  const draws = getFantasy5Draws();
+  if (draws.length < 10) throw new Error('Only ' + draws.length + ' Fantasy 5 draws in cache.');
   const freq = {};
   draws.forEach(d => d.numbers.forEach(n => { freq[n] = (freq[n] || 0) + 1; }));
   const sess = sid ? getSession(sid) : { lines: new Set() };
@@ -1740,7 +1753,7 @@ async function runAnalysisFantasy5(count = 6, sid = null) {
     lines: lines.map((l, i) => ({ line: i + 1, numbers: l.nums, score: Math.round(l.score * 10) / 10 })),
     topNumbers: freqStats.slice(0, 10),
     bottomNumbers: freqStats.slice(-10).reverse(),
-    lastUpdated: fs.statSync(PDF_PATH_F5).mtime.toLocaleString()
+    lastUpdated: draws[0] ? draws[0].date : 'unknown'
   };
 }
 
@@ -1841,7 +1854,7 @@ app.get('/analyze/fantasy5', async (req, res) => {
 app.post('/refresh/fantasy5', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
   enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => {
-    lastAutoRefreshF5 = null; f5Cache = null;
+    lastAutoRefreshF5 = null; return appendFantasy5Deltas();
   }));
   clearSession(sid);
   res.json({ queued: true, game: 'fantasy5' });
@@ -2001,13 +2014,13 @@ app.get('/draws/lottox', async (req, res) => {
   if (!isValidDrawDay(date, [3, 6])) return res.status(404).json({ error: 'No Lotto X draw on that date (draws Wed & Sat).', resultsUrl: FL_RESULTS_URLS.lottox });
   const pdfDate = normDateForPDF(date);
   try {
-    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    const draws = getLottoXDraws();
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
   const scraped = await scrapeFlDraws('lottox', date, null);
   if (scraped) return res.json({ date, numbers: scraped.numbers });
-  delete _availCache['lottox']; // invalidate chips cache so stale dates clear
+  delete _availCache['lottox'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
 
@@ -2017,13 +2030,13 @@ app.get('/draws/fantasy5', async (req, res) => {
   const type = (draw || '').toUpperCase();
   const pdfDate = normDateForPDF(date);
   try {
-    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const draws = getFantasy5Draws();
     const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
   const scraped = await scrapeFlDraws('fantasy5', date, type);
   if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
-  delete _availCache['fantasy5']; // invalidate chips cache so stale dates clear
+  delete _availCache['fantasy5'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
 });
 
@@ -2085,16 +2098,16 @@ app.get('/draws/jtp/available', async (req, res) => {
 });
 app.get('/draws/lottox/available', async (req, res) => {
   try {
-    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    const draws = getLottoXDraws();
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===3||day===6; });
     res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/fantasy5/available', async (req, res) => {
   try {
-    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const draws = getFantasy5Draws();
     const now = Date.now();
-    const valid = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
+    const valid = draws.filter(d => d.ts <= now);
     const seen = new Set(); const dates = [];
     for (const d of valid) {
       const key = d.date; if (seen.has(key)) continue; seen.add(key);
@@ -2148,7 +2161,7 @@ app.get('/latestdraw/jtp', async (req, res) => {
 
 app.get('/latestdraw/lottox', async (req, res) => {
   try {
-    const draws = parseLottoXHistoryPDF(await getLottoXText());
+    const draws = getLottoXDraws();
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     res.json({ date: d.date, numbers: d.numbers });
@@ -2157,12 +2170,10 @@ app.get('/latestdraw/lottox', async (req, res) => {
 
 app.get('/latestdraw/fantasy5', async (req, res) => {
   try {
-    const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
+    const draws = getFantasy5Draws();
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const now = Date.now();
-    const valid = draws.filter(d => d.ts > new Date('2019-01-01').getTime() && d.ts <= now);
-    const evening = valid.find(d => d.drawType === 'EVENING');
-    const midday  = valid.find(d => d.drawType === 'MIDDAY');
+    const evening = draws.find(d => d.drawType === 'EVENING');
+    const midday  = draws.find(d => d.drawType === 'MIDDAY');
     res.json({
       evening: evening ? { date: evening.date, numbers: evening.numbers } : null,
       midday:  midday  ? { date: midday.date,  numbers: midday.numbers  } : null
@@ -2232,7 +2243,7 @@ function schedulePostDrawRefreshes() {
   const lxDays   = [3, 6];
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
-    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; f5Cache = null; }));
+    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
     console.log('Post-draw refresh queued: Fantasy 5');
   }));
 
@@ -2248,7 +2259,7 @@ function schedulePostDrawRefreshes() {
       console.log('Post-draw refresh queued: JTP');
     }
     if (lxDays.includes(day)) {
-      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; lxCache = null; }));
+      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
       console.log('Post-draw refresh queued: Lotto X');
     }
   });
