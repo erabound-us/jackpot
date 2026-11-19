@@ -213,8 +213,8 @@
     </div>
     <div class="draw-col center">
       <div class="draw-label">Current Jackpot</div>
+      <div id="jtpJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>
       <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/jackpot-triple-play" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
-      <div class="draw-sub">Starting $250K &middot; Max $3M</div>
     </div>
     <div class="draw-col right">
       <div class="countdown" id="countdown">&mdash;</div>
@@ -237,6 +237,7 @@
   </div>
   <button class="generate-btn" id="generateBtn" onclick="generate()">&#127921; Generate Lines</button>
   <div class="press-hint" id="pressHint">Generation <span id="pressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div id="jtpEmailBlurb" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;">&#128140; <a href="#emailCard" style="color:var(--accent);">Email your lines</a> to create your digital play slip &mdash; then just have the cashier scan it!</div>
   <div class="status-msg" id="statusMsg"></div>
   <div id="results">
     <div class="card">
@@ -289,6 +290,7 @@
       <span class="chip" onclick="quickAsk('What is the lump sum after taxes?')">Taxes &amp; lump sum</span>
       <span class="chip" onclick="quickAsk('When is the next drawing?')">Draw schedule</span>
       <span class="chip" onclick="quickAsk('How do I claim my prize?')">Claiming prizes</span>
+      <span class="chip" onclick="quickAsk('Can I use the Florida Lottery app?')">FL Lottery app</span>
     </div>
     <div class="chat-messages" id="chatMessages"></div>
     <div class="chat-input-row">
@@ -356,8 +358,8 @@
     </div>
     <div class="draw-col center">
       <div class="draw-label">Current Jackpot</div>
+      <div id="lxJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>
       <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/florida-lotto" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
-      <div class="draw-sub">Rolls until won &middot; Millions</div>
     </div>
     <div class="draw-col right">
       <div class="countdown" id="lxCountdown">&mdash;</div>
@@ -383,6 +385,7 @@
   </div>
   <button class="generate-btn" id="lxGenerateBtn" onclick="lxGenerate()">🍀 Generate Lines</button>
   <div class="press-hint" id="lxPressHint">Generation <span id="lxPressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div id="lxEmailBlurb" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;">&#128140; <a href="#lxEmailCard" style="color:var(--accent);">Email your lines</a> to create your digital play slip &mdash; then just have the cashier scan it!</div>
   <div class="status-msg" id="lxStatusMsg"></div>
   <div id="lxResults">
     <div class="card">
@@ -645,8 +648,8 @@
       <div class="draw-sub" id="f5DrawTimeLabel">&mdash;</div>
     </div>
     <div class="draw-col center">
-      <div class="draw-label">Draw</div>
-      <div class="draw-when" id="f5DrawName" style="font-size:16px;">&mdash;</div>
+      <div class="draw-label">Jackpot &middot; <span id="f5DrawName" style="font-weight:400;">&mdash;</span></div>
+      <div id="f5JackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>
       <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/fantasy-5" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
     </div>
     <div class="draw-col right">
@@ -670,6 +673,7 @@
   </div>
   <button class="generate-btn" id="f5GenerateBtn" onclick="f5Generate()">&#127775; Generate Lines</button>
   <div class="press-hint" id="f5PressHint">Generation <span id="f5PressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div id="f5EmailBlurb" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;">&#128140; <a href="#f5EmailCard" style="color:var(--accent);">Email your lines</a> to create your digital play slip &mdash; then just have the cashier scan it!</div>
   <div class="status-msg" id="f5StatusMsg"></div>
   <div id="f5Results" style="display:none;">
     <div class="card">
@@ -1045,6 +1049,7 @@ function generate() {
       pressCount++;
       document.getElementById('pressNum').textContent = pressCount;
       pressHint.style.display = 'block';
+      document.getElementById('jtpEmailBlurb').style.display = 'block';
       if (pressCount === 1) renderAll(r.data);
       else startCountdown(r.data);
       renderLines(r.data.lines);
@@ -1059,6 +1064,7 @@ function doReset() {
   fetch('/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }) }).catch(function() {}).finally(function() {
     pressCount = 0;
     pressHint.style.display = 'none';
+    document.getElementById('jtpEmailBlurb').style.display = 'none';
     results.classList.remove('show');
     document.getElementById('emailCard').style.display = 'none';
     document.getElementById('emailStatus').textContent = '';
@@ -1090,6 +1096,7 @@ function doRefresh() {
       pressCount = 1;
       document.getElementById('pressNum').textContent = pressCount;
       pressHint.style.display = 'block';
+      document.getElementById('jtpEmailBlurb').style.display = 'block';
       renderAll(r.data);
       renderLines(r.data.lines);
       clearStatus();
@@ -1481,6 +1488,7 @@ function lxGenerate() {
       lxPressCount++;
       document.getElementById('lxPressNum').textContent = lxPressCount;
       document.getElementById('lxPressHint').style.display = 'block';
+      document.getElementById('lxEmailBlurb').style.display = 'block';
       if (lxPressCount === 1) lxRenderAll(r.data);
       else lxStartCountdown(r.data);
       lxRenderLines(r.data.lines);
@@ -2184,6 +2192,7 @@ function f5Generate() {
       f5PressCount++;
       document.getElementById('f5PressNum').textContent = f5PressCount;
       document.getElementById('f5PressHint').style.display = 'block';
+      document.getElementById('f5EmailBlurb').style.display = 'block';
       if (f5PressCount === 1) f5RenderAll(r.data);
       else f5StartCountdown(r.data.nextDraw);
       f5RenderLines(r.data.lines);
@@ -2422,6 +2431,19 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
   document.getElementById('cpDrawDate').value=cpLatestDate;
   cpLookupDraw();
 }).catch(function(){});
+
+// Fetch live jackpot amounts for JTP, Lotto X, Fantasy 5
+(function() {
+  var games = ['jtp', 'lottox', 'fantasy5'];
+  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount' };
+  games.forEach(function(g) {
+    fetch('/jackpot?game=' + g).then(function(r){return r.json();}).then(function(d){
+      var el = document.getElementById(ids[g]);
+      if (el && d.amount) el.textContent = d.amount;
+      else if (el) el.textContent = 'See FL Lottery';
+    }).catch(function(){});
+  });
+})();
 
 // == PICK Daily Games ===========================================================
 var pickGame = 'pick5';
@@ -3050,6 +3072,16 @@ function switchTab(id) {
         &bull; 120-way (all different): $500 &nbsp;&bull;&nbsp; 60-way: $1,000 &nbsp;&bull;&nbsp; 30-way: $2,000<br>
         &bull; 20-way: $3,000 &nbsp;&bull;&nbsp; 10-way: $6,000 &nbsp;&bull;&nbsp; 5-way: $12,000<br><br>
         More repeated digits = fewer ways = higher prize per win. Use the <strong>Check My Numbers</strong> section to calculate your exact prize for any combination.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">Can I use the Florida Lottery app to play my generated numbers?</div>
+      <div class="faq-a">Yes! The <strong>Florida Lottery app</strong> lets you create and save your favorite numbers as digital play slips. Simply enter your generated numbers into the app, then have your retailer scan the digital slip to print your paper ticket &mdash; it&#39;s that easy.<br><br>
+        <strong>Tip:</strong> Use the <strong>Email My Lines</strong> feature to send your generated numbers to yourself, then enter them into the app&#39;s digital play slip before heading to the store.<br><br>
+        Download the Florida Lottery app:<br>
+        &bull; <a href="https://apps.apple.com/us/app/flalottery/id476160599?ls=1" target="_blank" rel="noopener" style="color:var(--accent);">&#128241; App Store (iPhone)</a><br>
+        &bull; <a href="https://play.google.com/store/apps/details?id=com.flalottery.FLALOTTERY" target="_blank" rel="noopener" style="color:var(--accent);">&#129514; Google Play (Android)</a>
+      </div>
     </div>
 
     <div class="faq-item">

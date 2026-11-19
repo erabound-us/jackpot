@@ -276,8 +276,72 @@ Florida has no state income tax.
 - When adding a new game, add its `/nextdraw/<game>` fetch to the shared poll interval
 - Pick games share a single `/nextdraw/pick` endpoint -- all four games use the same Midday/Evening schedule
 
+## Live Jackpot Amounts in Draw Banners
+
+### Architecture
+- JTP, Lotto X, and Fantasy 5 draw banners show the **current jackpot amount** scraped live from the FL Lottery website
+- Cash Pop and Pick games have no jackpot — their banners do not include a jackpot row
+- The jackpot amount is displayed in the center column of the draw banner, in yellow (`var(--yellow)`), between the "Current Jackpot" label and the "View on FL Lottery" link
+
+### How the cache is populated — zero extra Puppeteer launches
+- `_jackpotCache` — server-side object: `game -> { amount, ts }`, 5-minute TTL
+- `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` if the cache is stale. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
+- `scrapeJackpot(game)` — reads `_jackpotCache` first; only launches Puppeteer if cache is cold (e.g. server just started and no draw lookup has run yet). This is the fallback path, not the normal path.
+- **Normal flow**: user opens page → `/latestdraw/<game>` → PDF hit (no scrape) → jackpot cache still cold → frontend fetches `/jackpot?game=<game>` → `scrapeJackpot` launches Puppeteer once → caches result. Subsequent `/jackpot` calls return instantly from cache. Any draw lookup that triggers `scrapeFlDraws` also refreshes the jackpot cache as a side effect.
+
+### Jackpot extraction patterns (in `extractAndCacheJackpot`)
+Patterns are tried in order of specificity against the full page HTML:
+1. `estimated jackpot[^<]{0,80}\$...` — most specific, matches FL Lottery's "Estimated Jackpot" label
+2. `current jackpot[^<]{0,80}\$...` — fallback label variant
+3. `jackpot[^<]{0,60}\$...` — broad fallback
+
+If none match, the cache is not updated and the frontend shows `"See FL Lottery"` as a fallback.
+
+### `/jackpot` endpoint
+- `GET /jackpot?game=jtp|lottox|fantasy5` → `{ game, amount }` where `amount` is a string like `"$1,500,000"` or `null`
+- Excluded from rate limiting (same as `/nextdraw/*` and `/latestdraw/*`) — pure read, no PDF I/O
+- Returns `amount: null` if scrape fails — frontend handles gracefully
+
+### Frontend elements (one per jackpot game)
+| Game | Element ID | Banner center col label |
+|------|------------|------------------------|
+| JTP | `jtpJackpotAmount` | "Current Jackpot" |
+| Lotto X | `lxJackpotAmount` | "Current Jackpot" |
+| Fantasy 5 | `f5JackpotAmount` | "Jackpot · `<span id="f5DrawName">`" |
+
+- All three are `<div class="draw-when" style="font-size:15px;color:var(--yellow);">` — same size/weight as the draw date
+- Fantasy 5 banner center col also shows the draw name (Midday/Evening) in the label span, since it has no separate "Draw" row
+
+### Frontend fetch (page load)
+```js
+(function() {
+  var games = ['jtp', 'lottox', 'fantasy5'];
+  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount' };
+  games.forEach(function(g) {
+    fetch('/jackpot?game=' + g).then(function(r){return r.json();}).then(function(d){
+      var el = document.getElementById(ids[g]);
+      if (el && d.amount) el.textContent = d.amount;
+      else if (el) el.textContent = 'See FL Lottery';
+    }).catch(function(){});
+  });
+})();
+```
+- No AbortController needed — errors are swallowed, banner just stays at `—`
+- Runs once on page load; no polling (jackpot changes only after a draw, which also triggers a draw lookup that refreshes the cache)
+
+### When adding a new game with a jackpot
+1. Add the game to `JACKPOT_GAME_URLS` in server.js
+2. Add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col, between the label and the FL Lottery link
+3. Add the game to the frontend `games` array and `ids` map in the page-load jackpot fetch block
+4. `extractAndCacheJackpot` is already called inside `scrapeFlDraws` and `getAvailableDates` — no changes needed there as long as the game is in `JACKPOT_GAME_URLS`
+
+### Games without a jackpot (Cash Pop, Pick 2-5)
+- Do NOT add a jackpot element to their banners
+- Do NOT add them to `JACKPOT_GAME_URLS`
+- Their banner center col shows draw-specific info (draw name for Cash Pop, draw name + FL Lottery link for Pick)
+
 ## API Surface
-GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/refresh/status`
+GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/jackpot?game=` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/refresh/status`
 POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
@@ -497,6 +561,40 @@ downloadPDFs()
 - `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
 - When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
 
+## Post-Generate Email Blurb
+After lines are generated, a small blurb appears below the Generation counter nudging users toward the Email My Lines card.
+
+- Each game with a Generate button has a hidden `<div id="xEmailBlurb">` immediately after its `press-hint` div
+- The blurb contains a link to the game's email card (`href="#xEmailCard"`) and the text: `Email your lines to create your digital play slip — then just have the cashier scan it!`
+- **Show**: whenever the press-hint is shown (on successful generate)
+- **Hide**: whenever the press-hint is hidden (on reset / doRefresh)
+- Games with blurbs: JTP (`jtpEmailBlurb`), Lotto X (`lxEmailBlurb`), Fantasy 5 (`f5EmailBlurb`)
+- Cash Pop and Pick panels do not have a press-hint or email blurb (Cash Pop has no press counter; Pick uses a different card layout)
+- **When adding a new game**: add `<div id="xEmailBlurb" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;">&#128140; <a href="#xEmailCard" style="color:var(--accent);">Email your lines</a> to create your digital play slip &mdash; then just have the cashier scan it!</div>` after the press-hint div, and show/hide it alongside the press-hint in the generate and reset functions
+
+## Florida Lottery App Integration
+The FL Lottery app allows players to create digital play slips and have retailers scan them to print paper tickets. This is surfaced in three places:
+
+### Chatbot (all games)
+- `FL_APP_RE` — shared regex constant, checked **second** in every `chatReplyXxx()` function (after `TZ_RE`)
+- `FL_APP_REPLY` — shared response string explaining the app, digital play slips, and App Store/Google Play links
+- Both defined once above `chatReply()` and reused across all chatbots
+- Triggers on: `florida lottery app`, `lottery app`, `download app`, `mobile app`, `digital play slip`, `play slip`, `scan app`, `qr`, `iphone`, `android`, `app store`, `google play`
+- **When adding a new chatbot**: add `if (FL_APP_RE.test(q)) return FL_APP_REPLY;` as the **second line** after the TZ check
+- App Store URL: `https://apps.apple.com/us/app/flalottery/id476160599?ls=1`
+- Google Play URL: `https://play.google.com/store/apps/details?id=com.flalottery.FLALOTTERY`
+
+### Email template (server.js)
+- A "Did you know?" blurb is included in every outgoing email, between the generated-by line and the legal disclaimer
+- Plain-text: two lines with App Store and Google Play URLs
+- HTML: styled paragraph with clickable App Store and Google Play links
+- This is in the shared `POST /email` handler — applies to all games automatically
+
+### FAQ
+- Entry: "Can I use the Florida Lottery app to play my generated numbers?" — explains digital play slips, links to App Store and Google Play
+- Positioned before the timezone FAQ entry
+- JTP Payout Assistant has an "FL Lottery app" quick-ask chip
+
 ## Email Button Reset Pattern
 When resetting an email send button in a `.finally()` block, always use `btn.innerHTML` (not `btn.textContent`) so HTML entities like `&#128140;` render as the emoji rather than literal text.
 
@@ -556,6 +654,7 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
    - Use `btn.innerHTML` (not `btn.textContent`) in `.finally()` reset
 5. Set `xLastWin` from Check My Numbers result; clear on form reset
 6. Pass `context: { spend, lines, game, won: xLastWin }` in `xSendChat()` POST body
+7. Add `<div id="xEmailBlurb">` after the press-hint div; show/hide it alongside the press-hint in generate and reset functions
 
 ## Timezones
 - All draw times are displayed in the **local timezone of the state where the game is operated**
@@ -570,10 +669,10 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
 ## Chatbot Timezone Handling
 - `TZ_RE` — shared regex constant, checked **first** in every `chatReplyXxx()` function before any other pattern
 - `TZ_REPLY` — shared response string explaining state-local time, EST/EDT dates, CT/MT/PT conversions with examples
-- Both defined once above `chatReply()` and reused across all 4 chatbots
-- Regex uses `\b` word boundaries to avoid false positives on short tokens (e.g. `ct` in "ticket", `pt` in "point")
-- When adding a new game chatbot: call `if (TZ_RE.test(q)) return TZ_REPLY;` as the **first line** after `const q = ...`
-- If the new game is in a different state/timezone, update `TZ_REPLY` to be a function or map keyed by game, so each chatbot returns the correct state's timezone info
+- `FL_APP_RE` — shared regex constant, checked **second** (after TZ_RE) in every `chatReplyXxx()` function
+- `FL_APP_REPLY` — shared response string about the FL Lottery app, digital play slips, App Store/Google Play links
+- All four constants defined once above `chatReply()` and reused across all chatbots
+- When adding a new game chatbot: add `if (TZ_RE.test(q)) return TZ_REPLY;` then `if (FL_APP_RE.test(q)) return FL_APP_REPLY;` as the **first two lines** after `const q = ...`
 
 
 `email.config.json` | `*.pdf` | `logs/*`
@@ -597,14 +696,14 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-19f`
+Latest stable: `backups/stable-2026-11-20a`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
-- Memory: `512mb` -- reduced from 1GB; stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
+- Memory: `512mb` -- stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
+- Node RSS at idle: ~117MB (heap limit 256MB); ~343MB available. Peak with Chrome ~267MB, leaving ~245MB headroom.
 - Node heap: `--max-old-space-size=256` in Dockerfile CMD -- Fantasy 5 PDF parse (~2.7MB) requires ~250MB heap; 256MB is the minimum safe value
-- Path to 256MB: monitor memory usage; if Chrome + Node peak stays under 200MB, `fly scale memory 256 -a jackpot-ixupbg` is viable
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
 - If machine gets stuck in crash loop: `flyctl machine restart 857444c4722408 -a jackpot-ixupbg`
@@ -827,6 +926,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 12. For games with secondary draw data (like Lotto X Double Play): use a **negative lookahead** in the PDF parse regex to skip secondary rows (e.g. `LOTTO(?!\s+DP)`); also strip the secondary section from the scraper chunk before extracting numbers
 13. For games with non-standard page structure (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`; skip article ID lookup with `if (idx === -1 && game !== '<game>') return null`
 14. For PDFs > 1 MB: add serialized `getXxxText()` cache function with `xxxParsePromise` variable
+15. If the game has a jackpot: add it to `JACKPOT_GAME_URLS` in server.js so `extractAndCacheJackpot` caches it automatically from `scrapeFlDraws` page loads
 
 ### Frontend (public/index.html)
 1. Add `var xLatestDate = null;` and `var xLastWin = null;` with other game state vars
@@ -841,6 +941,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 10. Add `xEmailCard`, `xEmailIncLines`, `xEmailIncWinning`, `xSendEmail()` following email checklist
 11. Add `xSendChat()` with `context: { spend, lines, game, won: xLastWin }`
 12. Add `/nextdraw/<game>` fetch to the shared `setInterval` poll
+13. If the game has a jackpot: add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col; add game to the page-load jackpot fetch block (`games` array + `ids` map)
 
 **For games sharing a single panel (like Pick 2-5)**:
 - Use a game selector UI (buttons) inside the panel instead of separate panels
