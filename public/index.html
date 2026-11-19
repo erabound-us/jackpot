@@ -912,7 +912,8 @@ function generate() {
   generateBtn.textContent = 'Generating...';
   clearStatus();
   var count = Math.min(Math.max(parseInt(document.getElementById('lineCount').value) || 6, 1), 100);
-  fetch('/analyze?count=' + count + '&sid=' + SID)
+  var _ac0 = new AbortController(); setTimeout(function(){_ac0.abort();}, 30000);
+  fetch('/analyze?count=' + count + '&sid=' + SID, {signal:_ac0.signal})
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
@@ -956,7 +957,8 @@ function doRefresh() {
   results.classList.remove('show');
   pressCount = 0;
   pressHint.style.display = 'none';
-  fetch('/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }) })
+  var _acR = new AbortController(); setTimeout(function(){_acR.abort();}, 10000);
+  fetch('/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sid: SID }), signal: _acR.signal })
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Download failed');
@@ -1047,7 +1049,8 @@ function checkNumbers() {
       row[j].className = 'num-input' + (drawnSet[hv] ? ' matched' : '');
     }
   }
-  fetch('/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, lines: lines }) })
+  var _acC = new AbortController(); setTimeout(function(){_acC.abort();}, 15000);
+  fetch('/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, lines: lines }), signal: _acC.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) { document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
@@ -1125,7 +1128,8 @@ function sendChat() {
   var jtpCombo = document.getElementById('jtpComboGen').checked;
   var jtpSpend = jtpTickets * (jtpCombo ? 2 : 1);
   var ctx = jtpTickets > 0 ? { spend: jtpSpend, lines: jtpTickets, game: 'jtp', won: jtpLastWin } : null;
-  fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: ctx }) })
+  var _acChat = new AbortController(); setTimeout(function(){_acChat.abort();}, 15000);
+  fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: ctx }), signal: _acChat.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) { thinking.remove(); appendMsg('bot', data.reply || data.error || 'No response.'); })
     .catch(function() { thinking.remove(); appendMsg('bot', 'Error reaching server.'); })
@@ -1134,7 +1138,8 @@ function sendChat() {
 
 // Load email config on page start and check if configured
 function loadEmailConfig() {
-  fetch('/email/config')
+  var _acEC = new AbortController(); setTimeout(function(){_acEC.abort();}, 10000);
+  fetch('/email/config', {signal: _acEC.signal})
     .then(function(res) { return res.json(); })
     .then(function(cfg) {
       var notConfigured = document.getElementById('emailNotConfigured');
@@ -1162,7 +1167,8 @@ function saveEmailConfig() {
   if (!apiKey) { status.style.color = 'var(--red)'; status.textContent = 'Resend API key is required.'; return; }
   var body = { apiKey: apiKey };
   if (from) body.from = from;
-  fetch('/email/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  var _acECS = new AbortController(); setTimeout(function(){_acECS.abort();}, 10000);
+  fetch('/email/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: _acECS.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) { status.style.color = 'var(--red)'; status.textContent = data.error; }
@@ -1175,7 +1181,8 @@ function testEmailConfig() {
   var status = document.getElementById('cfgStatus');
   status.style.color = 'var(--muted)';
   status.textContent = 'Sending test email...';
-  fetch('/email/test', { method: 'POST' })
+  var _acET = new AbortController(); setTimeout(function(){_acET.abort();}, 10000);
+  fetch('/email/test', { method: 'POST', signal: _acET.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) { status.style.color = 'var(--red)'; status.textContent = 'Failed: ' + data.error; }
@@ -1205,10 +1212,12 @@ function sendEmail() {
   btn.disabled = true;
   btn.textContent = 'Sending...';
   document.getElementById('emailStatus').textContent = '';
+  var _acEM = new AbortController(); setTimeout(function(){_acEM.abort();}, 30000);
   fetch('/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: to, lines: incLines ? lastLines : [], nextDraw: lastNextDraw, winningNumbers: incWinning ? jtpDrawn : null, winDrawDate: incWinning ? document.getElementById('jtpDrawDate').value : null, winPrize: (incWinning && jtpLastWin != null) ? jtpLastWin : null })
+    body: JSON.stringify({ to: to, lines: incLines ? lastLines : [], nextDraw: lastNextDraw, winningNumbers: incWinning ? jtpDrawn : null, winDrawDate: incWinning ? document.getElementById('jtpDrawDate').value : null, winPrize: (incWinning && jtpLastWin != null) ? jtpLastWin : null }),
+    signal: _acEM.signal
   })
     .then(function(res) { return res.json(); })
     .then(function(data) {
@@ -1344,7 +1353,8 @@ function lxGenerate() {
   btn.textContent = 'Generating...';
   lxClearStatus();
   var count = Math.min(Math.max(parseInt(document.getElementById('lxLineCount').value) || 6, 1), 100);
-  fetch('/analyze/lottox?count=' + count + '&sid=' + SID)
+  var _acLX = new AbortController(); setTimeout(function(){_acLX.abort();}, 30000);
+  fetch('/analyze/lottox?count=' + count + '&sid=' + SID, {signal:_acLX.signal})
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
@@ -1466,7 +1476,8 @@ function lxCheckNumbers() {
   var lxTotalWinAcc = 0;
   var lxPending = allLines.length;
   allLines.forEach(function(lineNums, lineIdx) {
-    fetch('/check/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, multiplier: mult, doublePlayDrawn: lineIdx === 0 ? dpDrawn : null, ezMatch: lineIdx === 0 ? ezMatch : 0 }) })
+    var _acLXC = new AbortController(); setTimeout(function(){_acLXC.abort();}, 15000);
+    fetch('/check/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, multiplier: mult, doublePlayDrawn: lineIdx === 0 ? dpDrawn : null, ezMatch: lineIdx === 0 ? ezMatch : 0 }), signal: _acLXC.signal })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (data.error) { lxResultEl.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
@@ -1548,10 +1559,12 @@ function lxSendEmail() {
   btn.disabled = true;
   btn.textContent = 'Sending...';
   document.getElementById('lxEmailStatus').textContent = '';
+  var _acLXE = new AbortController(); setTimeout(function(){_acLXE.abort();}, 30000);
   fetch('/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: to, lines: incLines ? lxLastLines : [], nextDraw: lxLastNextDraw, game: 'lottox', winningNumbers: incWinning ? lxDrawn : null, winDrawDate: incWinning ? document.getElementById('lxDrawDate').value : null, winPrize: (incWinning && lxLastWin != null) ? lxLastWin : null })
+    body: JSON.stringify({ to: to, lines: incLines ? lxLastLines : [], nextDraw: lxLastNextDraw, game: 'lottox', winningNumbers: incWinning ? lxDrawn : null, winDrawDate: incWinning ? document.getElementById('lxDrawDate').value : null, winPrize: (incWinning && lxLastWin != null) ? lxLastWin : null }),
+    signal: _acLXE.signal
   })
     .then(function(res) { return res.json(); })
     .then(function(data) {
@@ -1584,7 +1597,8 @@ function lxSendChat() {
   var lxDP = document.getElementById('lxDPGen').checked;
   var lxSpend = lxTickets * (2 + (lxEZ ? 1 : 0) + (lxDP ? 1 : 0));
   var lxCtx = lxTickets > 0 ? { spend: lxSpend, lines: lxTickets, game: 'lottox', won: lxLastWin } : null;
-  fetch('/chat/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: lxCtx }) })
+  var _acLXChat = new AbortController(); setTimeout(function(){_acLXChat.abort();}, 15000);
+  fetch('/chat/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: lxCtx }), signal: _acLXChat.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) { thinking.remove(); lxAppendMsg('bot', data.reply || data.error || 'No response.'); })
     .catch(function() { thinking.remove(); lxAppendMsg('bot', 'Error reaching server.'); })
@@ -1639,7 +1653,8 @@ function cpGenerate() {
   btn.textContent = 'Generating...';
   document.getElementById('cpStatusMsg').style.display = 'none';
   var count = Math.min(Math.max(parseInt(document.getElementById('cpNumCount').value) || 5, 1), 15);
-  fetch('/analyze/cashpop?count=' + count + '&sid=' + SID)
+  var _acCP = new AbortController(); setTimeout(function(){_acCP.abort();}, 30000);
+  fetch('/analyze/cashpop?count=' + count + '&sid=' + SID, {signal:_acCP.signal})
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
@@ -1704,7 +1719,8 @@ function cpCheckNumbers() {
   if (isNaN(pm) || pm < 5 || pm > 250) {
     res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter your prize multiplier (5-250) from your ticket.</div>'; return;
   }
-  fetch('/check/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winningNumber: wn, yourNumber: yn, playAmount: pa, prizeMultiplier: pm }) })
+  var _acCPC = new AbortController(); setTimeout(function(){_acCPC.abort();}, 15000);
+  fetch('/check/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winningNumber: wn, yourNumber: yn, playAmount: pa, prizeMultiplier: pm }), signal: _acCPC.signal })
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) { res.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
@@ -1798,7 +1814,8 @@ function cpSendChat() {
   var cpAmt = parseInt(document.getElementById('cpPlayAmtGen').value) || 5;
   var cpSpend = cpNums * cpAmt;
   var cpCtx = cpNums > 0 ? { spend: cpSpend, lines: cpNums, game: 'cashpop', won: cpLastWin } : null;
-  fetch('/chat/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: cpCtx }) })
+  var _acCPChat = new AbortController(); setTimeout(function(){_acCPChat.abort();}, 15000);
+  fetch('/chat/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: cpCtx }), signal: _acCPChat.signal })
     .then(function(res) { return res.json(); })
     .then(function(data) { thinking.remove(); cpAppendMsg('bot', data.reply || data.error || 'No response.'); })
     .catch(function() { thinking.remove(); cpAppendMsg('bot', 'Error reaching server.'); })
@@ -1825,10 +1842,12 @@ function cpSendEmail() {
   btn.textContent = 'Sending...';
   document.getElementById('cpEmailStatus').textContent = '';
   var lines = incLines ? [{ line: 1, numbers: cpLastNumbers, score: '' }] : [];
+  var _acCPE = new AbortController(); setTimeout(function(){_acCPE.abort();}, 30000);
   fetch('/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: to, lines: lines, nextDraw: cpLastNextDraw, game: 'cashpop', winningNumbers: incWinning ? [cpWinNum] : null })
+    body: JSON.stringify({ to: to, lines: lines, nextDraw: cpLastNextDraw, game: 'cashpop', winningNumbers: incWinning ? [cpWinNum] : null }),
+    signal: _acCPE.signal
   })
     .then(function(res) { return res.json(); })
     .then(function(data) {
@@ -1912,10 +1931,12 @@ function f5SendEmail() {
   var tickets = f5LastLines ? f5LastLines.length : 0;
   var ez = document.getElementById('f5EZMatchGen').checked;
   var context = { spend: tickets * (ez ? 2 : 1), lines: tickets, game: 'fantasy5', won: f5LastWin };
+  var _acF5E = new AbortController(); setTimeout(function(){_acF5E.abort();}, 30000);
   fetch('/email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: to, lines: incLines ? f5LastLines : [], nextDraw: f5LastNextDraw, game: 'fantasy5', winningNumbers: incWinning ? f5Drawn : null, winDrawDate: incWinning ? document.getElementById('f5DrawDate').value : null, winDrawType: incWinning ? document.getElementById('f5DrawType').value : null, winPrize: (incWinning && f5LastWin != null) ? f5LastWin : null })
+    body: JSON.stringify({ to: to, lines: incLines ? f5LastLines : [], nextDraw: f5LastNextDraw, game: 'fantasy5', winningNumbers: incWinning ? f5Drawn : null, winDrawDate: incWinning ? document.getElementById('f5DrawDate').value : null, winDrawType: incWinning ? document.getElementById('f5DrawType').value : null, winPrize: (incWinning && f5LastWin != null) ? f5LastWin : null }),
+    signal: _acF5E.signal
   })
     .then(function(res) { return res.json(); })
     .then(function(data) {
@@ -2035,7 +2056,8 @@ function f5Generate() {
   el.textContent = 'Analyzing complete draw history -- Fantasy 5 has 2 draws per day so this can take a minute or two. Hang tight!';
   el.style.display = 'block';
   var count = Math.min(Math.max(parseInt(document.getElementById('f5LineCount').value) || 6, 1), 100);
-  fetch('/analyze/fantasy5?count=' + count + '&sid=' + SID)
+  var _acF5 = new AbortController(); setTimeout(function(){_acF5.abort();}, 30000);
+  fetch('/analyze/fantasy5?count=' + count + '&sid=' + SID, {signal:_acF5.signal})
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
@@ -2078,16 +2100,19 @@ function f5LookupDraw() {
   var mmddyyyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
-  Promise.all([
-    (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=MIDDAY',{signal:_ac.signal});})().then(function(r){return r.json();}).catch(function(){return null;}),
-    (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=EVENING',{signal:_ac.signal});})().then(function(r){return r.json();}).catch(function(){return null;})
-  ]).then(function(results) {
-    var midday  = results[0] && !results[0].error ? results[0] : null;
-    var evening = results[1] && !results[1].error ? results[1] : null;
-    var target = drawType === 'EVENING' ? (evening || midday) : (midday || evening);
-    if (!target) {
+  var _primary = drawType === 'EVENING' ? 'EVENING' : 'MIDDAY';
+  var _fallback = _primary === 'EVENING' ? 'MIDDAY' : 'EVENING';
+  function _f5Fetch(dt) {
+    var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
+    return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
+  }
+  _f5Fetch(_primary).then(function(r) {
+    if (r && !r.error) return r;
+    return _f5Fetch(_fallback);
+  }).then(function(target) {
+    if (!target || target.error) {
       msg.style.color = 'var(--red)';
-      var url = (results[0] && results[0].resultsUrl) || 'https://floridalottery.com/games/draw-games/fantasy5';
+      var url = (target && target.resultsUrl) || 'https://floridalottery.com/games/draw-games/fantasy5';
       msg.innerHTML = 'No draw found for that date. <a href="' + url + '" target="_blank" style="color:var(--accent);">View official results</a>';
       return;
     }
@@ -2135,7 +2160,8 @@ function f5CheckNumbers() {
   var f5TotalWinAcc = 0;
   var f5Pending = f5AllLines.length;
   f5AllLines.forEach(function(lineNums, lineIdx) {
-    fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums }) })
+    var _acF5C = new AbortController(); setTimeout(function(){_acF5C.abort();}, 15000);
+    fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums }), signal: _acF5C.signal })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (data.error) { f5ResultEl.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
@@ -2167,6 +2193,39 @@ function f5CheckNumbers() {
       .catch(function(err) { f5ResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
   });
 }
+
+function f5AppendMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  var msgs = document.getElementById('f5ChatMessages');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function f5SendChat() {
+  var input = document.getElementById('f5ChatInput');
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  var btn = document.getElementById('f5ChatSend');
+  btn.disabled = true;
+  f5AppendMsg('user', msg);
+  var thinking = f5AppendMsg('thinking', 'Thinking...');
+  var f5Tickets = f5LastLines ? f5LastLines.length : 0;
+  var ez = document.getElementById('f5EZMatchGen') && document.getElementById('f5EZMatchGen').checked;
+  var f5Spend = f5Tickets * (ez ? 2 : 1);
+  var f5Ctx = f5Tickets > 0 ? { spend: f5Spend, lines: f5Tickets, game: 'fantasy5', won: f5LastWin } : null;
+  var _acF5Chat = new AbortController(); setTimeout(function(){_acF5Chat.abort();}, 15000);
+  fetch('/chat/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, context: f5Ctx }), signal: _acF5Chat.signal })
+    .then(function(res) { return res.json(); })
+    .then(function(data) { thinking.remove(); f5AppendMsg('bot', data.reply || data.error || 'No response.'); })
+    .catch(function() { thinking.remove(); f5AppendMsg('bot', 'Error reaching server.'); })
+    .finally(function() { btn.disabled = false; input.focus(); });
+}
+
+function f5QuickAsk(q) { document.getElementById('f5ChatInput').value = q; f5SendChat(); }
 
 function renderDateChips(containerId, dates, pickFn) {
   var el = document.getElementById(containerId);

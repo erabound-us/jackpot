@@ -3,9 +3,9 @@
 ## Stack
 - **Backend**: Node.js + Express 5, single file `server.js` (~1,900 lines)
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~1,750 lines)
-- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 1GB
-- **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`)
-- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD to leave headroom for Chrome
+- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
+- **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
+- **Node heap**: `--max-old-space-size=192` set in Dockerfile CMD
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -310,7 +310,28 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 ## Sessions
 - Browser `sid` in `sessionStorage`; server `Map` TTL 2 h; purged every 30 min
 
-## PDF Parse Cache
+## Serialized Refresh Queue
+- All PDF downloads (scheduled and manual) go through a single global queue -- **one job at a time, never concurrent**
+- Prevents OOM from concurrent large PDF operations (Fantasy 5 = 2.7MB, Lotto X = 1MB)
+- `enqueueRefresh(game, downloadFn)` -- adds a job; `processRefreshQueue()` runs them serially
+- Each job: **download PDF + invalidate cache only** -- parse happens lazily on next `/analyze` or `/latestdraw` call
+- **Single 30s retry**: on failure waits 30s then tries once more; if retry fails marks `error` and moves on
+- Status values: `queued` | `running` | `retrying` | `done` | `error`
+- `GET /refresh/status` -- returns current status of all games; excluded from rate limiting
+- `/refresh/*` routes return `{ queued: true, game }` immediately -- never block waiting for download
+- **When adding a new game**: call `enqueueRefresh(game, downloadFn)` in the `/refresh/<game>` route AND in `schedulePostDrawRefreshes()`
+- **Never call `downloadFile()` directly from a refresh route** -- always go through `enqueueRefresh`
+
+## PDF Parsing -- Memory Rules
+- `extractPDFText(pathOrBuffer)` accepts a **file path string** (preferred) or a Buffer
+- **Always pass the file path directly**: `extractPDFText(PDF_PATH_X)` -- never `extractPDFText(fs.readFileSync(PDF_PATH_X))`
+- Passing a path uses `loadPDF()` internally, avoiding a full Buffer copy of the file in memory before parsing
+- `p.destroy()` is called after every parse to free PDFParser internal state immediately
+- Large PDFs (>1MB) use mtime-based parse cache with serialized `parsePromise` -- see PDF Parse Cache section
+- Node heap: `--max-old-space-size=192` in Dockerfile
+- Fly.io machine: `512mb` -- validated stable with queue serialization
+- **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
+
 - PDFs > 1 MB (currently Lotto X ~1 MB, Fantasy 5 ~2.7 MB) use an mtime-based in-memory parse cache with **serialized parsing**
 - Cache stores `{ text, mtime }` — invalidates automatically when `fs.statSync().mtimeMs` changes
 - **Serialized parse**: `lxParsePromise` and `f5ParsePromise` prevent concurrent parses — if a parse is already in progress, subsequent requests wait for it instead of starting a new one. This prevents OOM from multiple simultaneous 2.7MB PDF parses.
@@ -341,7 +362,45 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 - Raw emoji chars (e.g. `'🍀'`) and Unicode escapes (e.g. `'\u{1F4B0}'`) are safe with `textContent`.
 - Apply `innerHTML` to every game's `xSendEmail()` `.finally()` reset when building a new game.
 
-### When Adding a New Game — Email Checklist
+### Frontend Fetch -- AbortController Timeouts
+Every user-triggered fetch() in index.html MUST have an AbortController with an appropriate timeout. This prevents mobile connections from hanging indefinitely on slow or dropped requests.
+
+### Timeout values by endpoint type
+| Endpoint type | Timeout | Rationale |
+|---|---|---|
+| /analyze/* | 30s | PDF parse + line generation can take 10-15s |
+| /email | 30s | Resend API call + server processing |
+| /refresh/* | 10s | Just enqueues a job, returns immediately |
+| /check/* | 15s | Pure math, should be fast |
+| /chat/* | 15s | String matching, no I/O |
+| /email/config GET/POST | 10s | File read/write only |
+| /email/test | 10s | Single Resend API call |
+| /draws/* (lookup) | 60s | Already had this -- puppeteer can take 15s+ |
+
+### Endpoints that do NOT need AbortController
+- /nextdraw/* -- pure date math, instant; poll errors swallowed with .catch(function(){})
+- /latestdraw/* -- page-load only; errors swallowed with .catch(function(){})
+- /draws/*/available -- page-load chips; errors swallowed with .catch(function(){})
+- /reset -- fire-and-forget; .catch(function(){}) already present
+- /mode -- startup only, tiny
+
+### AbortController pattern
+Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid closure collisions inside loops. For loops (e.g. allLines.forEach), declare the AbortController inside the loop body so each request gets its own controller.
+
+### Fantasy 5 draw lookup -- sequential fetch (not parallel)
+- f5LookupDraw() fetches the selected draw type first, then falls back to the other if not found -- never both in parallel
+- Parallel dual-fetch was the root cause of mobile timeouts: two simultaneous requests each triggering a PDF parse
+- Pattern: _f5Fetch(_primary).then(function(r){ if (r && !r.error) return r; return _f5Fetch(_fallback); }).then(...)
+- Each _f5Fetch(dt) creates its own AbortController with 60s timeout
+
+### When adding a new game -- fetch checklist
+1. Every fetch() in user-triggered functions gets an AbortController with the appropriate timeout from the table above
+2. Add xAppendMsg(role, text) for the game chat panel (copies pattern from appendMsg, lxAppendMsg, cpAppendMsg)
+3. Add xSendChat() with AbortController (15s), context injection, and .finally() re-enable
+4. Add xQuickAsk(q) function
+5. For multi-draw games: use sequential fetch with fallback, not Promise.all
+
+## When Adding a New Game — Email Checklist
 1. Add `xEmailCard` div (hidden by default, shown after line generation)
 2. Add `xEmailIncLines` and `xEmailIncWinning` checkboxes (both checked by default)
 3. Add `xEmailTo` input and send button calling `xSendEmail()`
@@ -392,13 +451,14 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-19`
+Latest stable: `backups/stable-2026-11-19b`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
-- Memory: `1gb` — required for Fantasy5 PDF (2.7MB) + Chrome + Node. 512MB OOMs on concurrent PDF parses.
-- Node heap: `--max-old-space-size=768` in Dockerfile CMD — leaves ~256MB headroom for Chrome
+- Memory: `512mb` -- reduced from 1GB; stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
+- Node heap: `--max-old-space-size=192` in Dockerfile CMD -- leaves headroom for Chrome (~150MB) within 512MB total
+- Path to 256MB: monitor memory usage; if Chrome + Node peak stays under 200MB, `fly scale memory 256 -a jackpot-ixupbg` is viable
 - Health check: `GET /health` every 15s, 5s timeout, 10s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
 - If machine gets stuck in crash loop: `flyctl machine restart 857444c4722408 -a jackpot-ixupbg`

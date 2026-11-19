@@ -1049,7 +1049,7 @@ async function getLottoXText() {
   const mtime = fs.statSync(PDF_PATH_LX).mtimeMs;
   if (lxCache && lxCache.mtime === mtime) return lxCache.text;
   if (!lxParsePromise) {
-    lxParsePromise = extractPDFText(fs.readFileSync(PDF_PATH_LX)).then(text => {
+    lxParsePromise = extractPDFText(PDF_PATH_LX).then(text => {
       lxCache = { text, mtime };
       lxParsePromise = null;
       console.log('Lotto X PDF cache refreshed (mtime changed)');
@@ -1697,7 +1697,7 @@ async function getFantasy5Text() {
   const mtime = fs.statSync(PDF_PATH_F5).mtimeMs;
   if (f5Cache && f5Cache.mtime === mtime) return f5Cache.text;
   if (!f5ParsePromise) {
-    f5ParsePromise = extractPDFText(fs.readFileSync(PDF_PATH_F5)).then(text => {
+    f5ParsePromise = extractPDFText(PDF_PATH_F5).then(text => {
       f5Cache = { text, mtime };
       f5ParsePromise = null;
       console.log('Fantasy 5 PDF cache refreshed (mtime changed)');
@@ -1948,12 +1948,6 @@ function normDateForPDF(date) {
   const yy = p[2].length === 4 ? p[2].slice(2) : p[2];
   return p[0] + '/' + p[1] + '/' + yy;
 }
-function stripLeadingZeros(date) {
-  const p = date.split('/');
-  if (p.length !== 3) return date;
-  return parseInt(p[0]) + '/' + parseInt(p[1]) + '/' + p[2];
-}
-
 function stripLeadingZeros(date) {
   const p = date.split('/');
   if (p.length !== 3) return date;
