@@ -1052,7 +1052,8 @@ let lxCache = null;
 let lxParsePromise = null;
 
 async function getLottoXText() {
-  const mtime = fs.statSync(PDF_PATH_LX).mtimeMs;
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_LX).mtimeMs; } catch(e) { throw new Error('Lotto X PDF not yet downloaded. Try again in a moment.'); }
   if (lxCache && lxCache.mtime === mtime) return lxCache.text;
   if (!lxParsePromise) {
     lxParsePromise = extractPDFText(PDF_PATH_LX).then(text => {
@@ -1311,17 +1312,17 @@ async function start() {
     process.exit(1);
   });
 
-  server.listen(port, '0.0.0.0', async () => {
-    process.stdout.write('Downloading latest PDFs from Florida Lottery...');
-    const dl = await downloadPDFs();
-    const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-    if (!failed.length) {
-      console.log(' done.');
-    } else {
-      console.log('');
-      failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`));
-    }
+  process.stdout.write('Downloading latest PDFs from Florida Lottery...');
+  const dl = await downloadPDFs();
+  const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
+  if (!failed.length) {
+    console.log(' done.');
+  } else {
+    console.log('');
+    failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`));
+  }
 
+  server.listen(port, '0.0.0.0', () => {
     const localUrl = `http://localhost:${port}`;
     console.log('');
     console.log('╔══════════════════════════════════════════════════════╗');
@@ -1693,7 +1694,8 @@ let f5Cache = null;
 let f5ParsePromise = null;
 
 async function getFantasy5Text() {
-  const mtime = fs.statSync(PDF_PATH_F5).mtimeMs;
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_F5).mtimeMs; } catch(e) { throw new Error('Fantasy 5 PDF not yet downloaded. Try again in a moment.'); }
   if (f5Cache && f5Cache.mtime === mtime) return f5Cache.text;
   if (!f5ParsePromise) {
     f5ParsePromise = extractPDFText(PDF_PATH_F5).then(text => {

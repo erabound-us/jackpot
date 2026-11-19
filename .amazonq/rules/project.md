@@ -346,6 +346,12 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - JTP Frequency PDF: `https://files.floridalottery.com/exptkt/jackpot-triple-play_number-frequency-chart.pdf`
 - Lotto X History PDF: `https://files.floridalottery.com/exptkt/lotto_winning-numbers-history.pdf`
 - Fantasy 5 History PDF: `https://files.floridalottery.com/exptkt/fantasy5_winning-numbers-history.pdf`
+- Cash Pop History PDF: `https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf`
+- **All PDF URL and path constants are declared at the top of `server.js`** (lines ~94–107) — never declare them inline inside a game section. When adding a new game, add its `PDF_URL_X` and `PDF_PATH_X` constants to that block.
+- **`downloadPDFs()` downloads ALL game PDFs at startup** — JTP (sequential), then Lotto X + Fantasy 5 + Cash Pop in parallel. This ensures no game is missing on a fresh container after deploy. When adding a new game, add it to the `Promise.all` block in `downloadPDFs()`.
+- **`downloadPDFs()` runs BEFORE `server.listen()`** — the server does not accept any requests until all PDFs are on disk. Never move it back inside the listen callback.
+- **`getXxxText()` cache functions wrap `fs.statSync` in try/catch** — if a PDF is somehow missing, throw a clean Error (caught by route try/catch) instead of crashing the process with an unhandled exception. Pattern: `try { mtime = fs.statSync(PDF_PATH_X).mtimeMs; } catch(e) { throw new Error('X PDF not yet downloaded. Try again in a moment.'); }`
+- **Direct `extractPDFText(path)` calls** (JTP, Cash Pop) are safe without a guard — `loadPDF()` emits `pdfParser_dataError` on a missing file, which rejects the promise and is caught by the route-level try/catch. Only `fs.statSync` needs explicit guarding because it throws synchronously before any async boundary.
 - Auto-refreshed once per day on first `/analyze` (or `/analyze/lottox`, `/analyze/fantasy5`) call
 - Fantasy 5 and Cash Pop also auto-refresh via `schedulePostDrawRefreshes()` ~5 min after each draw completes (server-side `setTimeout` chain, no external scheduler needed)
 - **JTP and Lotto X also refresh via `schedulePostDrawRefreshes()` at 11:20 PM ET, gated on draw day** — JTP fires on Tue/Fri (days 2,5), Lotto X fires on Wed/Sat (days 3,6)
@@ -661,9 +667,11 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 ## When Adding a New Game — Complete Checklist
 
 ### Server (server.js)
-1. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
-2. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
-3. Add game URL to `FL_RESULTS_URLS`
+1. Add `PDF_URL_X` and `PDF_PATH_X` constants to the **top of the file** in the PDF constants block (lines ~94-107) -- never declare them inline inside the game section
+2. Add the new game download to the `Promise.all` block in `downloadPDFs()` so it downloads on every server startup -- include cache bust (`xCache = null`) if the game has a parse cache
+3. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
+4. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
+5. Add game URL to `FL_RESULTS_URLS`
 4. Add `/draws/<game>/available` endpoint — **PDF-based** using `expandYear()`, filtered by draw days
 5. Add `/draws/<game>` route: **PDF first** using `stripLeadingZeros()` comparison, puppeteer fallback, `delete _availCache['<game>']` + official link on 404
 6. Add draw day validation: `if (!isValidDrawDay(date, [days])) return 404` before PDF/scraper
@@ -672,7 +680,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 9. Add `/analyze/<game>`, `/refresh/<game>`, `/check/<game>`, `/chat/<game>` endpoints
 10. Add game to `schedulePostDrawRefreshes()` — **all games must have a scheduled refresh 5 min after every draw**, regardless of draw frequency. For games that don't draw every day, gate the download on draw day using `getDay()` check inside the callback.
 11. For multi-draw games: handle draw type in `scrapeFlDraws` (slice between labels, use chunk size 4000)
-12. For games with secondary draw data (like Lotto X Double Play): strip before extracting numbers
+12. For games with secondary draw data (like Lotto X Double Play): use a **negative lookahead** in the PDF parse regex to skip secondary rows (e.g. `LOTTO(?!\s+DP)`); also strip the secondary section from the scraper chunk before extracting numbers
 13. For games with non-standard page structure (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`; skip article ID lookup with `if (idx === -1 && game !== '<game>') return null`
 14. For PDFs > 1 MB: add serialized `getXxxText()` cache function with `xxxParsePromise` variable
 
