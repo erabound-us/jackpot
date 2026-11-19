@@ -992,14 +992,20 @@ function generateLottoXLines(freq, draws, count = 6, seenLines = new Set()) {
 
 // mtime-based parse cache for PDFs > 1 MB -- never stale: invalidates when file changes on disk
 let lxCache = null;
+let lxParsePromise = null;
 
 async function getLottoXText() {
   const mtime = fs.statSync(PDF_PATH_LX).mtimeMs;
-  if (!lxCache || lxCache.mtime !== mtime) {
-    lxCache = { text: await extractPDFText(fs.readFileSync(PDF_PATH_LX)), mtime };
-    console.log('Lotto X PDF cache refreshed (mtime changed)');
+  if (lxCache && lxCache.mtime === mtime) return lxCache.text;
+  if (!lxParsePromise) {
+    lxParsePromise = extractPDFText(fs.readFileSync(PDF_PATH_LX)).then(text => {
+      lxCache = { text, mtime };
+      lxParsePromise = null;
+      console.log('Lotto X PDF cache refreshed (mtime changed)');
+      return text;
+    });
   }
-  return lxCache.text;
+  return lxParsePromise;
 }
 
 async function runAnalysisLottoX(count = 6, sid = null) {
@@ -1632,14 +1638,20 @@ function generateFantasy5Lines(freq, draws, count = 6, seenLines = new Set()) {
 }
 
 let f5Cache = null;
+let f5ParsePromise = null;
 
 async function getFantasy5Text() {
   const mtime = fs.statSync(PDF_PATH_F5).mtimeMs;
-  if (!f5Cache || f5Cache.mtime !== mtime) {
-    f5Cache = { text: await extractPDFText(fs.readFileSync(PDF_PATH_F5)), mtime };
-    console.log('Fantasy 5 PDF cache refreshed (mtime changed)');
+  if (f5Cache && f5Cache.mtime === mtime) return f5Cache.text;
+  if (!f5ParsePromise) {
+    f5ParsePromise = extractPDFText(fs.readFileSync(PDF_PATH_F5)).then(text => {
+      f5Cache = { text, mtime };
+      f5ParsePromise = null;
+      console.log('Fantasy 5 PDF cache refreshed (mtime changed)');
+      return text;
+    });
   }
-  return f5Cache.text;
+  return f5ParsePromise;
 }
 
 async function runAnalysisFantasy5(count = 6, sid = null) {
