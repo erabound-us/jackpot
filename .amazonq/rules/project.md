@@ -331,6 +331,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - Node heap: `--max-old-space-size=192` in Dockerfile
 - Fly.io machine: `512mb` -- validated stable with queue serialization
 - **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
+- **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
 
 - PDFs > 1 MB (currently Lotto X ~1 MB, Fantasy 5 ~2.7 MB) use an mtime-based in-memory parse cache with **serialized parsing**
 - Cache stores `{ text, mtime }` — invalidates automatically when `fs.statSync().mtimeMs` changes
@@ -527,6 +528,7 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 
 ### Game-specific scraper notes
 - **Lotto X**: article contains both main draw AND Double Play numbers. Slice chunk to before `'Double Play'` to get only the 6 main draw numbers. Chunk size 2000 is sufficient.
+- **Lotto X PDF**: each date has TWO lines — `LOTTO DP` (Double Play) first, then `LOTTO` (main draw). The parse regex MUST use a negative lookahead `LOTTO(?!\s+DP)` to skip DP lines. Without it, the lazy `[\d\s]+?` captures DP numbers and anchors on the next line's `LOTTO \d`, returning wrong numbers. Current regex: `/(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+LOTTO(?!\s+DP)\s+\d/g`
 - **Fantasy 5**: article contains both Midday and Evening draws. Use chunk size 4000 (Evening label appears ~2583 chars in). Find the target draw type label (`Midday` or `Evening`), then slice to the next occurrence of the other label to isolate that draw's numbers. Default to Midday if no drawType specified.
 - **Fantasy 5 latestdraw**: filter draws to `ts > 2019-01-01` to exclude corrupt sentinel entries (e.g. `12/31/99`) that appear at the top of the PDF.
 - **Fantasy 5 available dates**: use `/games/draw-games/fantasy5` (no hyphen) — `/games/draw-games/fantasy-5` returns 404.

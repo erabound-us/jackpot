@@ -382,11 +382,9 @@ function generateLines(freq, draws, count = 6, seenLines = new Set()) {
 }
 
 async function runAnalysis(count = 6, sid = null) {
-  const histBuf = fs.readFileSync(PDF_PATHS.history);
-  const freqBuf = fs.readFileSync(PDF_PATHS.frequency);
   const [histText, freqText] = await Promise.all([
-    extractPDFText(histBuf),
-    extractPDFText(freqBuf)
+    extractPDFText(PDF_PATHS.history),
+    extractPDFText(PDF_PATHS.frequency)
   ]);
   const draws = parseHistoryPDF(histText);
   const freq  = parseFrequencyPDF(freqText);
@@ -1399,8 +1397,7 @@ function scoreCashPop(n, freq, draws, totalDraws) {
 }
 
 async function runAnalysisCashPop(count = 5, sid = null) {
-  const buf = fs.readFileSync(PDF_PATH_CP);
-  const text = await extractPDFText(buf);
+  const text = await extractPDFText(PDF_PATH_CP);
   const draws = parseCashPopHistoryPDF(text);
   if (draws.length < 5) throw new Error('Only ' + draws.length + ' Cash Pop draws parsed.');
   const freq = {};
@@ -1969,7 +1966,7 @@ app.get('/draws/jtp', async (req, res) => {
   if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No JTP draw on that date (draws Tue & Fri).', resultsUrl: FL_RESULTS_URLS.jtp });
   const pdfDate = normDateForPDF(date);
   try {
-    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
@@ -2062,7 +2059,7 @@ function expandYear(date) {
 
 app.get('/draws/jtp/available', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===2||day===5; });
     res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
@@ -2090,7 +2087,7 @@ app.get('/draws/fantasy5/available', async (req, res) => {
 });
 app.get('/draws/cashpop/available', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
     res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2100,7 +2097,7 @@ app.get('/draws/cashpop', async (req, res) => {
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   // PDF fallback first - has 5 numbers per date (one per session)
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
     const pdfDate = normDateForPDF(date);
     const match = draws.find(d => d.date === date || d.date === pdfDate);
     if (match) {
@@ -2123,7 +2120,7 @@ app.get('/draws/cashpop', async (req, res) => {
 
 app.get('/latestdraw/jtp', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
+    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     res.json({ date: d.date, numbers: d.numbers });
@@ -2156,7 +2153,7 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
 
 app.get('/latestdraw/cashpop', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATH_CP)));
+    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     res.json({ date: d.date, numbers: d.numbers });
