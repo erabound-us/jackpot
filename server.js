@@ -1334,17 +1334,19 @@ async function start() {
     // Download all PDFs after server is listening so health checks pass immediately
     // Then warm the large PDF caches (LX + F5) so first user request hits cache not cold parse
     process.stdout.write('Downloading latest PDFs from Florida Lottery...');
-    downloadPDFs().then(dl => {
-      const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-      if (!failed.length) { console.log(' done.'); }
-      else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
-      return getLottoXText().then(() => console.log('Lotto X cache warmed.')).catch(() => {});
-    }).then(() => {
-      return getFantasy5Text().then(() => console.log('Fantasy 5 cache warmed.')).catch(() => {});
-    }).then(() => {
-      _serverReady = true;
-      console.log('Server ready.');
-    });
+    downloadPDFs()
+      .catch(() => {})
+      .then(dl => {
+        if (dl) {
+          const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
+          if (!failed.length) { console.log(' done.'); }
+          else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
+        }
+        return getLottoXText().then(() => console.log('Lotto X cache warmed.')).catch(() => {});
+      })
+      .then(() => getFantasy5Text().then(() => console.log('Fantasy 5 cache warmed.')).catch(() => {}))
+      .then(() => { _serverReady = true; console.log('Server ready.'); })
+      .catch(() => { _serverReady = true; console.log('Server ready (with errors).'); });
   });
 }
 
