@@ -1771,6 +1771,7 @@ function cpLookupDraw() {
       if (!sessions.length) { msg.style.color = 'var(--red)'; msg.textContent = 'No sessions found for that date.'; return; }
       var target = sessions.find(function(s) { return s.name === session; }) || sessions[sessions.length - 1];
       document.getElementById('cpDrawSession').value = target.name;
+      if (cpLatestDate && document.getElementById('cpDrawDate').value === cpLatestDate) cpLatestSession = target.name;
       cpWinNum = target.number;
       var inp = document.getElementById('cpWinNum');
       if (inp) inp.value = target.number;
@@ -2240,14 +2241,7 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
   var p=d.date.split('/'); var yr=parseInt(p[2]); if(yr<100)yr+=2000;
   cpLatestDate=yr+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');
   document.getElementById('cpDrawDate').value=cpLatestDate;
-  if (d.latestSession) {
-    cpLatestSession=d.latestSession.name;
-    document.getElementById('cpDrawSession').value=d.latestSession.name;
-    cpWinNum=d.latestSession.number;
-    var inp=document.getElementById('cpWinNum'); if(inp)inp.value=d.latestSession.number;
-    var disp=document.getElementById('cpDrawnDisplay');
-    if(disp){disp.style.display='block';document.getElementById('cpDrawnBalls').innerHTML='<div class="hball" style="background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4);width:36px;height:36px;font-size:13px;">'+d.latestSession.number+'</div><span style="font-size:12px;color:var(--muted);margin-left:8px;">'+d.latestSession.name+'</span>';}
-  } else { cpWinNum=d.numbers[0]; var inp=document.getElementById('cpWinNum'); if(inp)inp.value=d.numbers[0]; }
+  cpLookupDraw();
 }).catch(function(){});
 </script>
 

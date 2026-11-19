@@ -373,9 +373,26 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 
 `email.config.json` | `*.pdf` | `logs/*`
 
+## Page Load — latestdraw Fetch Pattern
+Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Numbers date, drawn balls (gold), and session selector.
+
+**JTP and Lotto X** (no session selector):
+- Set `xLatestDate`, set date input, set `xDrawn`, render gold balls directly from response — no second fetch needed
+
+**Fantasy 5** (draw type selector, not session):
+- Same as JTP/Lotto X but also sets the draw type dropdown from `d.evening ? 'EVENING' : 'MIDDAY'`
+
+**Cash Pop** (5-session selector):
+- Set `cpLatestDate`, set date input, then call `cpLookupDraw()` — do NOT manually render balls or set session
+- `cpLookupDraw()` fetches `/draws/cashpop?date=...`, gets `allSessions`, resolves correct session, sets dropdown, renders gold balls, stores `cpLatestSession`
+- **Why different**: 5 sessions per day — correct latest session must be resolved from `allSessions`, not assumed
+- Never manually set `cpLatestSession` in the page load fetch — let `cpLookupDraw()` do it
+
+**Rule for new games with session selectors**: always call `xLookupDraw()` from the page load fetch instead of manually rendering. Only skip the second fetch for single-draw-per-date games (no session selector).
+
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-18e`
+Latest stable: `backups/stable-2026-11-19`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
