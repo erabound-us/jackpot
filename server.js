@@ -99,6 +99,12 @@ const PDF_PATHS = {
   history:   path.join(__dirname, 'jtp.pdf'),
   frequency: path.join(__dirname, 'jackpot-triple-play_number-frequency-chart.pdf')
 };
+const PDF_URLS_LX = 'https://files.floridalottery.com/exptkt/lotto_winning-numbers-history.pdf';
+const PDF_PATH_LX = path.join(__dirname, 'lotto_winning-numbers-history.pdf');
+const PDF_URL_F5  = 'https://files.floridalottery.com/exptkt/fantasy5_winning-numbers-history.pdf';
+const PDF_PATH_F5 = path.join(__dirname, 'fantasy5_winning-numbers-history.pdf');
+const PDF_URL_CP  = 'https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf';
+const PDF_PATH_CP = path.join(__dirname, 'cash-pop_winning-numbers-history.pdf');
 
 // ── Per-user session state ─────────────────────────────────────────────────────────────────────────────
 // Each browser gets a random session ID. Sessions expire after 2 hours of inactivity.
@@ -156,6 +162,11 @@ async function downloadPDFs() {
     try { await downloadFile(url, PDF_PATHS[key]); results[key] = 'ok'; }
     catch (e) { results[key] = e.message; }
   }
+  await Promise.all([
+    downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { results.lottox  = 'ok'; lxCache = null; }).catch(e => { results.lottox  = e.message; }),
+    downloadFile(PDF_URL_F5,  PDF_PATH_F5).then(() => { results.fantasy5 = 'ok'; f5Cache = null; }).catch(e => { results.fantasy5 = e.message; }),
+    downloadFile(PDF_URL_CP,  PDF_PATH_CP).then(() => { results.cashpop  = 'ok'; }).catch(e => { results.cashpop  = e.message; }),
+  ]);
   return results;
 }
 
@@ -920,9 +931,6 @@ app.post('/chat', (req, res) => {
 
 // ── Lotto X ───────────────────────────────────────────────────────────────────
 
-const PDF_URLS_LX = 'https://files.floridalottery.com/exptkt/lotto_winning-numbers-history.pdf';
-const PDF_PATH_LX = path.join(__dirname, 'lotto_winning-numbers-history.pdf');
-
 function getNextDrawLottoX() {
   const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const DRAW_DAYS = [3, 6];
@@ -1338,9 +1346,6 @@ const CP_DRAW_TIMES = [
   { name: 'Late Night', hour: 22, min: 29 }
 ];
 
-const PDF_URL_CP  = 'https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf';
-const PDF_PATH_CP = path.join(__dirname, 'cash-pop_winning-numbers-history.pdf');
-
 function getNextDrawCashPop() {
   const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1559,9 +1564,6 @@ app.post('/chat/cashpop', (req, res) => {
 });
 
 // ── Fantasy 5 ─────────────────────────────────────────────────────────────────
-
-const PDF_URL_F5  = 'https://files.floridalottery.com/exptkt/fantasy5_winning-numbers-history.pdf';
-const PDF_PATH_F5 = path.join(__dirname, 'fantasy5_winning-numbers-history.pdf');
 
 function getNextDrawFantasy5() {
   const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
