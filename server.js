@@ -1891,8 +1891,21 @@ const FL_RESULTS_URLS = {
 function normDateForPDF(date) {
   const p = date.split('/');
   if (p.length !== 3) return date;
-  return p[0] + '/' + p[1] + '/' + (p[2].length === 4 ? p[2].slice(2) : p[2]);
+  const yy = p[2].length === 4 ? p[2].slice(2) : p[2];
+  return p[0] + '/' + p[1] + '/' + yy;
 }
+function stripLeadingZeros(date) {
+  const p = date.split('/');
+  if (p.length !== 3) return date;
+  return parseInt(p[0]) + '/' + parseInt(p[1]) + '/' + p[2];
+}
+
+function stripLeadingZeros(date) {
+  const p = date.split('/');
+  if (p.length !== 3) return date;
+  return parseInt(p[0]) + '/' + parseInt(p[1]) + '/' + p[2];
+}
+
 
 function isValidDrawDay(dateStr, days) {
   const p = dateStr.split('/');
@@ -1908,7 +1921,7 @@ app.get('/draws/jtp', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
-    const match = draws.find(d => d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
   const scraped = await scrapeFlDraws('jtp', date, null);
@@ -1924,7 +1937,7 @@ app.get('/draws/lottox', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
-    const match = draws.find(d => d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
   const scraped = await scrapeFlDraws('lottox', date, null);
@@ -1940,7 +1953,7 @@ app.get('/draws/fantasy5', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = parseFantasy5HistoryPDF(await getFantasy5Text());
-    const match = draws.find(d => (d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
+    const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
   const scraped = await scrapeFlDraws('fantasy5', date, type);
