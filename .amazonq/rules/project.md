@@ -349,8 +349,51 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - Cash Pop History PDF: `https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf`
 - **All PDF URL and path constants are declared at the top of `server.js`** (lines ~94–107) — never declare them inline inside a game section. When adding a new game, add its `PDF_URL_X` and `PDF_PATH_X` constants to that block.
 - **`downloadPDFs()` downloads ALL game PDFs at startup** — JTP (sequential), then Lotto X + Fantasy 5 + Cash Pop in parallel. This ensures no game is missing on a fresh container after deploy. When adding a new game, add it to the `Promise.all` block in `downloadPDFs()`.
-- **`downloadPDFs()` runs INSIDE the `server.listen()` callback as a non-blocking fire-and-forget** — the server starts listening immediately so Fly.io health checks pass, then downloads all PDFs in the background. The `statSync` try/catch in `getXxxText()` returns a clean error if a request arrives before a PDF is ready. Grace period in `fly.toml` is 30s to allow downloads to complete before health checks begin.
+- **`downloadPDFs()` runs INSIDE the `server.listen()` callback as a non-blocking fire-and-forget** — the server starts listening immediately so Fly.io health checks pass, then downloads all PDFs in the background. Grace period in `fly.toml` is 30s to allow downloads to complete before health checks begin.
+- **Readiness gate**: `_serverReady` flag starts `false`. A middleware blocks all non-`/health` routes with 503 until `_serverReady = true`. The flag is set only after `downloadPDFs()` + `getLottoXText()` + `getFantasy5Text()` all complete. This prevents Fly's proxy from timing out on cold PDF parses -- users get a clean 503 "warming up" instead of a 502 Bad Gateway.
+- **When adding a new game with PDF > 1 MB**: add its `getXxxText()` to the warming chain before `_serverReady = true` is set.
 - **After downloads complete, large PDF caches are warmed sequentially** — `getLottoXText()` then `getFantasy5Text()` are called in the startup chain so the first user request hits the in-memory cache instead of triggering a cold 6-10s parse. Sequential (not parallel) to avoid OOM. When adding a new game with a PDF > 1 MB, add its `getXxxText()` call to this chain.
+
+## PDF Parse Performance -- Decision Table
+Every PDF used by the server must be benchmarked before deciding whether it needs a cache. Fly.io shared-cpu-1x is ~3-4x slower than a local dev machine. Fly's proxy cuts connections at ~8s.
+
+### Benchmark rule
+Run this locally to measure parse time before adding a new game:
+```js
+node -e "const {performance}=require('perf_hooks');const PDFParser=require('pdf2json');const t=performance.now();const p=new PDFParser(null,1);const _w=console.warn;console.warn=()=>{};p.on('pdfParser_dataReady',()=>{console.warn=_w;console.log(Math.round(performance.now()-t)+'ms len:'+p.getRawTextContent().length);p.destroy();});p.on('pdfParser_dataError',e=>{console.warn=_w;console.error(e.parserError);});p.loadPDF('path/to/file.pdf');"
+```
+Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, the PDF needs a cache + startup warming.
+
+### Current PDF parse times (measured locally, Nov 2026)
+| PDF | Local parse time | Est. Fly time | Needs cache | Needs startup warm |
+|-----|-----------------|---------------|-------------|-------------------|
+| jtp.pdf (~65KB text) | ~280ms | ~1s | No | No |
+| jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
+| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | No | No |
+| lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | Yes | Yes |
+| fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | Yes | Yes |
+
+### Decision rules
+- Local parse < 750ms (est. Fly < 3s): direct `extractPDFText(path)` on every request, no cache
+- Local parse 750ms-2s (est. Fly 3-8s): add mtime cache (`getXxxText()`) but startup warming optional
+- Local parse > 2s (est. Fly > 8s): **must** add mtime cache + startup warming or users get 502 on first request after deploy
+
+### Startup warming chain (server.js listen callback)
+```
+downloadPDFs()
+  .then(() => getLottoXText())    // ~1-2s, warms lxCache
+  .then(() => getFantasy5Text())  // ~6s, warms f5Cache
+```
+- Always sequential -- never parallel -- to avoid concurrent large PDF parses causing OOM
+- Each step swallows errors with `.catch(() => {})` so a failed warm doesn't crash startup
+- When adding a new game with local parse > 2s: add `getXxxText()` call at the END of this chain
+
+### When adding a new game -- PDF checklist
+1. Benchmark the PDF parse time locally using the node command above
+2. If est. Fly time < 3s: use direct `extractPDFText(PDF_PATH_X)` -- no cache needed
+3. If est. Fly time > 3s: add `getXxxText()` cache function with `xxxParsePromise` serialization and `fs.statSync` try/catch guard
+4. If est. Fly time > 8s (or > 2s local): add `getXxxText()` to the startup warming chain in `server.listen()` callback
+5. Always add `PDF_URL_X` and `PDF_PATH_X` to the top constants block and `downloadPDFs()` Promise.all
 - **`getXxxText()` cache functions wrap `fs.statSync` in try/catch** — if a PDF is somehow missing, throw a clean Error (caught by route try/catch) instead of crashing the process with an unhandled exception. Pattern: `try { mtime = fs.statSync(PDF_PATH_X).mtimeMs; } catch(e) { throw new Error('X PDF not yet downloaded. Try again in a moment.'); }`
 - **Direct `extractPDFText(path)` calls** (JTP, Cash Pop) are safe without a guard — `loadPDF()` emits `pdfParser_dataError` on a missing file, which rejects the promise and is caught by the route-level try/catch. Only `fs.statSync` needs explicit guarding because it throws synchronously before any async boundary.
 - Auto-refreshed once per day on first `/analyze` (or `/analyze/lottox`, `/analyze/fantasy5`) call

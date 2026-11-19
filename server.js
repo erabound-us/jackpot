@@ -80,6 +80,13 @@ function rateLimit(req, res, next) {
 app.use(rateLimit);
 app.use(express.json({ limit: '20kb' }));
 
+// Startup readiness gate -- returns 503 on non-health routes until PDF caches are warm
+let _serverReady = false;
+app.use((req, res, next) => {
+  if (_serverReady || req.path === '/health') return next();
+  res.status(503).json({ error: 'Server warming up. Try again in a moment.' });
+});
+
 // Clean up rate limit, strike, and blacklist maps every 5 minutes
 setInterval(() => {
   const now = Date.now();
@@ -1331,10 +1338,12 @@ async function start() {
       const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
       if (!failed.length) { console.log(' done.'); }
       else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
-      // Warm parse caches for large PDFs sequentially to avoid OOM
       return getLottoXText().then(() => console.log('Lotto X cache warmed.')).catch(() => {});
     }).then(() => {
       return getFantasy5Text().then(() => console.log('Fantasy 5 cache warmed.')).catch(() => {});
+    }).then(() => {
+      _serverReady = true;
+      console.log('Server ready.');
     });
   });
 }
