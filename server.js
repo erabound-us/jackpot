@@ -1058,6 +1058,7 @@ function generateLottoXLines(freq, draws, count = 6, seenLines = new Set()) {
 // Reads from committed JSON file (instant), appends deltas after each refresh
 const JSON_PATH_LX = path.join(__dirname, 'lottox_draws.json');
 let lxDrawsCache = null;
+let lxLastPdfMtime = null;
 
 function getLottoXDraws() {
   if (lxDrawsCache) return lxDrawsCache;
@@ -1068,10 +1069,14 @@ function getLottoXDraws() {
 }
 
 async function appendLottoXDeltas() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_LX).mtimeMs; } catch(e) { return; }
+  if (mtime === lxLastPdfMtime) { console.log('Lotto X: PDF unchanged, skipping parse.'); return; }
   const existing = getLottoXDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
   let text;
   try { text = await extractPDFText(PDF_PATH_LX); } catch(e) { return; }
+  lxLastPdfMtime = mtime;
   const all = parseLottoXHistoryPDF(text);
   const newDraws = all.filter(d => d.ts > newestTs);
   if (!newDraws.length) { console.log('Lotto X: no new draws in PDF.'); return; }
@@ -1338,24 +1343,16 @@ async function start() {
     console.log('');
     console.log('Press Ctrl+C to stop.\n');
     openBrowser(localUrl);
-    // Download all PDFs after server is listening so health checks pass immediately
-    // Then append any new draws since the committed JSON cache (fast -- delta only)
-    process.stdout.write('Downloading latest PDFs from Florida Lottery...');
-    // Hard timeout: mark server ready after 90s regardless of warming state
+    // JSON draw caches (LX + F5) are read from committed JSON files -- instant, no PDF parse
+    // appendXxxDeltas() only runs after scheduled/manual refresh when PDF has new draws
+    process.stdout.write('Loading draw caches and downloading PDFs...');
+    // Hard timeout: mark server ready after 90s regardless
     setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
-    downloadPDFs()
-      .catch(() => {})
-      .then(dl => {
-        if (dl) {
-          const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-          if (!failed.length) { console.log(' done.'); }
-          else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
-        }
-        return appendLottoXDeltas().catch(() => {});
-      })
-      .then(() => appendFantasy5Deltas().catch(() => {}))
-      .then(() => { _serverReady = true; console.log('Server ready.'); })
-      .catch(() => { _serverReady = true; console.log('Server ready (with errors).'); });
+    try { getLottoXDraws(); getFantasy5Draws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
+    _serverReady = true;
+    console.log('Server ready.');
+    // Download PDFs in background for delta detection on next refresh
+    downloadPDFs().catch(() => {});
   });
 }
 
@@ -1714,6 +1711,7 @@ function generateFantasy5Lines(freq, draws, count = 6, seenLines = new Set()) {
 
 const JSON_PATH_F5 = path.join(__dirname, 'fantasy5_draws.json');
 let f5DrawsCache = null;
+let f5LastPdfMtime = null;
 
 function getFantasy5Draws() {
   if (f5DrawsCache) return f5DrawsCache;
@@ -1724,10 +1722,14 @@ function getFantasy5Draws() {
 }
 
 async function appendFantasy5Deltas() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_F5).mtimeMs; } catch(e) { return; }
+  if (mtime === f5LastPdfMtime) { console.log('Fantasy 5: PDF unchanged, skipping parse.'); return; }
   const existing = getFantasy5Draws();
   const newestTs = existing.length ? existing[0].ts : 0;
   let text;
   try { text = await extractPDFText(PDF_PATH_F5); } catch(e) { return; }
+  f5LastPdfMtime = mtime;
   const all = parseFantasy5HistoryPDF(text).filter(d => d.ts <= Date.now() && d.ts > new Date('2000-01-01').getTime());
   const newDraws = all.filter(d => d.ts > newestTs);
   if (!newDraws.length) { console.log('Fantasy 5: no new draws in PDF.'); return; }
