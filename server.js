@@ -1325,11 +1325,16 @@ async function start() {
     console.log('Press Ctrl+C to stop.\n');
     openBrowser(localUrl);
     // Download all PDFs after server is listening so health checks pass immediately
+    // Then warm the large PDF caches (LX + F5) so first user request hits cache not cold parse
     process.stdout.write('Downloading latest PDFs from Florida Lottery...');
     downloadPDFs().then(dl => {
       const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
       if (!failed.length) { console.log(' done.'); }
       else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
+      // Warm parse caches for large PDFs sequentially to avoid OOM
+      return getLottoXText().then(() => console.log('Lotto X cache warmed.')).catch(() => {});
+    }).then(() => {
+      return getFantasy5Text().then(() => console.log('Fantasy 5 cache warmed.')).catch(() => {});
     });
   });
 }
