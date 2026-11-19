@@ -5,7 +5,7 @@
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~1,750 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=192` set in Dockerfile CMD
+- **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -123,6 +123,8 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 
 ## Scoring Algorithm
 - Frequency 40 pts | Recency (last 50 draws) 20 pts | Pair co-occurrence 15 pts
+- **All parsers cap output at 500 draws** (most recent) -- lottery history is immutable so older draws never change, and the scoring algorithm only meaningfully uses the last ~500 draws. The recency component uses only the last 50; pair co-occurrence uses all 500 normalized by count. Draws beyond 500 add noise not signal. This cap keeps parse output bounded regardless of how long a game has been running -- critical for future games like Powerball (running since 1992) and Mega Millions (since 1996) whose PDFs could be 5-15MB+.
+- **Cap is applied in the parser, not the caller** -- `parseXxxHistoryPDF()` returns `draws.slice(0, 500)` after sorting newest-first. Never remove this cap.
 - Low/high balance 5 pts | Spread 10 pts
 - JTP pool: top 30 of 46; balance midpoint ≤23; spread /45
 - Lotto X pool: top 35 of 53; balance midpoint ≤26; spread /52
@@ -328,7 +330,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - Passing a path uses `loadPDF()` internally, avoiding a full Buffer copy of the file in memory before parsing
 - `p.destroy()` is called after every parse to free PDFParser internal state immediately
 - Large PDFs (>1MB) use mtime-based parse cache with serialized `parsePromise` -- see PDF Parse Cache section
-- Node heap: `--max-old-space-size=192` in Dockerfile
+- Node heap: `--max-old-space-size=256` in Dockerfile
 - Fly.io machine: `512mb` -- validated stable with queue serialization
 - **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
 - **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
@@ -510,7 +512,7 @@ Latest stable: `backups/stable-2026-11-19b`
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
 - Memory: `512mb` -- reduced from 1GB; stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
-- Node heap: `--max-old-space-size=192` in Dockerfile CMD -- leaves headroom for Chrome (~150MB) within 512MB total
+- Node heap: `--max-old-space-size=256` in Dockerfile CMD -- Fantasy 5 PDF parse (~2.7MB) requires ~250MB heap; 256MB is the minimum safe value
 - Path to 256MB: monitor memory usage; if Chrome + Node peak stays under 200MB, `fly scale memory 256 -a jackpot-ixupbg` is viable
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently

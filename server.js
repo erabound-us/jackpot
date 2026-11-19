@@ -302,7 +302,7 @@ function parseHistoryPDF(text) {
     }
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws;
+  return draws.slice(0, 500);
 }
 
 function parseFrequencyPDF(text) {
@@ -982,7 +982,7 @@ function parseLottoXHistoryPDF(text) {
     }
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws;
+  return draws.slice(0, 500);
 }
 
 function scoreLottoX(nums, freq, draws, totalDraws) {
@@ -1405,7 +1405,7 @@ function parseCashPopHistoryPDF(text) {
     if (numbers.length === 5) draws.push({ date: m[1], numbers, ts });
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws;
+  return draws.slice(0, 500);
 }
 
 function scoreCashPop(n, freq, draws, totalDraws) {
@@ -1633,7 +1633,7 @@ function parseFantasy5HistoryPDF(text) {
     }
   }
   draws.sort((a, b) => b.ts - a.ts || (a.drawType === 'EVENING' ? -1 : 1));
-  return draws;
+  return draws.slice(0, 500);
 }
 
 function scoreFantasy5(nums, freq, draws, totalDraws) {
