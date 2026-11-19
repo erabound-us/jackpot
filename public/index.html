@@ -757,35 +757,142 @@
 </div>
 
 <div class="game-panel" id="panel-pick5">
-  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
-    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🎲 Pick 5 Analysis — Coming Soon</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 5. Please consider donating to help us build this game in the near future!</div>
-    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  <div class="state-row"><span>🦎 FLORIDA</span><span>🕐 Eastern Time (ET)</span></div>
+  <div class="draw-banner" id="pickDrawBanner">
+    <div class="draw-when" id="pickDrawName" style="font-size:16px;">&mdash;</div>
+    <div class="draw-countdown" id="pickCountdown">--:--:--</div>
+    <div id="pickSalesBadge" class="sales-badge"></div>
+  </div>
+  <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;">PICK Daily Games draw Midday (1:05 PM ET) and Evening (11:15 PM ET) every day</div>
+
+  <!-- Game selector -->
+  <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;">
+    <button id="pickBtn2" onclick="pickSetGame('pick2')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">✌️ Pick 2</button>
+    <button id="pickBtn3" onclick="pickSetGame('pick3')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🔢 Pick 3</button>
+    <button id="pickBtn4" onclick="pickSetGame('pick4')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🎯 Pick 4</button>
+    <button id="pickBtn5" onclick="pickSetGame('pick5')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.8);background:rgba(99,91,255,0.25);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🎲 Pick 5</button>
+  </div>
+
+  <!-- Generate -->
+  <div class="card">
+    <div class="card-title" id="pickCardTitle">🎲 Pick 5 — Generate Lines</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Positional frequency + recency analysis across Midday &amp; Evening draws</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <label style="font-size:13px;color:var(--muted);">Lines:</label>
+      <input type="number" id="pickLineCount" value="6" min="1" max="50" style="width:60px;background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;" oninput="pickUpdateCost()">
+      <label style="font-size:13px;color:var(--muted);">Play:</label>
+      <select id="pickPlayAmount" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+        <option value="1">$1.00</option>
+        <option value="0.5">$0.50</option>
+      </select>
+      <label style="font-size:13px;color:var(--muted);">Type:</label>
+      <select id="pickPlayType" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+        <option value="straight">Straight</option>
+        <option value="box">Box</option>
+        <option value="sb">Straight/Box</option>
+        <option value="combo">Combo</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="pickFireball" onchange="pickUpdateCost()"> Fireball (+2x cost)
+      </label>
+    </div>
+    <div id="pickCostBar" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+    <button class="btn" id="pickGenBtn" onclick="pickGenerate()">🎲 Generate Lines</button>
+    <div id="pickStatusMsg" class="status-msg" style="display:none;"></div>
+    <div id="pickResults" style="display:none;margin-top:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span id="pickOddsBadge" style="font-size:11px;color:var(--muted);"></span>
+        <span id="pickUpdatedLabel" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+      <div id="pickLinesDisplay"></div>
+      <div id="pickFreqDisplay" style="margin-top:12px;"></div>
+      <div id="pickHistoryDisplay" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Check My Numbers -->
+  <div class="card">
+    <div class="card-title">&#9989; Check My Numbers</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <label style="font-size:13px;color:var(--muted);">Date:</label>
+      <input type="date" id="pickDrawDate" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+      <select id="pickDrawType" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+        <option value="MIDDAY">Midday</option>
+        <option value="EVENING">Evening</option>
+      </select>
+    </div>
+    <div id="pickDateChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    <div id="pickDrawLookupMsg" style="font-size:12px;color:var(--muted);margin-bottom:6px;"></div>
+    <div id="pickDrawnDisplay" style="margin-bottom:10px;display:none;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Drawn: <span id="pickFireballDrawn" style="display:none;margin-left:8px;font-size:12px;color:var(--accent);"></span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="pickDrawnBalls"></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Your digits:</div>
+      <div id="pickCheckInputs" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <label style="font-size:13px;color:var(--muted);">Play type:</label>
+      <select id="pickCheckPlayType" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+        <option value="straight">Straight</option>
+        <option value="box">Box</option>
+        <option value="sb">Straight/Box</option>
+        <option value="combo">Combo</option>
+      </select>
+      <label style="font-size:13px;color:var(--muted);">Play amount:</label>
+      <select id="pickCheckPlayAmount" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+        <option value="1">$1.00</option>
+        <option value="0.5">$0.50</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="pickCheckFireball"> Fireball
+      </label>
+    </div>
+    <button class="btn" onclick="pickCheckNumbers()" style="margin-right:8px;">&#9989; Check</button>
+    <button class="btn btn-secondary" onclick="pickClearCheck()">Clear</button>
+    <div id="pickCheckResult" style="margin-top:10px;"></div>
+  </div>
+
+  <!-- Email -->
+  <div class="card" id="pickEmailCard" style="display:none;">
+    <div class="card-title">&#128140; Email My Lines</div>
+    <div style="margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pickEmailIncLines" checked> My Lines</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pickEmailIncWinning" checked> Winning Numbers</label>
+    </div>
+    <input type="email" id="pickEmailTo" placeholder="your@email.com" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;margin-bottom:8px;">
+    <button class="btn" id="pickEmailBtn" onclick="pickSendEmail()">&#128140; Send Lines</button>
+    <div id="pickEmailStatus" style="font-size:12px;margin-top:6px;"></div>
+  </div>
+
+  <!-- Chat -->
+  <div class="card">
+    <div class="card-title">&#129302; Payout Assistant</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+      <span class="chip" onclick="pickQuickAsk('What do I win for a straight?')">Straight prize</span>
+      <span class="chip" onclick="pickQuickAsk('How does Fireball work?')">Fireball</span>
+      <span class="chip" onclick="pickQuickAsk('What are the box prizes?')">Box prizes</span>
+      <span class="chip" onclick="pickQuickAsk('What are the odds?')">Odds</span>
+      <span class="chip" onclick="pickQuickAsk('When are the draws?')">Draw schedule</span>
+    </div>
+    <div class="chat-messages" id="pickChatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="pickChatInput" placeholder="Ask about prizes, play types, Fireball...">
+      <button class="chat-send" id="pickChatSend" onclick="pickSendChat()">Send</button>
+    </div>
   </div>
 </div>
 
 <div class="game-panel" id="panel-pick4">
-  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
-    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🎯 Pick 4 Analysis — Coming Soon</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">Pick 4 runs twice daily — high frequency means more data to analyze. Please consider donating to help us build this game in the near future!</div>
-    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
-  </div>
+  <div style="text-align:center;padding:20px;color:var(--muted);font-size:14px;">Use the <strong style="color:var(--text);">Pick 5</strong> tab &mdash; select Pick 4 from the game selector at the top of that panel.</div>
 </div>
 
 <div class="game-panel" id="panel-pick3">
-  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
-    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">🔢 Pick 3 Analysis — Coming Soon</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 3. Please consider donating to help us build this game in the near future!</div>
-    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
-  </div>
+  <div style="text-align:center;padding:20px;color:var(--muted);font-size:14px;">Use the <strong style="color:var(--text);">Pick 5</strong> tab &mdash; select Pick 3 from the game selector at the top of that panel.</div>
 </div>
 
 <div class="game-panel" id="panel-pick2">
-  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
-    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">✌️ Pick 2 Analysis — Coming Soon</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Pick 2. Please consider donating to help us build this game in the near future!</div>
-    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
-  </div>
+  <div style="text-align:center;padding:20px;color:var(--muted);font-size:14px;">Use the <strong style="color:var(--text);">Pick 5</strong> tab &mdash; select Pick 2 from the game selector at the top of that panel.</div>
 </div>
 
 </main>
@@ -1241,14 +1348,9 @@ function quickAsk(q) { chatInput.value = q; sendChat(); }
 function openFAQ() { document.getElementById('faqModal').classList.add('show'); }
 function closeFAQ() { document.getElementById('faqModal').classList.remove('show'); }
 
-function switchTab(id) {
-  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-  document.querySelectorAll('.game-panel').forEach(function(p) { p.classList.remove('active'); });
-  event.currentTarget.classList.add('active');
-  document.getElementById('panel-' + id).classList.add('active');
-}
+// switchTab defined at bottom of script (handles Pick 2/3/4 -> Pick 5 redirect)
 
-// ── Lotto X ───────────────────────────────────────────────────────────────────
+// == Lotto X ==
 var lxPressCount = 0;
 var lxCountdownInterval = null;
 var lxLastNextDraw = null;
@@ -1610,7 +1712,7 @@ function lxQuickAsk(q) { document.getElementById('lxChatInput').value = q; lxSen
 document.getElementById('lxChatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') lxSendChat(); });
 document.getElementById('lxResults').style.display = 'none';
 
-// ── Cash Pop ─────────────────────────────────────────────────────────────────
+// == Cash Pop ==
 var cpCountdownInterval = null;
 var cpLastNumbers = null;
 var cpLastNextDraw = null;
@@ -1870,7 +1972,7 @@ function cpQuickAsk(q) { document.getElementById('cpChatInput').value = q; cpSen
 
 document.getElementById('cpChatInput').addEventListener('keydown', function(e) { if (e.key === 'Enter') cpSendChat(); });
 
-// ── Cost calculators ──────────────────────────────────────────────────────────
+// == Cost calculators ==
 function jtpUpdateCost() {
   var tickets = Math.min(Math.max(parseInt(document.getElementById('lineCount').value) || 6, 1), 100);
   var combo = document.getElementById('jtpComboGen').checked;
@@ -1955,7 +2057,7 @@ function f5SendEmail() {
     .finally(function() { btn.disabled = false; btn.innerHTML = '&#128140; Send Lines'; });
 }
 
-// ── Fantasy 5 ─────────────────────────────────────────────────────────────────
+// == Fantasy 5 ==
 var f5PressCount = 0;
 var f5CountdownInterval = null;
 var f5LastLines = null;
@@ -2302,6 +2404,372 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
   document.getElementById('cpDrawDate').value=cpLatestDate;
   cpLookupDraw();
 }).catch(function(){});
+
+// == PICK Daily Games ===========================================================
+var pickGame = 'pick5';
+var pickLastLines = null;
+var pickLastNextDraw = null;
+var pickLastWin = null;
+var pickLatestDate = null;
+var pickLatestDrawType = null;
+var pickDrawn = [];
+var pickFireballDrawn = null;
+var pickCountdownInterval = null;
+
+var PICK_DIGITS = { pick2:2, pick3:3, pick4:4, pick5:5 };
+var PICK_LABELS = { pick2:'Pick 2', pick3:'Pick 3', pick4:'Pick 4', pick5:'Pick 5' };
+var PICK_ICONS  = { pick2:'\u270c\ufe0f', pick3:'\ud83d\udd22', pick4:'\ud83c\udfaf', pick5:'\ud83c\udfb2' };
+
+function pickSetGame(g) {
+  pickGame = g;
+  var n = PICK_DIGITS[g];
+  document.getElementById('pickCardTitle').textContent = PICK_ICONS[g] + ' ' + PICK_LABELS[g] + ' -- Generate Lines';
+  ['pick2','pick3','pick4','pick5'].forEach(function(x) {
+    var btn = document.getElementById('pickBtn'+x.replace('pick',''));
+    if (x === g) { btn.style.background='rgba(99,91,255,0.25)'; btn.style.border='1px solid rgba(99,91,255,0.8)'; btn.style.color='#fff'; btn.style.fontWeight='700'; }
+    else { btn.style.background='rgba(99,91,255,0.08)'; btn.style.border='1px solid rgba(99,91,255,0.4)'; btn.style.color='var(--text)'; btn.style.fontWeight='600'; }
+  });
+  // Rebuild check inputs
+  var ci = document.getElementById('pickCheckInputs');
+  ci.innerHTML = '';
+  for (var i=0;i<n;i++) { var inp=document.createElement('input'); inp.className='num-input'; inp.placeholder='#'+(i+1); inp.maxLength=1; inp.style.width='44px'; ci.appendChild(inp); }
+  // Reset results
+  document.getElementById('pickResults').style.display='none';
+  document.getElementById('pickCheckResult').innerHTML='';
+  document.getElementById('pickDrawnDisplay').style.display='none';
+  document.getElementById('pickDrawnBalls').innerHTML='';
+  pickDrawn=[];
+  pickFireballDrawn=null;
+  pickLastLines=null;
+  pickLastWin=null;
+  document.getElementById('pickEmailCard').style.display='none';
+  pickUpdateCost();
+  // Load latest draw for this game
+  pickLoadLatest();
+  fetch('/draws/pick/available?game='+g).then(function(r){return r.json();}).then(function(d){pickRenderChips(d.dates);}).catch(function(){});
+}
+
+function pickUpdateCost() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),50);
+  var pa = parseFloat(document.getElementById('pickPlayAmount').value);
+  var pt = document.getElementById('pickPlayType').value;
+  var fb = document.getElementById('pickFireball').checked;
+  var cost = count * pa * (fb ? 2 : 1);
+  if (pt === 'combo') {
+    var n = PICK_DIGITS[pickGame];
+    document.getElementById('pickCostBar').textContent = count + ' line(s) x Combo (cost varies by digits) x ' + (fb?'2x Fireball':'') + ' -- estimated $' + (cost*2).toFixed(2) + '-$' + (cost*24).toFixed(2);
+  } else {
+    document.getElementById('pickCostBar').textContent = count + ' line(s) x $' + pa.toFixed(2) + (fb?' x 2 (Fireball)':'') + ' = $' + cost.toFixed(2) + ' estimated';
+  }
+}
+
+function pickStartCountdown(nd) {
+  if (pickCountdownInterval) clearInterval(pickCountdownInterval);
+  if (!nd) return;
+  pickLastNextDraw = nd;
+  document.getElementById('pickDrawName').textContent = nd.drawName || nd.dayName;
+  var badge = document.getElementById('pickSalesBadge');
+  function tick() {
+    var ms = nd.msUntilDraw - (Date.now() - _pickCountdownStart);
+    if (ms < 0) ms = 0;
+    var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000),s=Math.floor((ms%60000)/1000);
+    document.getElementById('pickCountdown').textContent = String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    badge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+    badge.className = 'sales-badge ' + (nd.salesOpen ? 'open' : 'closed');
+  }
+  var _pickCountdownStart = Date.now();
+  tick();
+  pickCountdownInterval = setInterval(tick, 1000);
+}
+
+function pickLoadLatest() {
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();},10000);
+  fetch('/latestdraw/pick?game='+pickGame, {signal:_ac.signal}).then(function(r){return r.json();}).then(function(d){
+    if (d.error) return;
+    var latest = d.evening || d.midday;
+    if (!latest) return;
+    var p = latest.date.split('/');
+    var yr = parseInt(p[2]); if(yr<100)yr+=2000;
+    pickLatestDate = yr+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');
+    pickLatestDrawType = d.evening ? 'EVENING' : 'MIDDAY';
+    document.getElementById('pickDrawDate').value = pickLatestDate;
+    document.getElementById('pickDrawType').value = pickLatestDrawType;
+    pickDrawn = latest.digits;
+    pickFireballDrawn = latest.fireball;
+    pickRenderDrawnBalls(latest.digits, latest.fireball, true);
+  }).catch(function(){});
+}
+
+function pickRenderDrawnBalls(digits, fb, isLatest) {
+  var style = isLatest
+    ? 'background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)'
+    : 'background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4)';
+  document.getElementById('pickDrawnBalls').innerHTML = digits.map(function(d){
+    return '<div class="hball" style="'+style+';width:36px;height:36px;font-size:15px;">'+d+'</div>';
+  }).join('');
+  var fbEl = document.getElementById('pickFireballDrawn');
+  if (fb !== null && fb !== undefined) {
+    fbEl.textContent = 'FB: '+fb;
+    fbEl.style.display='';
+  } else { fbEl.style.display='none'; }
+  document.getElementById('pickDrawnDisplay').style.display='block';
+}
+
+function pickLookupDraw() {
+  var dateVal = document.getElementById('pickDrawDate').value;
+  var drawType = document.getElementById('pickDrawType').value;
+  var msg = document.getElementById('pickDrawLookupMsg');
+  pickDrawn=[];
+  pickFireballDrawn=null;
+  document.getElementById('pickDrawnDisplay').style.display='none';
+  document.getElementById('pickDrawnBalls').innerHTML='';
+  if (!dateVal) { msg.textContent=''; return; }
+  var parts = dateVal.split('-');
+  var mmddyyyy = parts[1]+'/'+parts[2]+'/'+parts[0];
+  msg.style.color='var(--muted)'; msg.textContent='Looking up...';
+  var _primary = drawType; var _fallback = drawType==='EVENING'?'MIDDAY':'EVENING';
+  function _pFetch(dt) {
+    var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);
+    return fetch('/draws/pick?game='+pickGame+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
+  }
+  _pFetch(_primary).then(function(r){
+    if (r && !r.error) return r;
+    return _pFetch(_fallback);
+  }).then(function(data){
+    if (!data || data.error) {
+      msg.style.color='var(--red)';
+      var url=(data&&data.resultsUrl)||('https://floridalottery.com/games/draw-games/'+pickGame.replace('pick','pick-'));
+      msg.innerHTML='No draw found. <a href="'+url+'" target="_blank" style="color:var(--accent);">View official results</a>';
+      return;
+    }
+    pickDrawn=data.digits;
+    pickFireballDrawn=data.fireball;
+    msg.textContent='';
+    var isLatest = pickLatestDate && document.getElementById('pickDrawDate').value===pickLatestDate;
+    pickRenderDrawnBalls(data.digits, data.fireball, isLatest);
+    document.getElementById('pickDrawType').value = data.drawType || drawType;
+  });
+}
+
+function pickRenderChips(dates) {
+  var el = document.getElementById('pickDateChips');
+  if (!el||!dates.length) return;
+  el.innerHTML = dates.map(function(d){
+    var p=d.split('/'); var label=p[0]+'/'+p[1];
+    return '<span onclick="pickPickDate(\''+d+'\')" style="cursor:pointer;background:rgba(99,91,255,0.12);border:1px solid rgba(99,91,255,0.3);color:#a78bfa;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;">'+label+'</span>';
+  }).join('');
+}
+
+function pickPickDate(d){var p=d.split('/');document.getElementById('pickDrawDate').value=p[2]+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');pickLookupDraw();}
+
+function pickGenerate() {
+  var btn = document.getElementById('pickGenBtn');
+  btn.disabled=true; btn.textContent='Analyzing...';
+  var count=Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),50);
+  var _ac=new AbortController();setTimeout(function(){_ac.abort();},30000);
+  fetch('/analyze/pick?game='+pickGame+'&count='+count+'&sid='+SID,{signal:_ac.signal})
+    .then(function(res){return res.json().then(function(data){return{ok:res.ok,data:data};});})
+    .then(function(r){
+      if (!r.ok) throw new Error(r.data.error||'Server error');
+      pickLastLines=r.data.lines;
+      pickLastNextDraw=r.data.nextDraw;
+      pickStartCountdown(r.data.nextDraw);
+      pickRenderLines(r.data);
+      document.getElementById('pickResults').style.display='block';
+      document.getElementById('pickEmailCard').style.display='block';
+      document.getElementById('pickOddsBadge').textContent=r.data.totalDraws+' draws analyzed';
+      document.getElementById('pickUpdatedLabel').textContent='Data as of: '+r.data.lastUpdated;
+      pickRenderHistory(r.data.recentHistory);
+      pickRenderFreq(r.data.posFreq, r.data.numDigits);
+      var el=document.getElementById('pickStatusMsg'); el.style.display='none';
+    })
+    .catch(function(err){
+      var el=document.getElementById('pickStatusMsg');
+      el.className='status-msg error'; el.textContent='Error: '+err.message; el.style.display='block';
+    })
+    .finally(function(){btn.disabled=false;btn.textContent=PICK_ICONS[pickGame]+' Generate Lines';});
+}
+
+function pickRenderLines(data) {
+  var html='';
+  data.lines.forEach(function(l,i){
+    var color=i===0?'var(--yellow)':'var(--accent)';
+    html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+    html+='<span style="font-size:11px;color:'+(i===0?'var(--yellow)':'var(--muted)')+';min-width:50px;font-weight:700;">'+(i===0?'BEST:':'Line '+(i+1)+':')+'</span>';
+    html+='<div style="display:flex;gap:5px;">';
+    l.digits.forEach(function(d){
+      html+='<div style="width:36px;height:36px;line-height:36px;text-align:center;border-radius:8px;background:'+color+';color:#000;font-weight:700;font-size:16px;">'+d+'</div>';
+    });
+    html+='</div><span style="font-size:11px;color:var(--muted);">score:'+l.score+'</span></div>';
+  });
+  document.getElementById('pickLinesDisplay').innerHTML=html;
+}
+
+function pickRenderHistory(history) {
+  if (!history||!history.length) return;
+  var html='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;">Recent Draws</div>';
+  history.slice(0,5).forEach(function(d){
+    html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+    html+='<span style="font-size:11px;color:var(--muted);min-width:70px;">'+d.date+' '+d.drawType.substring(0,3)+'</span>';
+    html+='<div style="display:flex;gap:4px;">';
+    d.digits.forEach(function(dig){
+      html+='<div style="width:28px;height:28px;line-height:28px;text-align:center;border-radius:6px;background:rgba(79,142,247,0.15);color:var(--accent);font-weight:700;font-size:13px;">'+dig+'</div>';
+    });
+    html+='</div><span style="font-size:11px;color:var(--accent);">FB:'+d.fireball+'</span></div>';
+  });
+  document.getElementById('pickHistoryDisplay').innerHTML=html;
+}
+
+function pickRenderFreq(posFreq, numDigits) {
+  if (!posFreq) return;
+  var html='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;">Positional Frequency (top 3 per position)</div>';
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  posFreq.forEach(function(freq, pos){
+    var sorted=freq.map(function(c,d){return{d:d,c:c};}).sort(function(a,b){return b.c-a.c;});
+    html+='<div style="background:var(--card);border:1px solid #2a2d3a;border-radius:8px;padding:8px;min-width:60px;">';
+    html+='<div style="font-size:10px;color:var(--muted);margin-bottom:4px;text-align:center;">Pos '+(pos+1)+'</div>';
+    sorted.slice(0,3).forEach(function(x,i){
+      html+='<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:'+(i===0?'var(--yellow)':'var(--text)')+'">'+
+        '<span>'+x.d+'</span><span style="color:var(--muted);">'+x.c+'</span></div>';
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  document.getElementById('pickFreqDisplay').innerHTML=html;
+}
+
+function pickCheckNumbers() {
+  if (!pickDrawn.length) {
+    document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);font-size:13px;">Select a draw date first.</div>'; return;
+  }
+  var n=PICK_DIGITS[pickGame];
+  var inputs=document.getElementById('pickCheckInputs').querySelectorAll('input');
+  var played=[];
+  for (var i=0;i<inputs.length;i++) {
+    var v=parseInt(inputs[i].value.trim());
+    if (isNaN(v)||v<0||v>9) { document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);font-size:13px;">Enter all '+n+' digits (0-9).</div>'; return; }
+    played.push(v);
+  }
+  var pt=document.getElementById('pickCheckPlayType').value;
+  var pa=parseFloat(document.getElementById('pickCheckPlayAmount').value);
+  var useFB=document.getElementById('pickCheckFireball').checked;
+  var fb=useFB?pickFireballDrawn:null;
+  var _ac=new AbortController();setTimeout(function(){_ac.abort();},15000);
+  fetch('/check/pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({game:pickGame,drawn:pickDrawn,fireball:fb,played:played,playType:pt,playAmount:pa}),signal:_ac.signal})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if (data.error){document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);">'+data.error+'</div>';return;}
+      var html='';
+      if (!data.results.length) {
+        html='<div class="check-line-result"><span style="font-weight:700;">No Match</span> &mdash; <span style="color:var(--muted);">$0</span></div>';
+      } else {
+        data.results.forEach(function(r){
+          var color=r.fireball?'var(--accent)':'var(--green)';
+          html+='<div class="check-line-result winner"><span style="font-weight:700;">'+r.type+'</span> &mdash; <span style="color:'+color+';font-weight:700;">$'+r.prize.toLocaleString()+'</span></div>';
+        });
+      }
+      if (data.totalPrize>0) {
+        pickLastWin=data.takeHome;
+        html+='<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total Prize</div>';
+        html+='<div class="amount" style="color:var(--yellow);">$'+data.totalPrize.toLocaleString()+'</div>';
+        if (data.withholding>0) html+='<div style="font-size:11px;color:var(--muted);margin-top:4px;">After 24% withholding: ~$'+data.takeHome.toLocaleString()+'</div>';
+        html+='</div>';
+      } else {
+        pickLastWin=0;
+        html+='<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">No Prize This Draw</div><div class="amount" style="color:var(--muted);">$0</div></div>';
+      }
+      document.getElementById('pickCheckResult').innerHTML=html;
+      // Highlight matched inputs
+      inputs.forEach(function(inp,i){
+        inp.className='num-input'+(pickDrawn[i]===played[i]?' matched':'');
+      });
+    })
+    .catch(function(err){document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';});
+}
+
+function pickClearCheck() {
+  document.getElementById('pickCheckInputs').querySelectorAll('input').forEach(function(i){i.value='';i.className='num-input';});
+  document.getElementById('pickCheckResult').innerHTML='';
+  pickLastWin=null;
+}
+
+function pickSendEmail() {
+  var to=document.getElementById('pickEmailTo').value.trim();
+  if (!to){document.getElementById('pickEmailStatus').textContent='Enter an email address.';return;}
+  var incLines=document.getElementById('pickEmailIncLines').checked;
+  if (!incLines||!pickLastLines||!pickLastLines.length){document.getElementById('pickEmailStatus').textContent='Generate lines first.';return;}
+  var incWinning=document.getElementById('pickEmailIncWinning').checked;
+  var btn=document.getElementById('pickEmailBtn');
+  btn.disabled=true;
+  var lines=pickLastLines.map(function(l,i){return{line:i+1,numbers:l.digits,score:l.score};});
+  var _ac=new AbortController();setTimeout(function(){_ac.abort();},30000);
+  fetch('/email',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to:to,lines:lines,nextDraw:pickLastNextDraw,game:'pick',gameLabel:PICK_LABELS[pickGame],
+      winningNumbers:incWinning&&pickDrawn.length?pickDrawn:null}),signal:_ac.signal})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if (data.error){document.getElementById('pickEmailStatus').style.color='var(--red)';document.getElementById('pickEmailStatus').textContent=data.error;}
+      else{document.getElementById('pickEmailStatus').style.color='var(--green)';document.getElementById('pickEmailStatus').textContent='Sent to '+data.sent+' recipient'+(data.sent>1?'s':'')+'.';}
+    })
+    .catch(function(err){document.getElementById('pickEmailStatus').style.color='var(--red)';document.getElementById('pickEmailStatus').textContent='Error: '+err.message;})
+    .finally(function(){btn.disabled=false;btn.innerHTML='&#128140; Send Lines';});
+}
+
+function pickAppendMsg(role,text){
+  var div=document.createElement('div');div.className='chat-msg '+role;div.textContent=text;
+  var msgs=document.getElementById('pickChatMessages');msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;return div;
+}
+
+function pickSendChat(){
+  var input=document.getElementById('pickChatInput');
+  var msg=input.value.trim();if(!msg)return;
+  input.value='';
+  var btn=document.getElementById('pickChatSend');btn.disabled=true;
+  pickAppendMsg('user',msg);
+  var thinking=pickAppendMsg('thinking','Thinking...');
+  var tickets=pickLastLines?pickLastLines.length:0;
+  var pa=parseFloat(document.getElementById('pickPlayAmount').value)||1;
+  var fb=document.getElementById('pickFireball').checked;
+  var spend=tickets*pa*(fb?2:1);
+  var ctx=tickets>0?{spend:spend,lines:tickets,game:pickGame,won:pickLastWin}:null;
+  var _ac=new AbortController();setTimeout(function(){_ac.abort();},15000);
+  fetch('/chat/pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,context:ctx}),signal:_ac.signal})
+    .then(function(r){return r.json();})
+    .then(function(data){thinking.remove();pickAppendMsg('bot',data.reply||data.error||'No response.');})
+    .catch(function(){thinking.remove();pickAppendMsg('bot','Error reaching server.');})
+    .finally(function(){btn.disabled=false;input.focus();});
+}
+
+function pickQuickAsk(q){document.getElementById('pickChatInput').value=q;pickSendChat();}
+
+document.getElementById('pickChatInput').addEventListener('keydown',function(e){if(e.key==='Enter')pickSendChat();});
+
+// Initialize Pick panel
+pickSetGame('pick5');
+fetch('/nextdraw/pick').then(function(r){return r.json();}).then(function(d){pickStartCountdown(d);}).catch(function(){});
+fetch('/draws/pick/available?game=pick5').then(function(r){return r.json();}).then(function(d){pickRenderChips(d.dates);}).catch(function(){});
+
+// Add Pick to the 60s poll
+setInterval(function(){
+  fetch('/nextdraw/pick').then(function(r){return r.json();}).then(function(d){pickStartCountdown(d);}).catch(function(){});
+}, 60000);
+
+// When switching to pick2/3/4 tabs, redirect to pick5 panel and set game
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.game-panel').forEach(function(p){p.classList.remove('active');});
+  event.currentTarget.classList.add('active');
+  if (id==='pick2'||id==='pick3'||id==='pick4') {
+    document.getElementById('panel-pick5').classList.add('active');
+    pickSetGame(id);
+    // Also activate the pick5 tab visually
+    document.querySelectorAll('.tab').forEach(function(t){
+      if (t.getAttribute('onclick')==="switchTab('pick5')") t.classList.add('active');
+    });
+  } else {
+    document.getElementById('panel-'+id).classList.add('active');
+  }
+}
 </script>
 
 <!-- FAQ Modal -->

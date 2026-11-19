@@ -112,6 +112,18 @@ const PDF_URL_F5  = 'https://files.floridalottery.com/exptkt/fantasy5_winning-nu
 const PDF_PATH_F5 = path.join(__dirname, 'fantasy5_winning-numbers-history.pdf');
 const PDF_URL_CP  = 'https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf';
 const PDF_PATH_CP = path.join(__dirname, 'cash-pop_winning-numbers-history.pdf');
+const PDF_URLS_PICK = {
+  pick2: 'https://files.floridalottery.com/exptkt/pick2_winning-numbers-history.pdf',
+  pick3: 'https://files.floridalottery.com/exptkt/pick3_winning-numbers-history.pdf',
+  pick4: 'https://files.floridalottery.com/exptkt/pick4_winning-numbers-history.pdf',
+  pick5: 'https://files.floridalottery.com/exptkt/pick5_winning-numbers-history.pdf',
+};
+const PDF_PATHS_PICK = {
+  pick2: path.join(__dirname, 'pick2_winning-numbers-history.pdf'),
+  pick3: path.join(__dirname, 'pick3_winning-numbers-history.pdf'),
+  pick4: path.join(__dirname, 'pick4_winning-numbers-history.pdf'),
+  pick5: path.join(__dirname, 'pick5_winning-numbers-history.pdf'),
+};
 
 // ── Per-user session state ─────────────────────────────────────────────────────────────────────────────
 // Each browser gets a random session ID. Sessions expire after 2 hours of inactivity.
@@ -173,6 +185,9 @@ async function downloadPDFs() {
     downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { results.lottox  = 'ok'; lxDrawsCache = null; }).catch(e => { results.lottox  = e.message; }),
     downloadFile(PDF_URL_F5,  PDF_PATH_F5).then(() => { results.fantasy5 = 'ok'; f5DrawsCache = null; }).catch(e => { results.fantasy5 = e.message; }),
     downloadFile(PDF_URL_CP,  PDF_PATH_CP).then(() => { results.cashpop  = 'ok'; }).catch(e => { results.cashpop  = e.message; }),
+    ...Object.entries(PDF_URLS_PICK).map(([g, url]) =>
+      downloadFile(url, PDF_PATHS_PICK[g]).then(() => { results[g] = 'ok'; pickCache[g] = null; }).catch(e => { results[g] = e.message; })
+    ),
   ]);
   return results;
 }
@@ -2237,8 +2252,375 @@ function scheduleDaily(hour, min, fn) {
   }, msUntilNextET(hour, min));
 }
 
+// ── PICK Daily Games (Pick 2, 3, 4, 5) ─────────────────────────────────────
+
+// Prize tables (base prizes at $1.00 play; 50c play = half)
+const PICK_PRIZES = {
+  pick2: {
+    straight: 100,
+    box: { 2: 50 },
+    sb: { 2: 75 },   // straight half + box half
+    combo: null,
+    fireball: { straight: 50, box: 25 }
+  },
+  pick3: {
+    straight: 500,
+    box: { 3: 160, 6: 80 },
+    sb: { 3: 330, 6: 290 },
+    combo: { 3: 500, 6: 500 },
+    fireball: { straight: 200, box3: 40, box6: 20 }
+  },
+  pick4: {
+    straight: 5000,
+    box: { 4: 1200, 6: 800, 12: 400, 24: 200 },
+    sb: { 4: 3100, 6: 2900, 12: 2700, 24: 2600 },
+    combo: { 4: 5000, 6: 5000, 12: 5000, 24: 5000 },
+    fireball: { straight: 1500, box4: 300, box6: 200, box12: 100, box24: 50 }
+  },
+  pick5: {
+    straight: 50000,
+    box: { 5: 12000, 10: 6000, 20: 3000, 30: 2000, 60: 1000, 120: 500 },
+    sb: { 5: 31000, 10: 28000, 20: 26500, 30: 26000, 60: 25500, 120: 25250 },
+    combo: { 5: 50000, 10: 50000, 20: 50000, 30: 50000, 60: 50000, 120: 50000 },
+    fireball: { straight: 12000, box5: 2500, box10: 1250, box20: 625, box30: 416, box60: 208, box120: 104 }
+  }
+};
+
+// Box ways by digit count
+function getBoxWays(digits) {
+  const counts = {};
+  digits.forEach(d => { counts[d] = (counts[d] || 0) + 1; });
+  const vals = Object.values(counts).sort((a,b) => b-a);
+  const n = digits.length;
+  let perms = 1;
+  for (let i = 1; i <= n; i++) perms *= i;
+  let denom = 1;
+  vals.forEach(v => { for (let i = 1; i <= v; i++) denom *= i; });
+  return perms / denom;
+}
+
+// mtime cache for Pick PDFs (~1s parse, under JSON cache threshold)
+const pickCache = { pick2: null, pick3: null, pick4: null, pick5: null };
+const pickParsePromise = { pick2: null, pick3: null, pick4: null, pick5: null };
+
+async function getPickText(game) {
+  let mtime;
+  try { mtime = require('fs').statSync(PDF_PATHS_PICK[game]).mtimeMs; } catch(e) { throw new Error(game + ' PDF not yet downloaded. Try again in a moment.'); }
+  if (pickCache[game] && pickCache[game].mtime === mtime) return pickCache[game].text;
+  if (!pickParsePromise[game]) {
+    pickParsePromise[game] = extractPDFText(PDF_PATHS_PICK[game]).then(text => {
+      pickCache[game] = { text, mtime };
+      pickParsePromise[game] = null;
+      console.log(game + ' PDF cache refreshed.');
+      return text;
+    });
+  }
+  return pickParsePromise[game];
+}
+
+function parsePickHistoryPDF(text, numDigits) {
+  const draws = [];
+  // Each row: DATE  D[-D...] FB N  D[-D...] FB N  (midday then evening)
+  const digitPat = Array(numDigits).fill('(\\d)').join('\\s*-\\s*');
+  const re = new RegExp('(\\d{1,2}/\\d{1,2}/\\d{4})\\s+' + digitPat + '\\s+FB\\s+(\\d)\\s+' + digitPat + '\\s+FB\\s+(\\d)', 'g');
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const date = m[1];
+    const parts = date.split('/');
+    const ts = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
+    if (ts > Date.now() || ts < new Date('2000-01-01').getTime()) continue;
+    const midDigits = [];
+    for (let i = 2; i < 2 + numDigits; i++) midDigits.push(parseInt(m[i]));
+    const midFB = parseInt(m[2 + numDigits]);
+    const eveDigits = [];
+    for (let i = 3 + numDigits; i < 3 + numDigits * 2; i++) eveDigits.push(parseInt(m[i]));
+    const eveFB = parseInt(m[3 + numDigits * 2]);
+    draws.push({ date, drawType: 'MIDDAY',  digits: midDigits, fireball: midFB, ts });
+    draws.push({ date, drawType: 'EVENING', digits: eveDigits, fireball: eveFB, ts: ts + 1 });
+  }
+  draws.sort((a, b) => b.ts - a.ts);
+  return draws.slice(0, 500);
+}
+
+function scorePickDigits(digits, draws) {
+  const n = digits.length;
+  // Positional frequency: how often each digit appears at each position
+  const posFreq = Array.from({length: n}, () => Array(10).fill(0));
+  draws.forEach(d => d.digits.forEach((dig, pos) => { posFreq[pos][dig]++; }));
+  let score = 0;
+  digits.forEach((d, pos) => { score += posFreq[pos][d] / Math.max(1, draws.length) * 40; });
+  // Recency: how recently each digit appeared at each position
+  const recent = draws.slice(0, 50);
+  digits.forEach((d, pos) => {
+    const lastIdx = recent.map((dr, i) => dr.digits[pos] === d ? i : -1).filter(i => i >= 0).pop();
+    if (lastIdx !== undefined) score += (lastIdx / recent.length) * 20;
+  });
+  // Overall digit frequency across all positions
+  const overallFreq = Array(10).fill(0);
+  draws.forEach(d => d.digits.forEach(dig => { overallFreq[dig]++; }));
+  const maxFreq = Math.max(...overallFreq);
+  digits.forEach(d => { score += overallFreq[d] / maxFreq * 10; });
+  return score;
+}
+
+function generatePickLines(draws, numDigits, count, seenLines) {
+  const candidates = [];
+  const used = new Set();
+  const target = Math.max(3000, count * 50);
+  for (let attempt = 0; attempt < target; attempt++) {
+    const digits = Array.from({length: numDigits}, () => Math.floor(Math.random() * 10));
+    const key = digits.join('');
+    if (used.has(key)) continue;
+    used.add(key);
+    const penalty = seenLines.has(key) ? 30 : 0;
+    candidates.push({ digits, score: scorePickDigits(digits, draws) - penalty });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  const lines = [];
+  for (const c of candidates) {
+    if (lines.length >= count) break;
+    // Diversity: max 1 shared digit at same position between selected lines
+    if (!lines.some(l => l.digits.filter((d, i) => d === c.digits[i]).length >= numDigits - 1)) lines.push(c);
+  }
+  for (const c of candidates) {
+    if (lines.length >= count) break;
+    if (!lines.includes(c)) lines.push(c);
+  }
+  return lines.slice(0, count);
+}
+
+function getNextDrawPick() {
+  // Same schedule as Fantasy 5: Midday 1:05 PM, Evening 11:15 PM ET, every day
+  const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const drawTimes = [
+    { name: 'Midday',  hour: 13, min: 5,  closeH: 12, closeM: 45 },
+    { name: 'Evening', hour: 23, min: 15, closeH: 22, closeM: 55 }
+  ];
+  for (let offset = 0; offset < 2; offset++) {
+    const day = new Date(nowET); day.setDate(day.getDate() + offset);
+    for (const d of drawTimes) {
+      const candidate = new Date(day); candidate.setHours(d.hour, d.min, 0, 0);
+      if (candidate > nowET) {
+        const salesClose = new Date(candidate); salesClose.setHours(d.closeH, d.closeM, 0, 0);
+        const fmt = (h, m) => { const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h > 12 ? h-12 : (h===0?12:h); return h12+':'+String(m).padStart(2,'0')+' '+ap+' ET'; };
+        return { drawName: d.name, dayName: DAY_NAMES[candidate.getDay()], date: MON_NAMES[candidate.getMonth()]+' '+candidate.getDate()+', '+candidate.getFullYear(), drawTime: fmt(d.hour, d.min), closeTime: fmt(d.closeH, d.closeM), salesOpen: nowET < salesClose, msUntilDraw: candidate - nowET };
+      }
+    }
+  }
+}
+
+function checkPickStraight(played, drawn) {
+  return played.every((d, i) => d === drawn[i]);
+}
+
+function checkPickBox(played, drawn) {
+  const s = [...played].sort().join('');
+  const d = [...drawn].sort().join('');
+  return s === d;
+}
+
+function getFireballCombos(drawn, fb) {
+  // Replace each position with fireball digit
+  return drawn.map((_, i) => drawn.map((d, j) => j === i ? fb : d));
+}
+
+function checkPickWin(played, drawn, fb, playType, game, playAmount) {
+  const prizes = PICK_PRIZES[game];
+  const mult = playAmount === 0.5 ? 0.5 : 1;
+  const results = [];
+
+  // Base game check
+  const isStraight = checkPickStraight(played, drawn);
+  const ways = getBoxWays(drawn);
+  const isBox = checkPickBox(played, drawn);
+
+  if (playType === 'straight') {
+    if (isStraight) results.push({ type: 'Straight', prize: Math.round(prizes.straight * mult), base: true });
+  } else if (playType === 'box') {
+    if (isBox && !isStraight) results.push({ type: 'Box ' + ways + '-way', prize: Math.round((prizes.box[ways] || 0) * mult), base: true });
+    else if (isStraight) results.push({ type: 'Box ' + ways + '-way (Straight match)', prize: Math.round((prizes.box[ways] || 0) * mult), base: true });
+  } else if (playType === 'sb') {
+    // Straight/Box: costs $1 (50c straight + 50c box)
+    if (isStraight) results.push({ type: 'Straight/Box - Straight', prize: Math.round(prizes.straight * 0.5), base: true });
+    if (isBox) results.push({ type: 'Straight/Box - Box', prize: Math.round((prizes.box[ways] || 0) * 0.5), base: true });
+  } else if (playType === 'combo') {
+    if (isStraight) results.push({ type: 'Combo - Straight', prize: Math.round(prizes.straight * mult), base: true });
+  }
+
+  // Fireball check
+  if (fb !== null && fb !== undefined) {
+    const fbCombos = getFireballCombos(drawn, fb);
+    fbCombos.forEach(fbDrawn => {
+      const fbStraight = checkPickStraight(played, fbDrawn);
+      const fbBox = checkPickBox(played, fbDrawn);
+      const fbWays = getBoxWays(fbDrawn);
+      if (playType === 'straight' && fbStraight) {
+        results.push({ type: 'Fireball Straight', prize: Math.round((prizes.fireball.straight || 0) * mult), fireball: true });
+      } else if (playType === 'box' && fbBox) {
+        const fbPrize = prizes.fireball['box' + fbWays] || prizes.fireball.box || 0;
+        results.push({ type: 'Fireball Box', prize: Math.round(fbPrize * mult), fireball: true });
+      } else if (playType === 'sb') {
+        if (fbStraight) results.push({ type: 'Fireball S/B Straight', prize: Math.round((prizes.fireball.straight || 0) * 0.5), fireball: true });
+        else if (fbBox) { const fbPrize = prizes.fireball['box' + fbWays] || prizes.fireball.box || 0; results.push({ type: 'Fireball S/B Box', prize: Math.round(fbPrize * 0.5), fireball: true }); }
+      }
+    });
+  }
+
+  const totalPrize = results.reduce((s, r) => s + r.prize, 0);
+  const wh = totalPrize > 5000 ? Math.round(totalPrize * 0.24) : 0;
+  return { results, totalPrize, withholding: wh, takeHome: totalPrize - wh };
+}
+
+function chatReplyPick(question, context) {
+  const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
+  const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
+  if (wl) return wl;
+
+  if (/straight.*prize|prize.*straight|win.*straight|straight.*win/.test(q))
+    return 'PICK Daily Games Straight prizes (exact order match, $1.00 play):\n\n- PICK 2: $100\n- PICK 3: $500\n- PICK 4: $5,000\n- PICK 5: $50,000\n\n50c play = half the prize. Prizes over $5,000 subject to 24% federal withholding. Florida has no state income tax.';
+
+  if (/box.*prize|prize.*box|win.*box|box.*win/.test(q))
+    return 'PICK Box prizes depend on how many unique combinations your digits create ($1.00 play):\n\nPICK 3: 3-way $160 | 6-way $80\nPICK 4: 4-way $1,200 | 6-way $800 | 12-way $400 | 24-way $200\nPICK 5: 5-way $12,000 | 10-way $6,000 | 20-way $3,000 | 30-way $2,000 | 60-way $1,000 | 120-way $500\n\nMore repeated digits = fewer ways = higher prize.';
+
+  if (/fireball/.test(q))
+    return 'Fireball doubles your ticket cost and adds an extra drawn digit. It replaces one of the official drawn digits to create new winning combinations.\n\nFireball Straight prizes ($1.00 play): PICK 2 $50 | PICK 3 $200 | PICK 4 $1,500 | PICK 5 $12,000\n\nYou can win both the base game prize AND a Fireball prize on the same ticket.';
+
+  if (/play type|straight|box|combo/.test(q))
+    return 'PICK Daily Games play types:\n\n- Straight: exact order match -- highest prize\n- Box: any order match -- lower prize, more ways to win\n- Straight/Box: half straight + half box on one ticket\n- Combo: covers all straight combinations of your digits (costs more)\n\nFireball add-on doubles cost and adds extra winning combinations.';
+
+  if (/cost|price|how much|ticket/.test(q))
+    return 'PICK Daily Games ticket costs (estimated, subject to change):\n\n- Base play: 50c or $1.00 per panel\n- Fireball add-on: doubles the base cost\n- Combo: costs $1 x number of combinations (e.g. PICK 3 6-way Combo = $6)\n\nAlways confirm at your retailer.';
+
+  if (/when|draw|time|midday|evening|schedule/.test(q))
+    return 'PICK Daily Games draw schedule:\n\n- Midday: 1:05 PM ET every day\n- Evening: 11:15 PM ET every day\n- Midday sales close: ~12:45 PM ET\n- Evening sales close: 10:55 PM ET\n\nAll four PICK games (2, 3, 4, 5) draw at the same times.';
+
+  if (/odd|chance|probabilit/.test(q))
+    return 'PICK Daily Games odds (Straight play):\n\n- PICK 2: 1 in 100\n- PICK 3: 1 in 1,000\n- PICK 4: 1 in 10,000\n- PICK 5: 1 in 100,000\n\nBox play improves odds proportionally to the number of combinations covered.';
+
+  if (/tax|take.?home|withhold/.test(q))
+    return 'Tax details for PICK Daily Games:\n\n- Prizes over $5,000: 24% federal withholding\n- Florida: NO state income tax\n- PICK 4 Straight ($5,000) and PICK 5 Straight ($50,000) exceed the threshold\n\nTip: ask "take-home on $5000" for exact math.';
+
+  return 'I can answer questions about PICK Daily Games (Pick 2, 3, 4, 5) prizes, play types, Fireball, odds, and draw schedule.\n\nTry asking:\n- "What do I win for a Pick 3 straight?"\n- "How does Fireball work?"\n- "What are the box prizes for Pick 4?"\n- "When are the draws?"';
+}
+
+// PICK routes
+app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
+
+app.get('/latestdraw/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game. Use pick2, pick3, pick4, or pick5.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const evening = draws.find(d => d.drawType === 'EVENING');
+    const midday  = draws.find(d => d.drawType === 'MIDDAY');
+    res.json({
+      evening: evening ? { date: evening.date, digits: evening.digits, fireball: evening.fireball } : null,
+      midday:  midday  ? { date: midday.date,  digits: midday.digits,  fireball: midday.fireball  } : null
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/draws/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  const { date, draw } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  const type = (draw || '').toUpperCase();
+  const numDigits = parseInt(game.replace('pick',''));
+  try {
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    const match = draws.find(d => (d.date === date) && (!type || d.drawType === type));
+    if (match) return res.json({ date: match.date, drawType: match.drawType, digits: match.digits, fireball: match.fireball });
+  } catch(e) {}
+  const gameId = game.replace('pick','pick-');
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://floridalottery.com/games/draw-games/' + gameId });
+});
+
+app.get('/draws/pick/available', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    const seen = new Set(); const dates = [];
+    for (const d of draws) {
+      if (seen.has(d.date)) continue; seen.add(d.date);
+      dates.push(d.date);
+      if (dates.length >= 5) break;
+    }
+    res.json({ dates });
+  } catch(e) { res.json({ dates: [] }); }
+});
+
+app.get('/analyze/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
+    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 50);
+    const sid = req.query.sid || null;
+    const sess = sid ? getSession(sid) : { lines: new Set() };
+    const lines = generatePickLines(draws, numDigits, count, sess.lines);
+    lines.forEach(l => sess.lines.add(l.digits.join('')));
+    // Positional frequency stats
+    const posFreq = Array.from({length: numDigits}, () => Array(10).fill(0));
+    draws.forEach(d => d.digits.forEach((dig, pos) => { posFreq[pos][dig]++; }));
+    res.json({
+      game, numDigits, totalDraws: draws.length,
+      nextDraw: getNextDrawPick(),
+      recentHistory: draws.slice(0, 10),
+      lines: lines.map((l, i) => ({ line: i+1, digits: l.digits, score: Math.round(l.score * 10) / 10 })),
+      posFreq,
+      lastUpdated: draws[0] ? draws[0].date : 'unknown'
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/check/pick', (req, res) => {
+  const { game, drawn, fireball, played, playType, playAmount } = req.body;
+  const g = (game || 'pick5').toLowerCase();
+  if (!PICK_PRIZES[g]) return res.status(400).json({ error: 'Invalid game.' });
+  const numDigits = parseInt(g.replace('pick',''));
+  if (!Array.isArray(drawn) || drawn.length !== numDigits) return res.status(400).json({ error: 'drawn must be ' + numDigits + ' digits (0-9).' });
+  if (!Array.isArray(played) || played.length !== numDigits) return res.status(400).json({ error: 'played must be ' + numDigits + ' digits (0-9).' });
+  const validTypes = ['straight','box','sb','combo'];
+  const pt = (playType || 'straight').toLowerCase();
+  if (!validTypes.includes(pt)) return res.status(400).json({ error: 'playType must be straight, box, sb, or combo.' });
+  const pa = [0.5, 1].includes(parseFloat(playAmount)) ? parseFloat(playAmount) : 1;
+  const fb = (fireball !== null && fireball !== undefined) ? parseInt(fireball) : null;
+  const result = checkPickWin(played.map(Number), drawn.map(Number), fb, pt, g, pa);
+  res.json({ game: g, drawn: drawn.map(Number), played: played.map(Number), fireball: fb, playType: pt, playAmount: pa, ...result });
+});
+
+app.post('/refresh/pick', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+    enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
+  });
+  clearSession(sid);
+  res.json({ queued: true, games: Object.keys(PDF_URLS_PICK) });
+});
+
+app.post('/chat/pick', (req, res) => {
+  const { message, context } = req.body;
+  if (!message || typeof message !== 'string') return res.status(400).json({ error: 'No message provided.' });
+  res.json({ reply: chatReplyPick(message, context) });
+});
+
 function schedulePostDrawRefreshes() {
   const f5Times  = [[13, 10], [23, 20]];
+  const pickTimes = [[13, 10], [23, 20]]; // Pick games draw same times as Fantasy 5
   const cpTimes  = [[7, 34], [11, 34], [14, 34], [18, 34], [22, 34]];
   // JTP draws Tue(2) & Fri(5); Lotto X draws Wed(3) & Sat(6) — refresh 5 min after 11:15 PM ET
   const jtpDays  = [2, 5];
@@ -2247,6 +2629,13 @@ function schedulePostDrawRefreshes() {
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
     console.log('Post-draw refresh queued: Fantasy 5');
+  }));
+
+  pickTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
+    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
+    });
+    console.log('Post-draw refresh queued: Pick 2-5');
   }));
 
   cpTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {

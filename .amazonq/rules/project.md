@@ -121,6 +121,34 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - Sales close ~5 minutes before each draw
 - No add-ons
 
+### Game 5-8: PICK Daily Games (Pick 2, Pick 3, Pick 4, Pick 5)
+- Pick N: player picks N digits (0-9), draws every day Midday (1:05 PM ET) and Evening (11:15 PM ET)
+- Play types: Straight (exact order), Box (any order), Straight/Box (half each), Combo (all straight combos)
+- Fireball add-on: doubles ticket cost, replaces one drawn digit to create N new winning combinations
+- Play amounts: 50c or $1.00 per panel
+- Digits 0-9 (not 1-46 like lottery games) -- positional frequency scoring
+
+### Official PICK Prizes ($1.00 play, Straight)
+| Game | Straight | Box (varies) | Fireball Straight |
+|------|----------|--------------|-------------------|
+| Pick 2 | $100 | $50 (2-way) | $50 |
+| Pick 3 | $500 | $80-$160 | $200 |
+| Pick 4 | $5,000 | $200-$1,200 | $1,500 |
+| Pick 5 | $50,000 | $500-$12,000 | $12,000 |
+
+### PICK PDF format
+Each row: `MM/DD/YYYY  D[-D...] FB N  D[-D...] FB N` (Midday then Evening, 4-digit year)
+- Digits 0-9 separated by ` - `; `FB N` = Fireball digit
+- Parse regex: `/(date)\s+(digits) FB (n)\s+(digits) FB (n)/g`
+- Parse time: ~1s locally, ~4s on Fly -- use mtime cache, no JSON cache needed
+- PDF URLs: `https://files.floridalottery.com/exptkt/pick{2,3,4,5}_winning-numbers-history.pdf`
+
+### PICK Scoring
+- Positional frequency: how often each digit 0-9 appears at each position (primary signal)
+- Overall frequency across all positions
+- Recency: how recently each digit appeared at each position (last 50 draws)
+- Diversity filter: max 1 shared digit at same position between selected lines
+
 ## Scoring Algorithm
 - Frequency 40 pts | Recency (last 50 draws) 20 pts | Pair co-occurrence 15 pts
 - **All parsers cap output at 500 draws** (most recent) -- lottery history is immutable so older draws never change, and the scoring algorithm only meaningfully uses the last ~500 draws. The recency component uses only the last 50; pair co-occurrence uses all 500 normalized by count. Draws beyond 500 add noise not signal. This cap keeps parse output bounded regardless of how long a game has been running -- critical for future games like Powerball (running since 1992) and Mega Millions (since 1996) whose PDFs could be 5-15MB+.
@@ -537,7 +565,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-19b`
+Latest stable: `backups/stable-2026-11-19c`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
