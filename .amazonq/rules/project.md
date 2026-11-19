@@ -13,7 +13,7 @@
 ```
 Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 ```
-- PDFs are downloaded at runtime by the server on first `/analyze` call each day
+- PDFs are downloaded at runtime by the server; **all games now refresh via `schedulePostDrawRefreshes()` — 5 minutes after each draw on the game's schedule**. The `ensureDailyRefresh` guards on `/analyze` routes remain as a safety fallback only.
 - No cloudflared tunnel in production — that was a previous architecture, now obsolete
 - `jackpot-tunnel-config.yml` and `start_jackpot.ps1` are local-only dev tools
 
@@ -326,7 +326,9 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - Fantasy 5 History PDF: `https://files.floridalottery.com/exptkt/fantasy5_winning-numbers-history.pdf`
 - Auto-refreshed once per day on first `/analyze` (or `/analyze/lottox`, `/analyze/fantasy5`) call
 - Fantasy 5 and Cash Pop also auto-refresh via `schedulePostDrawRefreshes()` ~5 min after each draw completes (server-side `setTimeout` chain, no external scheduler needed)
-- When adding a new multi-draw-per-day game, add its post-draw refresh times to `schedulePostDrawRefreshes()`
+- **JTP and Lotto X also refresh via `schedulePostDrawRefreshes()` at 11:20 PM ET, gated on draw day** — JTP fires on Tue/Fri (days 2,5), Lotto X fires on Wed/Sat (days 3,6)
+- `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
+- When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
 
 ## Email Button Reset Pattern
 When resetting an email send button in a `.finally()` block, always use `btn.innerHTML` (not `btn.textContent`) so HTML entities like `&#128140;` render as the emoji rather than literal text.
@@ -350,7 +352,25 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 5. Set `xLastWin` from Check My Numbers result; clear on form reset
 6. Pass `context: { spend, lines, game, won: xLastWin }` in `xSendChat()` POST body
 
-## Never Modify
+## Timezones
+- All draw times are displayed in the **local timezone of the state where the game is operated**
+- Current games are all Florida Lottery → **Eastern Time (ET)**
+- Florida observes EST (UTC-5) Nov–Mar and EDT (UTC-4) Mar–Nov
+- The state row in the UI shows the timezone label: e.g. `🦎 FLORIDA  🕐 Eastern Time (ET)`
+- When adding a game from another state, use that state's `timeZone` string in all `toLocaleString()` calls in `getNextDrawXxx()`, and update the state row label accordingly
+- **Draw day validation** (`isValidDrawDay`) uses `Date.UTC()` + `getUTCDay()` — pure calendar math, timezone-independent. Never use `new Date(y, m, d).getDay()` — it depends on server local time and will give wrong results on Fly.io (UTC)
+- **`getNextDrawXxx()` functions** use `new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })` — always use the game state's IANA timezone string here
+- When adding a game from another state, replace `'America/New_York'` with the appropriate IANA zone (e.g. `'America/Chicago'` for CT, `'America/Los_Angeles'` for PT)
+
+## Chatbot Timezone Handling
+- `TZ_RE` — shared regex constant, checked **first** in every `chatReplyXxx()` function before any other pattern
+- `TZ_REPLY` — shared response string explaining state-local time, EST/EDT dates, CT/MT/PT conversions with examples
+- Both defined once above `chatReply()` and reused across all 4 chatbots
+- Regex uses `\b` word boundaries to avoid false positives on short tokens (e.g. `ct` in "ticket", `pt` in "point")
+- When adding a new game chatbot: call `if (TZ_RE.test(q)) return TZ_REPLY;` as the **first line** after `const q = ...`
+- If the new game is in a different state/timezone, update `TZ_REPLY` to be a function or map keyed by game, so each chatbot returns the correct state's timezone info
+
+
 `email.config.json` | `*.pdf` | `logs/*`
 
 ## Backups
@@ -571,7 +591,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 7. Add `/latestdraw/<game>` endpoint: **PDF only**, filter sentinel dates (`ts > 2019-01-01`), return `{ date, numbers }`
 8. Add `/nextdraw/<game>` endpoint (pure date math, no scraping)
 9. Add `/analyze/<game>`, `/refresh/<game>`, `/check/<game>`, `/chat/<game>` endpoints
-10. Add game to `schedulePostDrawRefreshes()` if it has multiple draws per day
+10. Add game to `schedulePostDrawRefreshes()` — **all games must have a scheduled refresh 5 min after every draw**, regardless of draw frequency. For games that don't draw every day, gate the download on draw day using `getDay()` check inside the callback.
 11. For multi-draw games: handle draw type in `scrapeFlDraws` (slice between labels, use chunk size 4000)
 12. For games with secondary draw data (like Lotto X Double Play): strip before extracting numbers
 13. For games with non-standard page structure (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`; skip article ID lookup with `if (idx === -1 && game !== '<game>') return null`

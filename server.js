@@ -546,8 +546,12 @@ function tryContextualSpend(q, context) {
   return 'Based on your ' + label + ' ($' + spent + ' spent):\n' + calcWinLoss(spent, won);
 }
 
+const TZ_RE = /time.?zone|what.?time.?zone|eastern.?time|\best\b|\bedt\b|\b(central|mountain|pacific).?time|convert.{0,20}time|time.{0,20}convert|what.?time.{0,20}(is|are|do|does|will)|my.?time|local.?time|utc|gmt|dst|daylight.?saving/i;
+const TZ_REPLY = 'All draw times are shown in the local timezone of the state where the game is operated. For all current Florida Lottery games that means Eastern Time (ET).\n\nFlorida observes:\n- EST (UTC-5): early November through mid-March\n- EDT (UTC-4): mid-March through early November\n\nQuick conversions from ET:\n- Central (CT):  ET - 1 hour  (e.g. 11:15 PM ET = 10:15 PM CT)\n- Mountain (MT): ET - 2 hours (e.g. 11:15 PM ET = 9:15 PM MT)\n- Pacific (PT):  ET - 3 hours (e.g. 11:15 PM ET = 8:15 PM PT)\n\nThe app always shows the correct current Florida time regardless of where you are viewing it from. If we add games from other states in the future, each game will display times in that state\'s own local timezone, clearly labeled on the state row.';
+
 function chatReply(question, context) {
   const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
 
   const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
   if (wl) return wl;
@@ -1029,6 +1033,7 @@ async function runAnalysisLottoX(count = 6, sid = null) {
 
 function chatReplyLottoX(question, context) {
   const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
 
   const taxM = q.match(/(?:take.?home|after.?tax|net|lump.?sum|cash.?out|keep).{0,30}\$(\d[\d,]*)/i) ||
                q.match(/\$(\d[\d,]*).{0,30}(?:take.?home|after.?tax|net|lump.?sum|keep)/i) ||
@@ -1429,6 +1434,7 @@ app.post('/check/cashpop', (req, res) => {
 
 function chatReplyCashPop(question, context) {
   const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
 
   const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
   if (wl) return wl;
@@ -1677,6 +1683,7 @@ async function runAnalysisFantasy5(count = 6, sid = null) {
 
 function chatReplyFantasy5(question, context) {
   const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
 
   const taxM = q.match(/(?:take.?home|after.?tax|net|keep).{0,30}\$(\d[\d,]*)/i) ||
                q.match(/\$(\d[\d,]*).{0,30}(?:take.?home|after.?tax|net|keep)/i) ||
@@ -1910,8 +1917,9 @@ function stripLeadingZeros(date) {
 function isValidDrawDay(dateStr, days) {
   const p = dateStr.split('/');
   if (p.length !== 3) return true; // can't parse, let it through
-  const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
-  return days.includes(d.getDay());
+  const yy = parseInt(p[2].length === 2 ? '20' + p[2] : p[2]);
+  const d = new Date(Date.UTC(yy, parseInt(p[0]) - 1, parseInt(p[1])));
+  return days.includes(d.getUTCDay());
 }
 
 app.get('/draws/jtp', async (req, res) => {
@@ -2014,14 +2022,14 @@ function expandYear(date) {
 app.get('/draws/jtp/available', async (req, res) => {
   try {
     const draws = parseHistoryPDF(await extractPDFText(fs.readFileSync(PDF_PATHS.history)));
-    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1])).getDay(); return day===2||day===5; });
+    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===2||day===5; });
     res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/lottox/available', async (req, res) => {
   try {
     const draws = parseLottoXHistoryPDF(await getLottoXText());
-    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1])).getDay(); return day===3||day===6; });
+    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===3||day===6; });
     res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2162,6 +2170,9 @@ function scheduleDaily(hour, min, fn) {
 function schedulePostDrawRefreshes() {
   const f5Times  = [[13, 10], [23, 20]];
   const cpTimes  = [[7, 34], [11, 34], [14, 34], [18, 34], [22, 34]];
+  // JTP draws Tue(2) & Fri(5); Lotto X draws Wed(3) & Sat(6) — refresh 5 min after 11:15 PM ET
+  const jtpDays  = [2, 5];
+  const lxDays   = [3, 6];
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     downloadFile(PDF_URL_F5, PDF_PATH_F5)
@@ -2174,6 +2185,21 @@ function schedulePostDrawRefreshes() {
       .then(() => { lastAutoRefreshCP = null; console.log('Post-draw refresh: Cash Pop PDF updated'); })
       .catch(err => console.warn('Post-draw refresh failed (Cash Pop): ' + err.message));
   }));
+
+  // JTP & Lotto X: schedule daily at 11:20 PM ET but only download on valid draw days
+  scheduleDaily(23, 20, () => {
+    const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+    if (jtpDays.includes(day)) {
+      downloadPDFs()
+        .then(() => { lastAutoRefreshDate = null; console.log('Post-draw refresh: JTP PDFs updated'); })
+        .catch(err => console.warn('Post-draw refresh failed (JTP): ' + err.message));
+    }
+    if (lxDays.includes(day)) {
+      downloadFile(PDF_URLS_LX, PDF_PATH_LX)
+        .then(() => { lastAutoRefreshLottoX = null; lxCache = null; console.log('Post-draw refresh: Lotto X PDF updated'); })
+        .catch(err => console.warn('Post-draw refresh failed (Lotto X): ' + err.message));
+    }
+  });
 }
 
 schedulePostDrawRefreshes();

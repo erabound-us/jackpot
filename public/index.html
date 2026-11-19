@@ -177,14 +177,13 @@
   <h1>&#127921; Jackpot Analyzer</h1>
   <div class="header-right">
     <button class="hdr-btn" onclick="openFAQ()">&#10067; FAQ</button>
-    <button class="hdr-btn danger" id="resetBtn" onclick="doReset()">&#128465; Reset</button>
     <button class="hdr-btn" id="refreshBtn" onclick="doRefresh()" style="display:none"><span class="spin" id="refreshSpin">&#8635;</span> Update Data</button>
     <span class="port-badge" id="portBadge" style="display:none">Port &mdash;</span>
   </div>
 </header>
 
 <div style="background:var(--card);border-bottom:1px solid var(--border);padding:4px 16px 8px;text-align:center;">
-  <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;">&#129422; Florida</span>
+  <span style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;">&#129422; Florida</span><span style="font-size:11px;color:var(--muted);margin-left:8px;font-weight:400;text-transform:none;letter-spacing:0;">&#128336; Eastern Time (ET)</span>
 </div>
 <div class="tab-bar">
   <div class="tab active" onclick="switchTab('jtp')">🎱 Jackpot Triple Play</div>
@@ -204,7 +203,7 @@
   <div style="text-align:center;margin-bottom:16px;">
     <div style="font-size:36px;margin-bottom:6px;">&#127921;</div>
     <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Jackpot Triple Play</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Each $1 ticket includes 1 player-selected line + 2 auto Quick Pick lines — draws every Tuesday &amp; Friday at 11:15 PM ET.</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Each $1 ticket includes 1 player-selected line + 2 auto Quick Pick lines — draws every Tuesday &amp; Friday at 11:15 PM ET (Florida local time).</div>
   </div>
   <div class="draw-banner" id="drawBanner">
     <div class="draw-col">
@@ -347,7 +346,7 @@
   <div style="text-align:center;margin-bottom:16px;">
     <div style="font-size:36px;margin-bottom:6px;">🍀</div>
     <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Florida Lotto (Lotto X)</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 6 numbers from 1–53 — draws every Wednesday &amp; Saturday at 11:15 PM ET. Every ticket includes a random multiplier up to 10×!</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 6 numbers from 1–53 — draws every Wednesday &amp; Saturday at 11:15 PM ET (Florida local time). Every ticket includes a random multiplier up to 10×!</div>
   </div>
   <div class="draw-banner" id="lxDrawBanner">
     <div class="draw-col">
@@ -492,7 +491,7 @@
   <div style="text-align:center;margin-bottom:16px;">
     <div style="font-size:36px;margin-bottom:6px;">&#128176;</div>
     <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Cash Pop</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">Pick 1 to 15 numbers from 1&#8211;15. Your prize multiplier (5&#215;&#8211;250&#215;) prints on your ticket. Match the single winning number to win. <strong style="color:var(--text);">5 draws every day</strong> &mdash; Morning (7:29 AM), Matinee (11:29 AM), Afternoon (2:29 PM), Evening (6:29 PM) &amp; Late Night (10:29 PM) ET.</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">Pick 1 to 15 numbers from 1&#8211;15. Your prize multiplier (5&#215;&#8211;250&#215;) prints on your ticket. Match the single winning number to win. <strong style="color:var(--text);">5 draws every day</strong> &mdash; Morning (7:29 AM), Matinee (11:29 AM), Afternoon (2:29 PM), Evening (6:29 PM) &amp; Late Night (10:29 PM) ET (Florida local time).</div>
   </div>
   <div class="draw-banner" id="cpDrawBanner">
     <div class="draw-col">
@@ -637,7 +636,7 @@
   <div style="text-align:center;margin-bottom:16px;">
     <div style="font-size:36px;margin-bottom:6px;">&#127775;</div>
     <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Fantasy 5</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 5 numbers from 1&#8211;36 for $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET.</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 5 numbers from 1&#8211;36 for $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time).</div>
   </div>
   <div class="draw-banner" id="f5DrawBanner">
     <div class="draw-col">
@@ -810,14 +809,13 @@ var statusMsg = document.getElementById('statusMsg');
 var results = document.getElementById('results');
 var generateBtn = document.getElementById('generateBtn');
 var refreshBtn = document.getElementById('refreshBtn');
-var resetBtn = document.getElementById('resetBtn');
 var pressHint = document.getElementById('pressHint');
 var pressCount = 0;
 var countdownInterval = null;
 
 function setStatus(type, text) { statusMsg.className = 'status-msg ' + type; statusMsg.textContent = text; }
 function clearStatus() { statusMsg.style.display = 'none'; }
-function setAllBtns(disabled) { generateBtn.disabled = refreshBtn.disabled = resetBtn.disabled = disabled; }
+function setAllBtns(disabled) { generateBtn.disabled = refreshBtn.disabled = disabled; }
 
 function startCountdown(data) {
   var nd = data.nextDraw;
@@ -2304,7 +2302,7 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
 
     <div class="faq-item">
       <div class="faq-q">How does Jackpot Triple Play work?</div>
-      <div class="faq-a">Each <strong>$1 ticket</strong> gives you 3 lines of 6 numbers from 1&ndash;46. <strong>You choose 1 line</strong> &mdash; the other 2 are always auto Quick Pick. Drawings are every <strong>Tuesday &amp; Friday at 11:15 PM ET</strong>; sales close at 10:55 PM ET.<br><br>
+      <div class="faq-a">Each <strong>$1 ticket</strong> gives you 3 lines of 6 numbers from 1&ndash;46. <strong>You choose 1 line</strong> &mdash; the other 2 are always auto Quick Pick. Drawings are every <strong>Tuesday &amp; Friday at 11:15 PM ET</strong> (Florida local time); sales close at 10:55 PM ET.<br><br>
         The jackpot starts at <strong>$250,000</strong> (paid as a 25-year annuity or one-time cash lump sum). When the jackpot pool reaches its cap, any excess rolls down to boost the 2nd, 3rd, and 4th prize tiers.<br><br>
         Add <strong>Combo (+$1)</strong> to combine matches across all 3 lines for extra fixed prizes up to $10,000.</div>
     </div>
@@ -2330,7 +2328,7 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
 
     <div class="faq-item">
       <div class="faq-q">How does Florida Lotto (Lotto X) work?</div>
-      <div class="faq-a">Each <strong>$2 ticket</strong> has 1 line of 6 numbers chosen from 1&ndash;53. Every ticket automatically gets a random <strong>Multiplier (2&times;, 3&times;, 4&times;, 5&times;, or 10&times;)</strong> that boosts 2nd, 3rd, and 4th prizes. Drawings are every <strong>Wednesday &amp; Saturday at 11:15 PM ET</strong>; sales close at 10:55 PM ET.<br><br>
+      <div class="faq-a">Each <strong>$2 ticket</strong> has 1 line of 6 numbers chosen from 1&ndash;53. Every ticket automatically gets a random <strong>Multiplier (2&times;, 3&times;, 4&times;, 5&times;, or 10&times;)</strong> that boosts 2nd, 3rd, and 4th prizes. Drawings are every <strong>Wednesday &amp; Saturday at 11:15 PM ET</strong> (Florida local time); sales close at 10:55 PM ET.<br><br>
         The jackpot rolls until someone wins (no cap). Optional add-ons:<br>
         &bull; <strong>EZMatch (+$1)</strong> &mdash; instant win up to $500 at purchase<br>
         &bull; <strong>Double Play (+$1)</strong> &mdash; bonus drawing using your same numbers, top prize $250,000 fixed</div>
@@ -2399,7 +2397,8 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
         &bull; Matinee: <strong>11:29 AM ET</strong><br>
         &bull; Afternoon: <strong>2:29 PM ET</strong><br>
         &bull; Evening: <strong>6:29 PM ET</strong><br>
-        &bull; Late Night: <strong>10:29 PM ET</strong><br><br>
+        &bull; Late Night: <strong>10:29 PM ET</strong><br>
+        <em>All times are Florida local time (Eastern Time).</em><br><br>
         Sales close approximately 5 minutes before each draw. You can play multiple consecutive draws in advance.</div>
     </div>
 
@@ -2412,6 +2411,19 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
         &bull; 50&times; multiplier &rarr; $250<br>
         &bull; 250&times; multiplier &rarr; $1,250<br><br>
         You know your potential prize before the draw. Higher multipliers are rarer &mdash; the Florida Lottery does not publish the exact multiplier odds. Use the <strong>Check My Numbers</strong> section to calculate your exact prize and estimated take-home.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What timezone are the draw times in?</div>
+      <div class="faq-a">All times are shown in the <strong>local timezone of the state where the game is operated</strong>. For all current Florida Lottery games, that means <strong>Eastern Time (ET)</strong>.<br><br>
+        Florida observes:<br>
+        &bull; <strong>EST (UTC&minus;5)</strong> &mdash; early November through mid-March<br>
+        &bull; <strong>EDT (UTC&minus;4)</strong> &mdash; mid-March through early November<br><br>
+        The app always displays the correct current Florida time regardless of where you are viewing it from. Quick conversions from ET:<br><br>
+        &bull; <strong>Central (CT)</strong>: ET &minus; 1 hour &nbsp;(e.g. 11:15 PM ET = 10:15 PM CT)<br>
+        &bull; <strong>Mountain (MT)</strong>: ET &minus; 2 hours &nbsp;(e.g. 11:15 PM ET = 9:15 PM MT)<br>
+        &bull; <strong>Pacific (PT)</strong>: ET &minus; 3 hours &nbsp;(e.g. 11:15 PM ET = 8:15 PM PT)<br><br>
+        <strong>If we add games from other states in the future</strong>, each game will display times in that state&rsquo;s own local timezone, clearly labeled on the state row &mdash; so you always know exactly which timezone you&rsquo;re looking at.</div>
     </div>
 
     <div class="faq-item">
