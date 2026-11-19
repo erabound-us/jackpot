@@ -2034,9 +2034,22 @@ function cpUpdateCost() {
   document.getElementById('cpCostTotal').textContent = 'Total: $' + total;
 }
 
+function f5UpdateCost() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('f5LineCount').value) || 6, 1), 100);
+  var ez = document.getElementById('f5EZMatchGen').checked;
+  var base = count * 1;
+  var ezAmt = ez ? count * 1 : 0;
+  var total = base + ezAmt;
+  var parts = count + ' ticket' + (count !== 1 ? 's' : '') + ' x $1 = $' + base;
+  if (ez) parts += '  +  EZMatch ' + count + ' x $1 = $' + ezAmt;
+  document.getElementById('f5CostBreakdown').textContent = parts;
+  document.getElementById('f5CostTotal').textContent = 'Total: $' + total;
+}
+
 jtpUpdateCost();
 lxUpdateCost();
 cpUpdateCost();
+f5UpdateCost();
 
 function f5SendEmail() {
   var to = document.getElementById('f5EmailTo').value.trim();
