@@ -953,7 +953,7 @@ function getNextDrawLottoX() {
 
 function parseLottoXHistoryPDF(text) {
   const draws = [];
-  const re = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+LOTTO\s+\d/g;
+  const re = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+LOTTO(?!\s+DP)\s+\d/g;
   let m;
   while ((m = re.exec(text)) !== null) {
     const date = m[1];
