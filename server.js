@@ -1334,6 +1334,8 @@ async function start() {
     // Download all PDFs after server is listening so health checks pass immediately
     // Then warm the large PDF caches (LX + F5) so first user request hits cache not cold parse
     process.stdout.write('Downloading latest PDFs from Florida Lottery...');
+    // Hard timeout: mark server ready after 90s regardless of warming state
+    setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
     downloadPDFs()
       .catch(() => {})
       .then(dl => {
