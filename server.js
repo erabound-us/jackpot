@@ -53,6 +53,9 @@ function rateLimit(req, res, next) {
     }
   }
 
+  // Exclude pure read endpoints from per-route AND global rate limits
+  if (req.path.startsWith('/nextdraw') || req.path.startsWith('/latestdraw') || req.path === '/refresh/status' || req.path === '/health') return next();
+
   // Global cap
   const gKey = ip + '__global';
   const gEntry = rateLimits.get(gKey) || { count: 0, start: now };

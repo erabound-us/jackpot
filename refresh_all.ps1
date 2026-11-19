@@ -27,14 +27,15 @@ function Expand-Year($d) {
 function Wait-ForRefresh($game, $timeoutSecs) {
   $deadline = (Get-Date).AddSeconds($timeoutSecs)
   while ((Get-Date) -lt $deadline) {
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 5
     try {
       $status = Invoke-RestMethod -Uri ($base + "/refresh/status") -Method GET -TimeoutSec 10
       $s = $status.$game
       if ($s) {
         if ($s.state -eq "done")     { return "done" }
         if ($s.state -eq "error")    { return "error: $($s.detail)" }
-        if ($s.state -eq "retrying") { Write-Host "`r [ ] $($game.name) -- retrying after error...     " -NoNewline -ForegroundColor Yellow }
+        if ($s.state -eq "retrying") { Write-Host "`r [ ] $game -- retrying after error...     " -NoNewline -ForegroundColor Yellow }
+      }
     } catch {}
   }
   return "timeout"
