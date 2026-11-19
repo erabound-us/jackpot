@@ -1312,16 +1312,6 @@ async function start() {
     process.exit(1);
   });
 
-  process.stdout.write('Downloading latest PDFs from Florida Lottery...');
-  const dl = await downloadPDFs();
-  const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-  if (!failed.length) {
-    console.log(' done.');
-  } else {
-    console.log('');
-    failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`));
-  }
-
   server.listen(port, '0.0.0.0', () => {
     const localUrl = `http://localhost:${port}`;
     console.log('');
@@ -1334,6 +1324,13 @@ async function start() {
     console.log('');
     console.log('Press Ctrl+C to stop.\n');
     openBrowser(localUrl);
+    // Download all PDFs after server is listening so health checks pass immediately
+    process.stdout.write('Downloading latest PDFs from Florida Lottery...');
+    downloadPDFs().then(dl => {
+      const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
+      if (!failed.length) { console.log(' done.'); }
+      else { console.log(''); failed.forEach(([k, v]) => console.warn(`  ⚠️  ${k}: ${v} (using cached file)`)); }
+    });
   });
 }
 
