@@ -1786,7 +1786,7 @@ let _browser = null;
 const _scrapeCache = {};
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--single-process', '--no-zygote'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
+    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
   }
   return _browser;
 }
@@ -1812,24 +1812,19 @@ async function scrapeFlDraws(game, dateStr, drawType) {
   const pageUrl = url;
   const _ck = game + '|' + dateStr + '|' + (drawType || '');
   if (_scrapeCache[_ck]) return _scrapeCache[_ck];
+  console.log('Puppeteer scraping:', game, dateStr, drawType || '');
   for (let _try = 0; _try < 2; _try++) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const t = req.resourceType();
-      if (t === 'document') req.continue();
-      else req.abort();
-    });
     await page.goto(pageUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
     await page.close();
     await closeBrowser();
     const idx = html.indexOf(articleId);
-    if (idx === -1) return null;
-    const chunk = html.slice(idx, idx + (game === 'fantasy5' ? 4000 : 2000));
+    if (idx === -1 && game !== 'cashpop') return null;
+    const chunk = game === 'cashpop' ? html : html.slice(idx, idx + (game === 'fantasy5' ? 4000 : 2000));
     // For Lotto X: strip Double Play section before extracting numbers
     const searchChunk = game === 'lottox'
       ? (chunk.includes('Double Play') ? chunk.slice(0, chunk.indexOf('Double Play')) : chunk)
@@ -1852,10 +1847,17 @@ async function scrapeFlDraws(game, dateStr, drawType) {
     const nums = []; let m;
     while ((m = numRe.exec(searchChunk)) !== null) nums.push(parseInt(m[1]));
     if (game === 'cashpop') {
-      // Cash Pop: each session is a <li> with draw name + number
+      // Cash Pop: no article ID — search whole page, filter by date
+      // Convert dateStr MM/DD/YYYY to short form like "Nov 18"
+      const dateParts = dateStr.split('/');
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const shortDate = months[parseInt(dateParts[0])-1] + ' ' + parseInt(dateParts[1]);
+      // Find the section for this date
+      const dateIdx = searchChunk.indexOf(shortDate);
+      const dateChunk = dateIdx !== -1 ? searchChunk.slice(Math.max(0, dateIdx - 500), dateIdx + 2000) : searchChunk;
       const liRe = /<li[^>]*>.*?<div[^>]*>([^<]+)<\/div>.*?game-numbers__number[^>]*>(\d+)/gs;
       const sessions = []; let ms;
-      while ((ms = liRe.exec(searchChunk)) !== null) {
+      while ((ms = liRe.exec(dateChunk)) !== null) {
         const name = ms[1].trim();
         const num = parseInt(ms[2]);
         if (name && num >= 1 && num <= 15) sessions.push({ name, number: num });
@@ -1963,12 +1965,6 @@ async function getAvailableDates(game) {
   try {
     const browser = await getBrowser();
     const page = await browser.newPage();
-    await page.setRequestInterception(true);
-    page.on('request', req => {
-      const t = req.resourceType();
-      if (t === 'document') req.continue();
-      else req.abort();
-    });
     await page.goto(GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 15000 });
     try { await page.waitForSelector('.game-numbers__number, .draw-results-item', { timeout: 5000 }); } catch(_) {}
     const html = await page.content();
