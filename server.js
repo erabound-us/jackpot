@@ -2479,138 +2479,64 @@ function chatReplyPick(question, context) {
   const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
   if (wl) return wl;
 
-  if (/straight.*prize|prize.*straight|win.*straight|straight.*win/.test(q))
-    return 'PICK Daily Games Straight prizes (exact order match, $1.00 play):\n\n- PICK 2: $100\n- PICK 3: $500\n- PICK 4: $5,000\n- PICK 5: $50,000\n\n50c play = half the prize. Prizes over $5,000 subject to 24% federal withholding. Florida has no state income tax.';
+  // Detect which Pick game is being asked about
+  const gameM = q.match(/pick\s*([2-5])/);
+  const g = gameM ? 'pick' + gameM[1] : null;
 
-  if (/box.*prize|prize.*box|win.*box|box.*win/.test(q))
-    return 'PICK Box prizes depend on how many unique combinations your digits create ($1.00 play):\n\nPICK 3: 3-way $160 | 6-way $80\nPICK 4: 4-way $1,200 | 6-way $800 | 12-way $400 | 24-way $200\nPICK 5: 5-way $12,000 | 10-way $6,000 | 20-way $3,000 | 30-way $2,000 | 60-way $1,000 | 120-way $500\n\nMore repeated digits = fewer ways = higher prize.';
+  if (/straight.*prize|prize.*straight|win.*straight|straight.*win/.test(q)) {
+    if (g === 'pick2') return 'Pick 2 Straight ($1.00 play): $100\n50c play: $50\nOdds: 1 in 100\n\nFireball Straight: $50 ($1 play).\nFlorida has no state income tax.';
+    if (g === 'pick3') return 'Pick 3 Straight ($1.00 play): $500\n50c play: $250\nOdds: 1 in 1,000\n\nFireball Straight: $200 ($1 play).\nFlorida has no state income tax.';
+    if (g === 'pick4') return 'Pick 4 Straight ($1.00 play): $5,000\n50c play: $2,500\nOdds: 1 in 10,000\n\nFireball Straight: $1,500 ($1 play).\nNote: 24% federal withholding applies. Take-home ~$3,800. Florida has no state income tax.';
+    if (g === 'pick5') return 'Pick 5 Straight ($1.00 play): $50,000\n50c play: $25,000\nOdds: 1 in 100,000\n\nFireball Straight: $12,000 ($1 play).\nNote: 24% federal withholding applies. Take-home ~$38,000. Florida has no state income tax.';
+    return 'PICK Daily Games Straight prizes ($1.00 play, exact order match):\n\n- Pick 2: $100 (odds 1 in 100)\n- Pick 3: $500 (odds 1 in 1,000)\n- Pick 4: $5,000 (odds 1 in 10,000)\n- Pick 5: $50,000 (odds 1 in 100,000)\n\n50c play = half the prize. Pick 4 and Pick 5 exceed $5,000 -- 24% federal withholding applies. Florida has no state income tax.\n\nTip: ask "take-home on $5000" for exact math.';
+  }
+
+  if (/box.*prize|prize.*box|win.*box|box.*win/.test(q)) {
+    if (g === 'pick2') return 'Pick 2 Box (2-way): $50 at $1 play, $25 at 50c.\nPick 2 only has one box type.';
+    if (g === 'pick3') return 'Pick 3 Box prizes ($1.00 play):\n\n- 6-way (all digits different, e.g. 1-2-3): $80\n- 3-way (one pair, e.g. 1-1-2): $160\n\nMore repeated digits = fewer ways = higher prize.';
+    if (g === 'pick4') return 'Pick 4 Box prizes ($1.00 play):\n\n- 24-way (all different): $200\n- 12-way (one pair): $400\n- 6-way (two pairs or triple): $800\n- 4-way (triple + unique): $1,200\n\nMore repeated digits = fewer ways = higher prize.';
+    if (g === 'pick5') return 'Pick 5 Box prizes ($1.00 play):\n\n- 120-way (all different): $500\n- 60-way: $1,000\n- 30-way: $2,000\n- 20-way: $3,000\n- 10-way: $6,000\n- 5-way (four of a kind + one): $12,000\n\nMore repeated digits = fewer ways = higher prize.';
+    return 'PICK Box prizes ($1.00 play):\n\nPick 2: 2-way $50\nPick 3: 3-way $160 | 6-way $80\nPick 4: 4-way $1,200 | 6-way $800 | 12-way $400 | 24-way $200\nPick 5: 5-way $12,000 | 10-way $6,000 | 20-way $3,000 | 30-way $2,000 | 60-way $1,000 | 120-way $500\n\nMore repeated digits = fewer ways = higher prize per win.';
+  }
 
   if (/fireball/.test(q))
-    return 'Fireball doubles your ticket cost and adds an extra drawn digit. It replaces one of the official drawn digits to create new winning combinations.\n\nFireball Straight prizes ($1.00 play): PICK 2 $50 | PICK 3 $200 | PICK 4 $1,500 | PICK 5 $12,000\n\nYou can win both the base game prize AND a Fireball prize on the same ticket.';
+    return 'Fireball doubles your ticket cost and adds an extra drawn digit (0-9) after the main draw. It can replace any one of the official drawn digits to create new winning combinations.\n\nNew combinations created:\n- Pick 2 + Fireball: 2 new combos\n- Pick 3 + Fireball: 3 new combos\n- Pick 4 + Fireball: 4 new combos\n- Pick 5 + Fireball: 5 new combos\n\nNote: if the Fireball digit matches an official drawn digit, some combos may be duplicates.\n\nFireball Straight prizes ($1.00 play):\n- Pick 2: $50 | Pick 3: $200 | Pick 4: $1,500 | Pick 5: $12,000\n\nYou can win both a base game prize AND a Fireball prize on the same ticket.';
 
-  if (/play type|straight|box|combo/.test(q))
-    return 'PICK Daily Games play types:\n\n- Straight: exact order match -- highest prize\n- Box: any order match -- lower prize, more ways to win\n- Straight/Box: half straight + half box on one ticket\n- Combo: covers all straight combinations of your digits (costs more)\n\nFireball add-on doubles cost and adds extra winning combinations.';
+  if (/combo/.test(q))
+    return 'Combo play covers ALL straight combinations of your digits automatically. Cost = $1 x number of combinations.\n\nExamples ($1 play):\n- Pick 3 with 1-2-3 (6-way Combo): costs $6, wins $500 if any order matches\n- Pick 3 with 1-1-2 (3-way Combo): costs $3, wins $500 if any order matches\n- Pick 4 with 1-2-3-4 (24-way Combo): costs $24, wins $5,000 if any order matches\n\nCombo is Box play at the Straight prize level -- you pay for every combination upfront.';
+
+  if (/straight.?box|\bsb\b/.test(q))
+    return 'Straight/Box combines a 50c Straight play and a 50c Box play on one ticket for $1 total.\n\nIf your digits match in exact order: you win both the Straight prize AND the Box prize.\nIf your digits match in any other order: you win only the Box prize.\n\nExample (Pick 3, $1 S/B play with 1-2-3):\n- Exact match (1-2-3): $250 Straight + $40 Box = $290 total\n- Any order match (e.g. 3-1-2): $40 Box only';
+
+  if (/play type|how.*play|rules|work/.test(q))
+    return 'PICK Daily Games play types:\n\n- Straight: exact order match -- highest prize\n- Box: any order match -- lower prize, more ways to win\n- Straight/Box: half straight + half box on one ticket ($1 total)\n- Combo: covers all straight combinations of your digits (costs more)\n\nFireball add-on doubles cost and adds an extra drawn digit for more winning combinations.\n\nPlay amounts: 50c or $1.00 per panel. Draws: Midday 1:05 PM ET and Evening 11:15 PM ET every day.';
 
   if (/cost|price|how much|ticket/.test(q))
-    return 'PICK Daily Games ticket costs (estimated, subject to change):\n\n- Base play: 50c or $1.00 per panel\n- Fireball add-on: doubles the base cost\n- Combo: costs $1 x number of combinations (e.g. PICK 3 6-way Combo = $6)\n\nAlways confirm at your retailer.';
+    return 'PICK Daily Games ticket costs (estimated, subject to change):\n\n- Base play: 50c or $1.00 per panel\n- Fireball add-on: doubles the base cost\n- Combo: $1 x number of combinations (e.g. Pick 3 6-way = $6; Pick 4 24-way = $24)\n\nExamples at $1 Straight:\n- 6 Pick 3 lines: $6 base / $12 with Fireball\n- 6 Pick 5 lines: $6 base / $12 with Fireball\n\nAlways confirm at your retailer.';
 
   if (/when|draw|time|midday|evening|schedule/.test(q))
-    return 'PICK Daily Games draw schedule:\n\n- Midday: 1:05 PM ET every day\n- Evening: 11:15 PM ET every day\n- Midday sales close: ~12:45 PM ET\n- Evening sales close: 10:55 PM ET\n\nAll four PICK games (2, 3, 4, 5) draw at the same times.';
+    return 'PICK Daily Games draw schedule:\n\n- Midday: 1:05 PM ET every day\n- Evening: 11:15 PM ET every day\n- Midday sales close: ~12:45 PM ET\n- Evening sales close: 10:55 PM ET\n\nAll four PICK games (2, 3, 4, 5) draw at the same times, 7 days a week.';
 
   if (/odd|chance|probabilit/.test(q))
-    return 'PICK Daily Games odds (Straight play):\n\n- PICK 2: 1 in 100\n- PICK 3: 1 in 1,000\n- PICK 4: 1 in 10,000\n- PICK 5: 1 in 100,000\n\nBox play improves odds proportionally to the number of combinations covered.';
+    return 'PICK Daily Games odds (Straight play):\n\n- Pick 2: 1 in 100\n- Pick 3: 1 in 1,000\n- Pick 4: 1 in 10,000\n- Pick 5: 1 in 100,000\n\nBox play improves odds proportionally to the number of combinations covered.\nExample: Pick 3 6-way Box = 1 in 167 (6x better than Straight).';
 
   if (/tax|take.?home|withhold/.test(q))
-    return 'Tax details for PICK Daily Games:\n\n- Prizes over $5,000: 24% federal withholding\n- Florida: NO state income tax\n- PICK 4 Straight ($5,000) and PICK 5 Straight ($50,000) exceed the threshold\n\nTip: ask "take-home on $5000" for exact math.';
+    return 'Tax details for PICK Daily Games:\n\n- Prizes over $5,000: 24% federal withholding\n- Florida: NO state income tax\n- Pick 4 Straight ($5,000) and Pick 5 Straight ($50,000) exceed the threshold\n\nEstimated take-home:\n- Pick 4 Straight $5,000: ~$3,800 after 24% withholding\n- Pick 5 Straight $50,000: ~$38,000 after 24% withholding\n- Pick 5 Fireball $12,000: ~$9,120 after 24% withholding\n\nTip: ask "take-home on $5000" for exact math.';
 
-  return 'I can answer questions about PICK Daily Games (Pick 2, 3, 4, 5) prizes, play types, Fireball, odds, and draw schedule.\n\nTry asking:\n- "What do I win for a Pick 3 straight?"\n- "How does Fireball work?"\n- "What are the box prizes for Pick 4?"\n- "When are the draws?"';
+  if (/cancel|void/.test(q))
+    return 'PICK Daily Games cancellation rules:\n\n- Cancel within 2 hours of purchase\n- Cannot cancel after the sales cutoff for that drawing\n- Fireball tickets CANNOT be canceled\n- Free Quick Pick prize tickets cannot be canceled\n- Must cancel at the same retailer that sold the ticket';
+
+  if (/claim|expir|collect|redeem/.test(q))
+    return 'PICK prize claim details:\n\n- Prizes expire 180 days from the drawing date\n- Up to $599: claim at any Florida Lottery retailer\n- $600+: Florida Lottery district office or headquarters';
+
+  if (/advance|multiple.?draw|future.?draw/.test(q))
+    return 'Advance Play: play the same digits for up to 30 consecutive days (60 drawings if selecting both Midday and Evening). Fireball applies to all advance play drawings if selected.';
+
+  if (/\b(texas|california|new york|ohio|georgia|michigan|illinois|pennsylvania|new jersey|arizona|colorado|virginia|north carolina|massachusetts|washington|oregon|nevada|maryland|connecticut|minnesota|wisconsin|missouri|louisiana|kentucky|tennessee|indiana|alabama|south carolina|oklahoma|arkansas|iowa|mississippi|kansas|utah|nebraska|west virginia|idaho|hawaii|maine|new hampshire|rhode island|montana|delaware|south dakota|north dakota|alaska|vermont|wyoming|new mexico)\b/i.test(q))
+    return 'Jackpot Analyzer currently covers Florida Lottery games only. Want your state added? Every donation helps us expand to new states -- visit jackpot.allaml.ai to donate and help make it happen!';
+
+  return 'I can answer questions about PICK Daily Games (Pick 2, 3, 4, 5) prizes, play types, Fireball, Box ways, odds, taxes, and draw schedule.\n\nTry asking:\n- "What do I win for a Pick 3 straight?"\n- "Pick 4 box prizes"\n- "How does Fireball work?"\n- "What is Straight/Box play?"\n- "Pick 5 odds"\n- "When are the draws?"\n- "Spent $12 won $500 -- what is my ROI?"';
 }
-
-// PICK routes
-app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
-
-app.get('/latestdraw/pick', async (req, res) => {
-  const game = (req.query.game || 'pick5').toLowerCase();
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game. Use pick2, pick3, pick4, or pick5.' });
-  try {
-    const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
-    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
-    const evening = draws.find(d => d.drawType === 'EVENING');
-    const midday  = draws.find(d => d.drawType === 'MIDDAY');
-    res.json({
-      evening: evening ? { date: evening.date, digits: evening.digits, fireball: evening.fireball } : null,
-      midday:  midday  ? { date: midday.date,  digits: midday.digits,  fireball: midday.fireball  } : null
-    });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.get('/draws/pick', async (req, res) => {
-  const game = (req.query.game || 'pick5').toLowerCase();
-  const { date, draw } = req.query;
-  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
-  const type = (draw || '').toUpperCase();
-  const numDigits = parseInt(game.replace('pick',''));
-  try {
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
-    const match = draws.find(d => (d.date === date) && (!type || d.drawType === type));
-    if (match) return res.json({ date: match.date, drawType: match.drawType, digits: match.digits, fireball: match.fireball });
-  } catch(e) {}
-  const gameId = game.replace('pick','pick-');
-  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://floridalottery.com/games/draw-games/' + gameId });
-});
-
-app.get('/draws/pick/available', async (req, res) => {
-  const game = (req.query.game || 'pick5').toLowerCase();
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
-  try {
-    const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
-    const seen = new Set(); const dates = [];
-    for (const d of draws) {
-      if (seen.has(d.date)) continue; seen.add(d.date);
-      dates.push(d.date);
-      if (dates.length >= 5) break;
-    }
-    res.json({ dates });
-  } catch(e) { res.json({ dates: [] }); }
-});
-
-app.get('/analyze/pick', async (req, res) => {
-  const game = (req.query.game || 'pick5').toLowerCase();
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
-  try {
-    const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
-    if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
-    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 50);
-    const sid = req.query.sid || null;
-    const sess = sid ? getSession(sid) : { lines: new Set() };
-    const lines = generatePickLines(draws, numDigits, count, sess.lines);
-    lines.forEach(l => sess.lines.add(l.digits.join('')));
-    // Positional frequency stats
-    const posFreq = Array.from({length: numDigits}, () => Array(10).fill(0));
-    draws.forEach(d => d.digits.forEach((dig, pos) => { posFreq[pos][dig]++; }));
-    res.json({
-      game, numDigits, totalDraws: draws.length,
-      nextDraw: getNextDrawPick(),
-      recentHistory: draws.slice(0, 10),
-      lines: lines.map((l, i) => ({ line: i+1, digits: l.digits, score: Math.round(l.score * 10) / 10 })),
-      posFreq,
-      lastUpdated: draws[0] ? draws[0].date : 'unknown'
-    });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/check/pick', (req, res) => {
-  const { game, drawn, fireball, played, playType, playAmount } = req.body;
-  const g = (game || 'pick5').toLowerCase();
-  if (!PICK_PRIZES[g]) return res.status(400).json({ error: 'Invalid game.' });
-  const numDigits = parseInt(g.replace('pick',''));
-  if (!Array.isArray(drawn) || drawn.length !== numDigits) return res.status(400).json({ error: 'drawn must be ' + numDigits + ' digits (0-9).' });
-  if (!Array.isArray(played) || played.length !== numDigits) return res.status(400).json({ error: 'played must be ' + numDigits + ' digits (0-9).' });
-  const validTypes = ['straight','box','sb','combo'];
-  const pt = (playType || 'straight').toLowerCase();
-  if (!validTypes.includes(pt)) return res.status(400).json({ error: 'playType must be straight, box, sb, or combo.' });
-  const pa = [0.5, 1].includes(parseFloat(playAmount)) ? parseFloat(playAmount) : 1;
-  const fb = (fireball !== null && fireball !== undefined) ? parseInt(fireball) : null;
-  const result = checkPickWin(played.map(Number), drawn.map(Number), fb, pt, g, pa);
-  res.json({ game: g, drawn: drawn.map(Number), played: played.map(Number), fireball: fb, playType: pt, playAmount: pa, ...result });
-});
-
-app.post('/refresh/pick', (req, res) => {
-  const sid = req.body && req.body.sid ? req.body.sid : null;
-  Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-    enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
-  });
-  clearSession(sid);
-  res.json({ queued: true, games: Object.keys(PDF_URLS_PICK) });
-});
 
 app.post('/chat/pick', (req, res) => {
   const { message, context } = req.body;

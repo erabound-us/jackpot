@@ -1,11 +1,11 @@
 # Jackpot Analyzer — Project Steering Rules
 
 ## Stack
-- **Backend**: Node.js + Express 5, single file `server.js` (~1,900 lines)
-- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~1,750 lines)
+- **Backend**: Node.js + Express 5, single file `server.js` (~2,700 lines)
+- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~2,800 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD
+- **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~250MB heap
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -169,6 +169,7 @@ All costs are based on the known Florida Lottery price structure and are **subje
 | Lotto X (Florida Lotto) | $2 per ticket (1 line) | EZMatch +$1, Double Play +$1 |
 | Fantasy 5 | $1 per ticket (1 line) | EZMatch +$1 |
 | Cash Pop | $1/$2/$5/$10 per number | None |
+| Pick 2-5 | 50c or $1.00 per panel | Fireball doubles cost |
 
 ### Cost Estimator Rules
 - **JTP**: tickets = `ceil(lines / 3)`; total = tickets × $1 (+ $1 per ticket if Combo)
@@ -179,7 +180,7 @@ All costs are based on the known Florida Lottery price structure and are **subje
 - Disclaimer shown in UI and FAQ: *estimated, subject to change, confirm at retailer*
 
 ## Chatbot Math Capabilities
-All chatbots (`/chat`, `/chat/lottox`, `/chat/fantasy5`, `/chat/cashpop`) support inline math:
+All chatbots (`/chat`, `/chat/lottox`, `/chat/fantasy5`, `/chat/cashpop`, `/chat/pick`) support inline math:
 - `"take-home on $30,000"` → 24% withholding, net take-home
 - `"5 of 6 with 10x"` (Lotto X) → exact multiplied prize + withholding + net
 - `"what do I win for 4 of 6"` → base prize + Double Play equivalent
@@ -261,6 +262,8 @@ Florida has no state income tax.
 
 **When adding a new game/chatbot**: call `tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context)` as the **first** check inside the new `chatReplyXxx(question, context)` function. Pass `context` from the route handler. Compute spend in the frontend `sendChat` function and include `won: xLastWin` in the POST body. Store the check result win in `xLastWin` and clear it on form reset.
 
+**Pick games share one chatbot** (`/chat/pick`) -- `chatReplyPick` handles all four games. It detects which game is being asked about via `q.match(/pick\s*([2-5])/)` and returns per-game answers. When adding a new digit game, extend this pattern rather than creating a separate chatbot.
+
 ## Real-Time Draw Banners
 - Every game panel has a live draw banner showing next draw date/time, countdown, and Sales Open/Closed badge
 - On page load each panel fetches its `/nextdraw/*` endpoint once to populate the banner immediately
@@ -268,10 +271,11 @@ Florida has no state income tax.
 - Poll errors are swallowed with `.catch(function(){})` — **no** `console.log` or `console.warn` on poll success or failure to prevent log spam
 - `/nextdraw/*` routes are intentionally excluded from rate limiting (pure date math, no PDF I/O)
 - When adding a new game, add its `/nextdraw/<game>` fetch to the shared poll interval
+- Pick games share a single `/nextdraw/pick` endpoint -- all four games use the same Midday/Evening schedule
 
 ## API Surface
-GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid`
-POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/email` `/email/config` `/email/test`
+GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/refresh/status`
+POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
 - Return the most recent draw **from PDF only** — no puppeteer, no `getAvailableDates` call
@@ -308,6 +312,24 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 - `drawn`: 5 numbers from 1–36
 - `line`: 5 numbers from 1–36
 
+### POST /check/pick body
+```json
+{
+  "game": "pick5",
+  "drawn": [7,2,1,4,8],
+  "fireball": 0,
+  "played": [7,2,1,4,8],
+  "playType": "straight",
+  "playAmount": 1
+}
+```
+- `game`: `pick2` | `pick3` | `pick4` | `pick5`
+- `drawn`: N digits 0-9 (N = 2/3/4/5 matching game)
+- `fireball`: single digit 0-9, or null/omit if no Fireball
+- `played`: N digits 0-9 (your ticket numbers)
+- `playType`: `straight` | `box` | `sb` | `combo`
+- `playAmount`: `0.5` or `1`
+
 ## Email
 - Single `POST /email` endpoint shared by all games
 - `game` field in body: `"jtp"` (default) | `"lottox"` | `"fantasy5"` | `"cashpop"` — controls subject, header emoji, game label
@@ -332,6 +354,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/reset
 
 ## Rate Limits (per IP/min)
 `/analyze` 10 | `/refresh` 3 | `/email` 5 | `/check` 20 | `/chat` 30 | global cap 120 (all routes combined)
+- Pick games share these same rate limits via the same route prefixes (`/analyze/pick`, `/check/pick`, etc.)
 - Request body size capped at 20 KB — oversized payloads rejected with 413
 - `/nextdraw/*` and `/latestdraw/*` excluded from per-route limits but still subject to global cap
 - Auto-blacklist: 5 rate-limit strikes within 10 min → 24h IP ban → 403 on all requests
@@ -433,6 +456,10 @@ Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, th
 | jtp.pdf (~65KB text) | ~280ms | ~1s | No | No |
 | jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
 | cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | No | No |
+| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~4s | Yes (mtime) | No |
+| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~5s | Yes (mtime) | No |
+| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~5s | Yes (mtime) | No |
+| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~5s | Yes (mtime) | No |
 | lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | Yes | Yes |
 | fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | Yes | Yes |
 
@@ -462,6 +489,7 @@ downloadPDFs()
 - Auto-refreshed once per day on first `/analyze` (or `/analyze/lottox`, `/analyze/fantasy5`) call
 - Fantasy 5 and Cash Pop also auto-refresh via `schedulePostDrawRefreshes()` ~5 min after each draw completes (server-side `setTimeout` chain, no external scheduler needed)
 - **JTP and Lotto X also refresh via `schedulePostDrawRefreshes()` at 11:20 PM ET, gated on draw day** — JTP fires on Tue/Fri (days 2,5), Lotto X fires on Wed/Sat (days 3,6)
+- **Pick 2-5 refresh at 1:10 PM and 11:20 PM ET daily** (same schedule as Fantasy 5 -- draws every day Midday + Evening)
 - `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
 - When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
 
@@ -565,7 +593,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-19c`
+Latest stable: `backups/stable-2026-11-19e`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -776,6 +804,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 ### Server (server.js)
 1. Add `PDF_URL_X` and `PDF_PATH_X` constants to the **top of the file** in the PDF constants block (lines ~94-107) -- never declare them inline inside the game section
 2. Add the new game download to the `Promise.all` block in `downloadPDFs()` so it downloads on every server startup -- include cache bust (`xCache = null`) if the game has a parse cache
+   - Pick games use a shared `pickCache[game] = null` pattern -- add to the spread in `downloadPDFs()`
 3. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
 4. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
 5. Add game URL to `FL_RESULTS_URLS`
@@ -804,6 +833,12 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 10. Add `xEmailCard`, `xEmailIncLines`, `xEmailIncWinning`, `xSendEmail()` following email checklist
 11. Add `xSendChat()` with `context: { spend, lines, game, won: xLastWin }`
 12. Add `/nextdraw/<game>` fetch to the shared `setInterval` poll
+
+**For games sharing a single panel (like Pick 2-5)**:
+- Use a game selector UI (buttons) inside the panel instead of separate panels
+- `pickSetGame(g)` pattern: updates header icon/title/desc/link, syncs tab bar, rebuilds check inputs, resets state
+- `switchTab(id)` must call `pickSetGame(id)` for all variants and let `pickSetGame` own tab highlighting
+- Each game variant needs its own tab in the tab bar -- `switchTab` routes all variants to the shared panel
 
 ### Consistency Rules (apply to every game)
 - Gold balls = latest draw (page load + when user selects that same date)

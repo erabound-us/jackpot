@@ -757,20 +757,38 @@
 </div>
 
 <div class="game-panel" id="panel-pick5">
-  <div class="state-row"><span>🦎 FLORIDA</span><span>🕐 Eastern Time (ET)</span></div>
-  <div class="draw-banner" id="pickDrawBanner">
-    <div class="draw-when" id="pickDrawName" style="font-size:16px;">&mdash;</div>
-    <div class="draw-countdown" id="pickCountdown">--:--:--</div>
-    <div id="pickSalesBadge" class="sales-badge"></div>
+  <!-- Intro header -- updated by pickSetGame() -->
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;" id="pickHeaderIcon">&#127922;</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;" id="pickHeaderTitle">Pick 5</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;" id="pickHeaderDesc">AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 5 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!</div>
   </div>
-  <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:8px;">PICK Daily Games draw Midday (1:05 PM ET) and Evening (11:15 PM ET) every day</div>
+
+  <!-- Draw banner -->
+  <div class="draw-banner" id="pickDrawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="pickDrawWhen">&mdash;</div>
+      <div class="draw-sub" id="pickDrawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Draw</div>
+      <div class="draw-when" id="pickDrawName" style="font-size:16px;">&mdash;</div>
+      <a class="jackpot-link" id="pickLotteryLink" href="https://floridalottery.com/games/draw-games/pick-5" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="pickCountdown">&mdash;</div>
+      <div class="sales-badge" id="pickSalesBadge">&mdash;</div>
+      <div class="draw-sub" id="pickCloseTimeLabel">&mdash;</div>
+    </div>
+  </div>
 
   <!-- Game selector -->
   <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;">
-    <button id="pickBtn2" onclick="pickSetGame('pick2')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">✌️ Pick 2</button>
-    <button id="pickBtn3" onclick="pickSetGame('pick3')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🔢 Pick 3</button>
-    <button id="pickBtn4" onclick="pickSetGame('pick4')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🎯 Pick 4</button>
-    <button id="pickBtn5" onclick="pickSetGame('pick5')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.8);background:rgba(99,91,255,0.25);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">🎲 Pick 5</button>
+    <button id="pickBtn2" onclick="pickSetGame('pick2')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#10004;&#65039; Pick 2</button>
+    <button id="pickBtn3" onclick="pickSetGame('pick3')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#128290; Pick 3</button>
+    <button id="pickBtn4" onclick="pickSetGame('pick4')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#127919; Pick 4</button>
+    <button id="pickBtn5" onclick="pickSetGame('pick5')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.8);background:rgba(99,91,255,0.25);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">&#127922; Pick 5</button>
   </div>
 
   <!-- Generate -->
@@ -2418,16 +2436,38 @@ var pickCountdownInterval = null;
 
 var PICK_DIGITS = { pick2:2, pick3:3, pick4:4, pick5:5 };
 var PICK_LABELS = { pick2:'Pick 2', pick3:'Pick 3', pick4:'Pick 4', pick5:'Pick 5' };
-var PICK_ICONS  = { pick2:'\u270c\ufe0f', pick3:'\ud83d\udd22', pick4:'\ud83c\udfaf', pick5:'\ud83c\udfb2' };
+var PICK_ICONS  = { pick2:'&#10004;&#65039;', pick3:'&#128290;', pick4:'&#127919;', pick5:'&#127922;' };
+var PICK_DESCS  = {
+  pick2: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 2 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!',
+  pick3: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 3 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!',
+  pick4: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 4 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!',
+  pick5: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 5 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!'
+};
+var PICK_LINKS  = {
+  pick2: 'https://floridalottery.com/games/draw-games/pick-2',
+  pick3: 'https://floridalottery.com/games/draw-games/pick-3',
+  pick4: 'https://floridalottery.com/games/draw-games/pick-4',
+  pick5: 'https://floridalottery.com/games/draw-games/pick-5'
+};
 
 function pickSetGame(g) {
   pickGame = g;
   var n = PICK_DIGITS[g];
-  document.getElementById('pickCardTitle').textContent = PICK_ICONS[g] + ' ' + PICK_LABELS[g] + ' -- Generate Lines';
+  // Update header
+  document.getElementById('pickHeaderIcon').innerHTML = PICK_ICONS[g];
+  document.getElementById('pickHeaderTitle').textContent = PICK_LABELS[g];
+  document.getElementById('pickHeaderDesc').innerHTML = PICK_DESCS[g];
+  document.getElementById('pickLotteryLink').href = PICK_LINKS[g];
+  document.getElementById('pickCardTitle').innerHTML = PICK_ICONS[g] + ' ' + PICK_LABELS[g] + ' -- Generate Lines';
   ['pick2','pick3','pick4','pick5'].forEach(function(x) {
     var btn = document.getElementById('pickBtn'+x.replace('pick',''));
     if (x === g) { btn.style.background='rgba(99,91,255,0.25)'; btn.style.border='1px solid rgba(99,91,255,0.8)'; btn.style.color='#fff'; btn.style.fontWeight='700'; }
     else { btn.style.background='rgba(99,91,255,0.08)'; btn.style.border='1px solid rgba(99,91,255,0.4)'; btn.style.color='var(--text)'; btn.style.fontWeight='600'; }
+  });
+  // Sync tab bar to the active Pick game
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.tab').forEach(function(t){
+    if (t.getAttribute('onclick')==="switchTab('"+g+"')") t.classList.add('active');
   });
   // Rebuild check inputs
   var ci = document.getElementById('pickCheckInputs');
@@ -2467,7 +2507,10 @@ function pickStartCountdown(nd) {
   if (pickCountdownInterval) clearInterval(pickCountdownInterval);
   if (!nd) return;
   pickLastNextDraw = nd;
-  document.getElementById('pickDrawName').textContent = nd.drawName || nd.dayName;
+  document.getElementById('pickDrawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('pickDrawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('pickDrawName').textContent = nd.drawName || '';
+  document.getElementById('pickCloseTimeLabel').textContent = 'Sales close ' + nd.closeTime;
   var badge = document.getElementById('pickSalesBadge');
   function tick() {
     var ms = nd.msUntilDraw - (Date.now() - _pickCountdownStart);
@@ -2759,13 +2802,9 @@ function switchTab(id) {
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.game-panel').forEach(function(p){p.classList.remove('active');});
   event.currentTarget.classList.add('active');
-  if (id==='pick2'||id==='pick3'||id==='pick4') {
+  if (id==='pick2'||id==='pick3'||id==='pick4'||id==='pick5') {
     document.getElementById('panel-pick5').classList.add('active');
     pickSetGame(id);
-    // Also activate the pick5 tab visually
-    document.querySelectorAll('.tab').forEach(function(t){
-      if (t.getAttribute('onclick')==="switchTab('pick5')") t.classList.add('active');
-    });
   } else {
     document.getElementById('panel-'+id).classList.add('active');
   }
@@ -2903,9 +2942,18 @@ function switchTab(id) {
         &bull; EZMatch add-on: <strong>+$1</strong> per ticket<br>
         &bull; Double Play add-on: <strong>+$1</strong> per ticket<br>
         &bull; Example: 6 tickets = $12 base; with both add-ons = $24<br><br>
+        <strong>Fantasy 5</strong><br>
+        &bull; Base ticket: <strong>$1</strong> per play (1 line of 5 numbers)<br>
+        &bull; EZMatch add-on: <strong>+$1</strong> per ticket<br>
+        &bull; Example: 6 tickets = $6 base; with EZMatch = $12<br><br>
         <strong>Cash Pop</strong><br>
         &bull; Play amount: <strong>$1, $2, $5, or $10</strong> per number selected<br>
         &bull; Example: 5 numbers at $5 each = $25<br><br>
+        <strong>PICK Daily Games (Pick 2, 3, 4, 5)</strong><br>
+        &bull; Base play: <strong>50&cent; or $1.00</strong> per panel<br>
+        &bull; Fireball add-on: <strong>doubles</strong> the base cost<br>
+        &bull; Combo play: costs $1 &times; number of combinations (e.g. Pick 3 6-way Combo = $6)<br>
+        &bull; Example: 6 Pick 5 lines at $1 straight = $6; with Fireball = $12<br><br>
         <em>Prices sourced from official Florida Lottery materials. Subject to change. This tool is not affiliated with the Florida Lottery.</em>
       </div>
     </div>
@@ -2935,6 +2983,74 @@ function switchTab(id) {
     </div>
 
     <div class="faq-item">
+      <div class="faq-q">How does Fantasy 5 work?</div>
+      <div class="faq-a">Each <strong>$1 ticket</strong> has 1 line of 5 numbers chosen from 1&ndash;36. There are <strong>two draws every day</strong>: Midday at <strong>1:05 PM ET</strong> and Evening at <strong>11:15 PM ET</strong> (Florida local time). Midday sales close ~12:45 PM ET; Evening sales close 10:55 PM ET.<br><br>
+        The jackpot is pari-mutuel (shared among winners) and rolls until won, starting around $200,000. Optional add-on:<br>
+        &bull; <strong>EZMatch (+$1)</strong> &mdash; instant-win prizes $2&ndash;$500 printed on your ticket at purchase; odds 1 in 4.71<br><br>
+        Advance Play: up to 30 consecutive days (60 drawings if both draws selected). EZMatch and free Quick Pick prize tickets cannot be canceled.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What are the Fantasy 5 prizes and odds?</div>
+      <div class="faq-a">Per ticket (pari-mutuel &mdash; prizes vary by number of winners):<br><br>
+        &bull; 5 of 5 (Jackpot): <strong>1 in 376,992</strong> &mdash; pari-mutuel, starts ~$200,000<br>
+        &bull; 4 of 5: 1 in 2,432 &mdash; approx <strong>$500</strong><br>
+        &bull; 3 of 5: 1 in 81.07 &mdash; approx <strong>$10</strong><br>
+        &bull; 2 of 5: 1 in 8.39 &mdash; <strong>Free Quick Pick ticket</strong><br>
+        &bull; Any prize: <strong>1 in 7.61</strong><br><br>
+        Prizes over $5,000 are subject to 24% federal withholding. Florida has no state income tax.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">How do the PICK Daily Games work? (Pick 2, 3, 4, 5)</div>
+      <div class="faq-a">PICK Daily Games are digit-matching games. You pick N digits (0&ndash;9) &mdash; 2 for Pick 2, 3 for Pick 3, 4 for Pick 4, 5 for Pick 5. There are <strong>two draws every day</strong>: Midday at <strong>1:05 PM ET</strong> and Evening at <strong>11:15 PM ET</strong> (Florida local time). Sales close ~12:45 PM ET (Midday) and 10:55 PM ET (Evening).<br><br>
+        Play amounts: <strong>50&cent; or $1.00</strong> per panel. Play types:<br>
+        &bull; <strong>Straight</strong> &mdash; exact order match; highest prize<br>
+        &bull; <strong>Box</strong> &mdash; any order match; lower prize, more ways to win<br>
+        &bull; <strong>Straight/Box</strong> &mdash; half straight + half box on one ticket<br>
+        &bull; <strong>Combo</strong> &mdash; covers all straight combinations of your digits (costs more)<br><br>
+        Add <strong>Fireball</strong> to double your ticket cost and get an extra drawn digit that can replace any official drawn digit for more winning combinations.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What are the PICK Daily Games prizes?</div>
+      <div class="faq-a">Straight prizes at <strong>$1.00 play</strong> (50&cent; play = half):<br><br>
+        &bull; Pick 2 Straight: <strong>$100</strong> &nbsp;&bull;&nbsp; Box (2-way): $50<br>
+        &bull; Pick 3 Straight: <strong>$500</strong> &nbsp;&bull;&nbsp; Box: $80 (6-way) or $160 (3-way)<br>
+        &bull; Pick 4 Straight: <strong>$5,000</strong> &nbsp;&bull;&nbsp; Box: $200&ndash;$1,200 depending on ways<br>
+        &bull; Pick 5 Straight: <strong>$50,000</strong> &nbsp;&bull;&nbsp; Box: $500&ndash;$12,000 depending on ways<br><br>
+        Straight odds: Pick 2 = 1 in 100 &nbsp;&bull;&nbsp; Pick 3 = 1 in 1,000 &nbsp;&bull;&nbsp; Pick 4 = 1 in 10,000 &nbsp;&bull;&nbsp; Pick 5 = 1 in 100,000<br><br>
+        Prizes over $5,000 (Pick 4 and Pick 5 Straight) are subject to 24% federal withholding. Florida has no state income tax.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is Fireball and how does it work?</div>
+      <div class="faq-a">Fireball is an add-on for all PICK Daily Games that <strong>doubles your ticket cost</strong>. After each PICK drawing, a separate Fireball number (0&ndash;9) is drawn. The Fireball number can <strong>replace any one</strong> of the official drawn digits to create new winning combinations.<br><br>
+        Number of new combinations created:<br>
+        &bull; Pick 2 + Fireball: <strong>2</strong> new combinations<br>
+        &bull; Pick 3 + Fireball: <strong>3</strong> new combinations<br>
+        &bull; Pick 4 + Fireball: <strong>4</strong> new combinations<br>
+        &bull; Pick 5 + Fireball: <strong>5</strong> new combinations<br><br>
+        Note: if the Fireball number matches one of the official drawn digits, some combinations may be duplicates, reducing the total unique combinations. You can win both a base game prize and a Fireball prize on the same ticket.<br><br>
+        Fireball Straight prizes ($1.00 play): Pick 2 = $50 &nbsp;&bull;&nbsp; Pick 3 = $200 &nbsp;&bull;&nbsp; Pick 4 = $1,500 &nbsp;&bull;&nbsp; Pick 5 = $12,000</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">What is Box play and how many ways can I win?</div>
+      <div class="faq-a">Box play wins if your digits match the drawn digits <strong>in any order</strong>. The number of &ldquo;ways&rdquo; depends on how many unique combinations your digits create:<br><br>
+        <strong>Pick 3 Box:</strong><br>
+        &bull; 6-way (all 3 digits different, e.g. 1-2-3): prize $80 at $1 play<br>
+        &bull; 3-way (one pair, e.g. 1-1-2): prize $160 at $1 play<br><br>
+        <strong>Pick 4 Box:</strong><br>
+        &bull; 24-way (all different): $200 &nbsp;&bull;&nbsp; 12-way (one pair): $400<br>
+        &bull; 6-way (two pairs or one triple): $800 &nbsp;&bull;&nbsp; 4-way (triple + unique): $1,200<br><br>
+        <strong>Pick 5 Box:</strong><br>
+        &bull; 120-way (all different): $500 &nbsp;&bull;&nbsp; 60-way: $1,000 &nbsp;&bull;&nbsp; 30-way: $2,000<br>
+        &bull; 20-way: $3,000 &nbsp;&bull;&nbsp; 10-way: $6,000 &nbsp;&bull;&nbsp; 5-way: $12,000<br><br>
+        More repeated digits = fewer ways = higher prize per win. Use the <strong>Check My Numbers</strong> section to calculate your exact prize for any combination.</div>
+    </div>
+
+    <div class="faq-item">
       <div class="faq-q">What timezone are the draw times in?</div>
       <div class="faq-a">All times are shown in the <strong>local timezone of the state where the game is operated</strong>. For all current Florida Lottery games, that means <strong>Eastern Time (ET)</strong>.<br><br>
         Florida observes:<br>
@@ -2961,7 +3077,7 @@ function switchTab(id) {
       giving you the best mathematical edge possible. Free to use, no account, no tracking, zero data collected ever.
       <br><br>
       This is just the beginning. Florida Jackpot is game one.
-      <strong style="color:var(--text);">Powerball, Mega Millions, Lotto X, Cash POP, Fantasy 5, Pick 5, Pick 4, Pick 3, Pick 2 — all on the roadmap.</strong>
+      <strong style="color:var(--text);">Powerball and Mega Millions are next on the roadmap.</strong>
       Every donation directly funds the next game.
     </div>
     <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00"
