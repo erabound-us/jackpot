@@ -2305,7 +2305,7 @@ const pickParsePromise = { pick2: null, pick3: null, pick4: null, pick5: null };
 
 async function getPickText(game) {
   let mtime;
-  try { mtime = require('fs').statSync(PDF_PATHS_PICK[game]).mtimeMs; } catch(e) { throw new Error(game + ' PDF not yet downloaded. Try again in a moment.'); }
+  try { mtime = fs.statSync(PDF_PATHS_PICK[game]).mtimeMs; } catch(e) { throw new Error(game + ' PDF not yet downloaded. Try again in a moment.'); }
   if (pickCache[game] && pickCache[game].mtime === mtime) return pickCache[game].text;
   if (!pickParsePromise[game]) {
     pickParsePromise[game] = extractPDFText(PDF_PATHS_PICK[game]).then(text => {
@@ -2479,7 +2479,6 @@ function chatReplyPick(question, context) {
   const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
   if (wl) return wl;
 
-  // Detect which Pick game is being asked about
   const gameM = q.match(/pick\s*([2-5])/);
   const g = gameM ? 'pick' + gameM[1] : null;
 
@@ -2537,6 +2536,113 @@ function chatReplyPick(question, context) {
 
   return 'I can answer questions about PICK Daily Games (Pick 2, 3, 4, 5) prizes, play types, Fireball, Box ways, odds, taxes, and draw schedule.\n\nTry asking:\n- "What do I win for a Pick 3 straight?"\n- "Pick 4 box prizes"\n- "How does Fireball work?"\n- "What is Straight/Box play?"\n- "Pick 5 odds"\n- "When are the draws?"\n- "Spent $12 won $500 -- what is my ROI?"';
 }
+
+
+// PICK routes
+app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
+
+app.get('/latestdraw/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game. Use pick2, pick3, pick4, or pick5.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const evening = draws.find(d => d.drawType === 'EVENING');
+    const midday  = draws.find(d => d.drawType === 'MIDDAY');
+    res.json({
+      evening: evening ? { date: evening.date, digits: evening.digits, fireball: evening.fireball } : null,
+      midday:  midday  ? { date: midday.date,  digits: midday.digits,  fireball: midday.fireball  } : null
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/draws/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  const { date, draw } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  const type = (draw || '').toUpperCase();
+  const numDigits = parseInt(game.replace('pick',''));
+  try {
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date) && (!type || d.drawType === type));
+    if (match) return res.json({ date: match.date, drawType: match.drawType, digits: match.digits, fireball: match.fireball });
+  } catch(e) {}
+  const gameId = game.replace('pick','pick-');
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://floridalottery.com/games/draw-games/' + gameId });
+});
+
+app.get('/draws/pick/available', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    const seen = new Set(); const dates = [];
+    for (const d of draws) {
+      if (seen.has(d.date)) continue; seen.add(d.date);
+      dates.push(d.date);
+      if (dates.length >= 5) break;
+    }
+    res.json({ dates });
+  } catch(e) { res.json({ dates: [] }); }
+});
+
+app.get('/analyze/pick', async (req, res) => {
+  const game = (req.query.game || 'pick5').toLowerCase();
+  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  try {
+    const numDigits = parseInt(game.replace('pick',''));
+    const text = await getPickText(game);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
+    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 50);
+    const sid = req.query.sid || null;
+    const sess = sid ? getSession(sid) : { lines: new Set() };
+    const lines = generatePickLines(draws, numDigits, count, sess.lines);
+    lines.forEach(l => sess.lines.add(l.digits.join('')));
+    // Positional frequency stats
+    const posFreq = Array.from({length: numDigits}, () => Array(10).fill(0));
+    draws.forEach(d => d.digits.forEach((dig, pos) => { posFreq[pos][dig]++; }));
+    res.json({
+      game, numDigits, totalDraws: draws.length,
+      nextDraw: getNextDrawPick(),
+      recentHistory: draws.slice(0, 10),
+      lines: lines.map((l, i) => ({ line: i+1, digits: l.digits, score: Math.round(l.score * 10) / 10 })),
+      posFreq,
+      lastUpdated: draws[0] ? draws[0].date : 'unknown'
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/check/pick', (req, res) => {
+  const { game, drawn, fireball, played, playType, playAmount } = req.body;
+  const g = (game || 'pick5').toLowerCase();
+  if (!PICK_PRIZES[g]) return res.status(400).json({ error: 'Invalid game.' });
+  const numDigits = parseInt(g.replace('pick',''));
+  if (!Array.isArray(drawn) || drawn.length !== numDigits) return res.status(400).json({ error: 'drawn must be ' + numDigits + ' digits (0-9).' });
+  if (!Array.isArray(played) || played.length !== numDigits) return res.status(400).json({ error: 'played must be ' + numDigits + ' digits (0-9).' });
+  const validTypes = ['straight','box','sb','combo'];
+  const pt = (playType || 'straight').toLowerCase();
+  if (!validTypes.includes(pt)) return res.status(400).json({ error: 'playType must be straight, box, sb, or combo.' });
+  const pa = [0.5, 1].includes(parseFloat(playAmount)) ? parseFloat(playAmount) : 1;
+  const fb = (fireball !== null && fireball !== undefined) ? parseInt(fireball) : null;
+  const result = checkPickWin(played.map(Number), drawn.map(Number), fb, pt, g, pa);
+  res.json({ game: g, drawn: drawn.map(Number), played: played.map(Number), fireball: fb, playType: pt, playAmount: pa, ...result });
+});
+
+app.post('/refresh/pick', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+    enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
+  });
+  clearSession(sid);
+  res.json({ queued: true, games: Object.keys(PDF_URLS_PICK) });
+});
 
 app.post('/chat/pick', (req, res) => {
   const { message, context } = req.body;

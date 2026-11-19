@@ -2483,6 +2483,7 @@ function pickSetGame(g) {
   pickLastLines=null;
   pickLastWin=null;
   document.getElementById('pickEmailCard').style.display='none';
+  document.getElementById('pickDateChips').innerHTML = '';
   pickUpdateCost();
   // Load latest draw for this game
   pickLoadLatest();
@@ -2596,7 +2597,8 @@ function pickLookupDraw() {
 
 function pickRenderChips(dates) {
   var el = document.getElementById('pickDateChips');
-  if (!el||!dates.length) return;
+  if (!el) return;
+  if (!dates || !dates.length) { el.innerHTML = ''; return; }
   el.innerHTML = dates.map(function(d){
     var p=d.split('/'); var label=p[0]+'/'+p[1];
     return '<span onclick="pickPickDate(\''+d+'\')" style="cursor:pointer;background:rgba(99,91,255,0.12);border:1px solid rgba(99,91,255,0.3);color:#a78bfa;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;">'+label+'</span>';

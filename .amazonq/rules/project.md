@@ -142,6 +142,9 @@ Each row: `MM/DD/YYYY  D[-D...] FB N  D[-D...] FB N` (Midday then Evening, 4-dig
 - Parse regex: `/(date)\s+(digits) FB (n)\s+(digits) FB (n)/g`
 - Parse time: ~1s locally, ~4s on Fly -- use mtime cache, no JSON cache needed
 - PDF URLs: `https://files.floridalottery.com/exptkt/pick{2,3,4,5}_winning-numbers-history.pdf`
+- **Pick PDFs use 4-digit years** (`MM/DD/YYYY`) unlike JTP/LX/F5 which use 2-digit years (`MM/DD/YY`)
+- **Date comparison in `/draws/pick` MUST use `stripLeadingZeros()`** -- date picker sends zero-padded `11/01/2026` but PDF stores `11/1/2026`. Direct string comparison will miss dates with single-digit days/months.
+- `getPickText(game)` uses top-level `fs` (not inline `require('fs')`) -- always use the module-level import
 
 ### PICK Scoring
 - Positional frequency: how often each digit 0-9 appears at each position (primary signal)
@@ -385,6 +388,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 - Fly.io machine: `512mb` -- validated stable with queue serialization
 - **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
 - **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
+- **Never use inline `require('fs')`** inside functions -- always use the top-level `const fs = require('fs')` at the top of the file. Inline requires work but are inconsistent and harder to audit.
 
 ## JSON Draw Cache (Lotto X and Fantasy 5)
 Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Instead:
@@ -593,7 +597,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-19e`
+Latest stable: `backups/stable-2026-11-19f`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -696,7 +700,9 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - `stripLeadingZeros(date)` removes leading zeros from month/day: `11/07/26` → `11/7/26`
 - All draw route PDF matches use: `stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date`
 - `expandYear(date)` normalizes 2-digit years to 4-digit: `11/7/26` → `11/7/2026`; 4-digit years pass through unchanged
-- Cash Pop PDF uses 4-digit years (`MM/DD/YYYY`); all other PDFs use 2-digit years (`MM/DD/YY`)
+- Cash Pop PDF uses 4-digit years (`MM/DD/YYYY`); JTP/LX/F5 use 2-digit years (`MM/DD/YY`)
+- **Pick 2-5 PDFs also use 4-digit years** (`MM/DD/YYYY`) -- same as Cash Pop, different from JTP/LX/F5
+- `/draws/pick` uses `stripLeadingZeros()` for date comparison (same as all other draw routes)
 - `<input type="date">` returns `YYYY-MM-DD` — frontend converts to `MM/DD/YYYY` using `parts[0]` (NOT `parts[0].slice(2)`)
 - Scraper converts `MM/DD/YYYY` to `YYYY-MM-DD` for article ID matching
 - **Never use `.slice(2)` on the year** — always send 4-digit year to the server
@@ -704,6 +710,8 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 ### Frontend date chips pattern (all games)
 - Add `<div id="xDateChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>` above the date input
 - Add `xPickDate(d)` function: splits `MM/DD/YYYY`, sets input value as `YYYY-MM-DD`, calls `xLookupDraw()`
+- **Clear chips immediately on game switch** before the async fetch completes -- prevents stale chips from previous game flashing
+- `xRenderChips(dates)` must clear the container when `dates` is empty/null, not silently return -- pattern: `if (!dates || !dates.length) { el.innerHTML = ''; return; }`
 - On page load: `fetch('/draws/<game>/available').then(...).then(function(d){ renderDateChips('xDateChips', d.dates, 'xPickDate'); })`
 - `renderDateChips` builds spans with `onclick="pickFn('MM/DD/YYYY')"` — single quotes inside double-quoted attribute
 - **onclick quote rule**: the date arg uses single quotes inside the double-quoted onclick attr: `'<span onclick="' + pickFn + '(\'' + d + '\')">'`
