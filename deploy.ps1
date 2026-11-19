@@ -47,3 +47,6 @@ Write-Host ""
 $liveUrl = "https://jackpot.allaml.ai"
 Write-Host " Done. Live at $liveUrl" -ForegroundColor Green
 Write-Host ""
+Write-Host " Restarting local PM2 server..." -ForegroundColor Cyan
+try { pm2 restart ecosystem.config.js --update-env 2>$null; Write-Host " Local server updated." -ForegroundColor Green } catch { Write-Host " Local restart skipped (PM2 not running)." -ForegroundColor Gray }
+Write-Host ""
