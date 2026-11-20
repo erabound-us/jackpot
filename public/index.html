@@ -2262,9 +2262,10 @@ function f5LookupDraw() {
   var _f5Date = dateVal;
   if (window._f5LookupAC) window._f5LookupAC.abort();
   window._f5LookupAC = new AbortController();
+  var _f5Signal = window._f5LookupAC.signal;
+  setTimeout(function(){if(window._f5LookupAC)window._f5LookupAC.abort();},60000);
   function _f5Fetch(dt) {
-    var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
-    return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
+    return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_f5Signal}).then(function(r){return r.json();}).catch(function(){return null;});
   }
   _f5Fetch(_primary).then(function(r) {
     if (r && !r.error) return r;
@@ -2642,9 +2643,10 @@ function pickLookupDraw() {
   var _game = pickGame; var _date = dateVal;
   if (window._pickLookupAC) window._pickLookupAC.abort();
   window._pickLookupAC = new AbortController();
+  var _pickSignal = window._pickLookupAC.signal;
+  setTimeout(function(){if(window._pickLookupAC)window._pickLookupAC.abort();},60000);
   function _pFetch(dt) {
-    var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);
-    return fetch('/draws/pick?game='+_game+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
+    return fetch('/draws/pick?game='+_game+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_pickSignal}).then(function(r){return r.json();}).catch(function(){return null;});
   }
   _pFetch(_primary).then(function(r){
     if (r && !r.error) return r;
