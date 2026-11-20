@@ -794,6 +794,16 @@ fetch('/draws/pick?game=' + _game + '&date=' + date)
 - Multi-game panels (Pick): add `var _game = currentGame; var _date = dateVal`, check both in `.then()`
 - Never write to shared state in a `.then()` without first verifying the triggering inputs haven't changed
 
+**Pattern: Cancel Previous In-Flight Lookup**
+When a user clicks a new date chip before the previous lookup resolves, abort the previous request immediately. Store the AbortController in a `window._xLookupAC` variable:
+
+- At the top of `xLookupDraw()`: `if (window._xLookupAC) window._xLookupAC.abort();` then create a new one
+- Pass `signal: window._xLookupAC.signal` to the fetch
+- Aborting closes the server connection immediately, preventing the scraper from launching for the abandoned request
+- The `.catch()` already handles AbortError silently (fetch rejects with AbortError, caught by existing `.catch(function(){...})`)
+- **All 5 games implement this**: `window._jtpLookupAC`, `window._lxLookupAC`, `window._cpLookupAC`, `window._f5LookupAC`, `window._pickLookupAC`
+- **When adding a new game**: declare `window._xLookupAC` and abort+replace it at the top of `xLookupDraw()`
+
 ### Server-Side Concurrency
 
 **Scraper deduplication (`_scrapeInFlight`)**
@@ -947,7 +957,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20k`
+Latest stable: `backups/stable-2026-11-20l`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
