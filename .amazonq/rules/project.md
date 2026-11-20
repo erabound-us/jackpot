@@ -584,6 +584,8 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 - When adding a new game (initial JSON build)
 - After a long outage where many draws were missed and the delta would be large
 - Never needs to run on Fly -- JSON is always current via deltas
+- **`generate_draw_cache.js` covers all 4 JSON-cached games**: JTP, Cash Pop, Lotto X, Fantasy 5
+- **CRITICAL: parsers in `generate_draw_cache.js` MUST match the server parsers in `server.js` exactly** -- if they diverge, the initial JSON will have wrong/missing data. When updating a server parser, update `generate_draw_cache.js` too. Always verify output has consecutive dates before committing.
 
 ### When adding a new game with PDF > 1 MB
 1. Run `generate_draw_cache.js` locally to build initial JSON (add the game's parser to the script)
@@ -965,7 +967,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20n`
+Latest stable: `backups/stable-2026-11-20o`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
