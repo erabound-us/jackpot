@@ -749,6 +749,80 @@ Every game and UI element has a canonical emoji. **Never mix emojis between game
 - **Tab bar, panel header icon, generate button, and PICK_ICONS must all use the same emoji for each game**
 - **When adding a new game**: assign it a unique emoji not used by any existing game, add it to this table, use it consistently in all 4 places above
 
+## Race Conditions & Concurrency
+
+### Frontend Race Conditions
+
+Race conditions occur when a user triggers a new fetch before a previous one resolves, causing stale data to overwrite current state.
+
+**Pattern: Stale Response Guard**
+Capture the relevant state key at fetch time. In the `.then()` callback, check if the state still matches before writing. If not, discard the response silently.
+
+```js
+// For lookup functions keyed by date:
+var _myDate = dateVal;
+fetch('/draws/game?date=' + date)
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (document.getElementById('myDateInput').value !== _myDate) return; // stale
+    // safe to write state
+  });
+
+// For Pick games (keyed by game + date):
+var _game = pickGame; var _date = dateVal;
+fetch('/draws/pick?game=' + _game + '&date=' + date)
+  .then(function(data) {
+    if (pickGame !== _game || document.getElementById('pickDrawDate').value !== _date) return;
+    // safe to write state
+  });
+```
+
+**Where stale guards are applied (all lookup functions):**
+- `jtpLookupDraw` — guards on `jtpDrawDate.value === _jtpDate`
+- `lxLookupDraw` — guards on `lxDrawDate.value === _lxDate`
+- `f5LookupDraw` — guards on `f5DrawDate.value === _f5Date`
+- `cpLookupDraw` — guards on `cpDrawDate.value === _cpDate`
+- `pickLookupDraw` — guards on `pickGame === _game && pickDrawDate.value === _date`
+- `pickLoadLatest` — guards on `pickGame === _game`
+- `pickRenderChips` (available dates fetch) — guards on `pickGame === _g` via IIFE closure
+
+**Generate functions** are guarded by `btn.disabled = true` during the fetch — no stale guard needed since the button prevents concurrent calls.
+
+**Page-load fetches** (latestdraw, jackpot, nextdraw, available dates for JTP/LX/F5/CP) fire once and write to dedicated per-game state — no switching possible, no stale guard needed.
+
+**When adding a new game:**
+- Single-panel games (JTP, LX, F5, CP): add `var _xDate = dateVal` before the fetch, check `input.value !== _xDate` at the top of `.then()`
+- Multi-game panels (Pick): add `var _game = currentGame; var _date = dateVal`, check both in `.then()`
+- Never write to shared state in a `.then()` without first verifying the triggering inputs haven't changed
+
+### Server-Side Concurrency
+
+**Scraper deduplication (`_scrapeInFlight`)**
+Concurrent requests for the same game+date would each launch a Chrome instance, risking OOM. `_scrapeInFlight` is a key→Promise map that deduplicates concurrent scrapes:
+```js
+const _scrapeInFlight = {};
+async function scrapeFlDraws(game, dateStr, drawType) {
+  const _key = game + '|' + dateStr + '|' + (drawType || '');
+  if (_scrapeInFlight[_key]) return _scrapeInFlight[_key]; // reuse in-flight promise
+  _scrapeInFlight[_key] = _scrapeFlDrawsImpl(...).finally(() => delete _scrapeInFlight[_key]);
+  return _scrapeInFlight[_key];
+}
+```
+- The actual implementation is in `_scrapeFlDrawsImpl`
+- `_scrapeCache` (result cache) prevents re-scraping already-fetched dates
+- `_scrapeInFlight` prevents concurrent Chrome launches for the same date
+- Together they ensure at most one Chrome instance per unique game+date+drawType at any time
+
+**PDF parse serialization (`pickParsePromise`)**
+Pick PDFs use `pickParsePromise[game]` to serialize concurrent parse requests — if a parse is already in progress, new callers await the same promise instead of starting a new parse. LX and F5 use JSON caches (no parse on Fly). JTP and CP parse fast enough (~1s) that concurrent parses are acceptable under the rate limiter.
+
+**Rate limiting** (global cap 120 req/min, per-route limits) bounds the maximum concurrent load. The serialized refresh queue ensures PDF downloads never run concurrently.
+
+**When adding a new game:**
+- If the game uses a scraper: `scrapeFlDraws` already handles deduplication automatically
+- If the game has a slow PDF (>1s parse): add a `xxxParsePromise` serialization following the `pickParsePromise` pattern
+- Never call `scrapeFlDraws` without first checking `_scrapeCache` in latestdraw routes
+
 ## HTTP Cache-Control Headers
 
 Three middleware layers ensure browsers and proxies never cache stale responses:
@@ -867,7 +941,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20g`
+Latest stable: `backups/stable-2026-11-20h`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)

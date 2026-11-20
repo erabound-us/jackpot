@@ -1906,6 +1906,7 @@ app.post('/refresh/fantasy5', (req, res) => {
 // Puppeteer browser instance cache — reuse across requests
 let _browser = null;
 const _scrapeCache = {};
+const _scrapeInFlight = {}; // key -> Promise, deduplicates concurrent scrapes for same date
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
     _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
@@ -1939,6 +1940,12 @@ function extractAndCacheJackpot(game, html) {
 }
 
 async function scrapeFlDraws(game, dateStr, drawType) {
+  const _key = game + '|' + dateStr + '|' + (drawType || '');
+  if (_scrapeInFlight[_key]) return _scrapeInFlight[_key];
+  _scrapeInFlight[_key] = _scrapeFlDrawsImpl(game, dateStr, drawType).finally(function() { delete _scrapeInFlight[_key]; });
+  return _scrapeInFlight[_key];
+}
+async function _scrapeFlDrawsImpl(game, dateStr, drawType) {
   const GAME_URLS = {
     jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
     lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',

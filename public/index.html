@@ -1128,9 +1128,11 @@ function jtpLookupDraw() {
   var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
+  var _jtpDate = dateVal;
   (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (document.getElementById('jtpDrawDate').value !== _jtpDate) return;
       if (data.error) {
         msg.style.color = 'var(--red)';
         msg.textContent = data.error;
@@ -1533,9 +1535,11 @@ function lxLookupDraw() {
   var mmddyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
+  var _lxDate = dateVal;
   (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (document.getElementById('lxDrawDate').value !== _lxDate) return;
       if (data.error) {
         msg.style.color = 'var(--red)';
         msg.textContent = data.error;
@@ -1904,9 +1908,11 @@ function cpLookupDraw(forceLatest) {
   var mmddyyyy = parts[1] + '/' + parts[2] + '/' + parts[0];
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
+  var _cpDate = dateVal;
   (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy),{signal:_ac.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (document.getElementById('cpDrawDate').value !== _cpDate) return;
       if (data.error && !data.allSessions) {
         msg.style.color = 'var(--red)';
         msg.textContent = data.error;
@@ -2247,6 +2253,7 @@ function f5LookupDraw() {
   msg.textContent = 'Looking up...';
   var _primary = drawType === 'EVENING' ? 'EVENING' : 'MIDDAY';
   var _fallback = _primary === 'EVENING' ? 'MIDDAY' : 'EVENING';
+  var _f5Date = dateVal;
   function _f5Fetch(dt) {
     var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
     return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
@@ -2255,6 +2262,7 @@ function f5LookupDraw() {
     if (r && !r.error) return r;
     return _f5Fetch(_fallback);
   }).then(function(target) {
+    if (document.getElementById('f5DrawDate').value !== _f5Date) return;
     if (!target || target.error) {
       msg.style.color = 'var(--red)';
       var url = (target && target.resultsUrl) || 'https://floridalottery.com/games/draw-games/fantasy5';
@@ -2532,7 +2540,7 @@ function pickSetGame(g, skipTabSync) {
   pickUpdateCost();
   // Load latest draw for this game
   pickLoadLatest();
-  fetch('/draws/pick/available?game='+g).then(function(r){return r.json();}).then(function(d){pickRenderChips(d.dates);}).catch(function(){});
+  (function(_g){fetch('/draws/pick/available?game='+_g).then(function(r){return r.json();}).then(function(d){if(pickGame===_g)pickRenderChips(d.dates);}).catch(function(){});})(g);
 }
 
 function pickUpdateCost() {
@@ -2577,7 +2585,9 @@ function pickStartCountdown(nd) {
 
 function pickLoadLatest() {
   var _ac = new AbortController(); setTimeout(function(){_ac.abort();},10000);
-  fetch('/latestdraw/pick?game='+pickGame, {signal:_ac.signal}).then(function(r){return r.json();}).then(function(d){
+  var _game = pickGame;
+  fetch('/latestdraw/pick?game='+_game, {signal:_ac.signal}).then(function(r){return r.json();}).then(function(d){
+    if (pickGame !== _game) return;
     if (d.error) return;
     var latest = d.evening || d.midday;
     if (!latest) return;
@@ -2621,14 +2631,16 @@ function pickLookupDraw() {
   var mmddyyyy = parts[1]+'/'+parts[2]+'/'+parts[0];
   msg.style.color='var(--muted)'; msg.textContent='Looking up...';
   var _primary = drawType; var _fallback = drawType==='EVENING'?'MIDDAY':'EVENING';
+  var _game = pickGame; var _date = dateVal;
   function _pFetch(dt) {
     var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);
-    return fetch('/draws/pick?game='+pickGame+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
+    return fetch('/draws/pick?game='+_game+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
   }
   _pFetch(_primary).then(function(r){
     if (r && !r.error) return r;
     return _pFetch(_fallback);
   }).then(function(data){
+    if (pickGame !== _game || document.getElementById('pickDrawDate').value !== _date) return;
     if (!data || data.error) {
       msg.style.color='var(--red)';
       var url=(data&&data.resultsUrl)||('https://floridalottery.com/games/draw-games/'+pickGame.replace('pick','pick-'));
