@@ -443,21 +443,16 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 ### /latestdraw/* endpoints
 - Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
 - PDF/JSON is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
-- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw) — PDF only, no scraper needed
-- `/latestdraw/lottox` → `{ date, numbers }` — JSON cache first; if newest draw is older than the most recent expected Wed/Sat draw, falls back to scraper
-- `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache first; if newest draw is more than a day old, falls back to scraping yesterday's draws
-- `/latestdraw/cashpop` → `{ date, numbers }` — PDF first; if newest draw is more than a day old, falls back to scraping today's date
-- `/latestdraw/pick` → `{ evening, midday }` — PDF only (Pick PDFs update same day)
+- `/latestdraw/jtp` → `{ date, numbers }` — JSON cache only, no scraper
+- `/latestdraw/lottox` → `{ date, numbers }` — JSON cache only, no scraper
+- `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache only, no scraper
+- `/latestdraw/cashpop` → `{ date, numbers }` — JSON cache only, no scraper
+- `/latestdraw/pick` → `{ evening, midday }` — PDF via `getPickText()` (serialized), no scraper
+- **ALL latestdraw routes follow the JTP gold standard: JSON/cache only, never call scrapeFlDraws()** — scraper calls from latestdraw crash the server under concurrent load (exit_code=134). Data freshness is maintained by `appendXxxDeltas()` running 5 minutes after each draw via `schedulePostDrawRefreshes()`.
 - On page load the frontend fetches all and auto-populates `xDrawn`, the date input, and the drawn balls display in **gold**
 - `/latestdraw/*` excluded from rate limiting
-- **NEVER call `getAvailableDates()` or `scrapeFlDraws()` from `/latestdraw/*` unless as a stale-data fallback** — these run on every page load and will OOM the server if called unconditionally
-- **Stale detection pattern for JSON-cached games (LX, F5, CP)**:
-  - Compute the most recent expected draw time in ET
-  - If `draws[0].ts < expectedDrawTime`, scrape the most recent date
-  - Always wrap scraper call in `.catch(() => null)` — fall back to JSON if scrape fails
-  - **CRITICAL: Always check `_scrapeCache[cacheKey]` BEFORE calling `scrapeFlDraws()`** — `latestdraw/*` is excluded from rate limiting and called on every page load; if the scraper runs on every call it will OOM the server. The `_scrapeCache` key format is `game|MM/DD/YYYY|` (empty drawType for cashpop). Pattern: `const sc = _scrapeCache[cacheKey] || await scrapeFlDraws(...).catch(() => null);`
-  - For Cash Pop: scrape today's date; rebuild `numbers` array from `sessions` in session order
-  - For Fantasy 5: scrape yesterday's evening + midday in parallel; return scraped if found
+- **NEVER call `getAvailableDates()` or `scrapeFlDraws()` from `/latestdraw/*`** — these crash the server under concurrent load (exit_code=134/SIGABRT). All latestdraw routes must be JSON/cache only.
+- **Data freshness for latestdraw**: `appendXxxDeltas()` runs 5 minutes after each draw via `schedulePostDrawRefreshes()`, keeping all JSON caches current. The 5-minute window is acceptable — no scraper needed in latestdraw routes.
 
 ### POST /check/lottox body
 ```json
@@ -952,7 +947,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20j`
+Latest stable: `backups/stable-2026-11-20k`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
