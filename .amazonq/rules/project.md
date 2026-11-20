@@ -831,6 +831,7 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - Together: same date → deduplicated; different dates → serialized; cached dates → instant
 - **Never bypass `scrapeFlDraws`** — always call the outer function, never `_scrapeFlDrawsImpl` directly
 - **Draw-time guard before every scraper call**: before calling `scrapeFlDraws`, verify the draw has actually occurred in ET. If the requested date is today and the draw time hasn't passed yet, return 404 immediately — no Chrome launch. Draw cutoffs: JTP/LX 11:15 PM ET; F5 Midday 1:05 PM / Evening 11:15 PM ET; CP per-session (Morning 7:29, Matinee 11:29, Afternoon 2:29, Evening 6:29, Late Night 10:29 ET). Future dates always return 404 immediately.
+- **CRITICAL: Never use `new Date(year, month, day)` for date comparison in draw guards** — this creates midnight in the server's local timezone (UTC on Fly.io), not ET. A date that is "today" in ET may be "yesterday" in UTC. Always compare date components directly using the ET `nowET` object: extract month/day/year from `nowET` as strings and compare against the request date parts.
 
 **PDF parse serialization (`pickParsePromise`) and JSON caches**
 `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io. The solution is JSON caches -- no PDF parsing on Fly at all:
@@ -967,7 +968,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20o`
+Latest stable: `backups/stable-2026-11-20p`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
