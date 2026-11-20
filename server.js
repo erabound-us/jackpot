@@ -1935,6 +1935,15 @@ const JACKPOT_GAME_URLS = {
 const _jackpotCache = {}; // game -> { amount, ts }, 5-minute TTL
 
 // Extract jackpot amount from a scraped page HTML and cache it for the given game
+function saveJackpotCacheToFile() {
+  try {
+    let existing = {};
+    try { existing = JSON.parse(fs.readFileSync(JACKPOT_CACHE_PATH, 'utf8')); } catch(e) {}
+    Object.assign(existing, _jackpotCache);
+    fs.writeFileSync(JACKPOT_CACHE_PATH, JSON.stringify(existing));
+  } catch(e) {}
+}
+
 function extractAndCacheJackpot(game, html) {
   if (!['jtp','lottox','fantasy5'].includes(game)) return;
   const now = Date.now();
@@ -1951,6 +1960,7 @@ function extractAndCacheJackpot(game, html) {
       const amount = '$' + m[1].trim();
       _jackpotCache[game] = { amount, ts: now };
       console.log('Jackpot cached from scrape ' + game + ': ' + amount);
+      saveJackpotCacheToFile();
       return;
     }
   }
@@ -2308,12 +2318,76 @@ app.get('/latestdraw/cashpop', async (req, res) => {
     res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+function getLastDrawTime(game) {
+  // Returns the most recent draw time in ET as a Date, or null if no draw has occurred today/recently
+  const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const h = nowET.getHours(), m = nowET.getMinutes();
+  const nowMins = h * 60 + m;
+  const today = new Date(nowET); today.setSeconds(0, 0);
+
+  const drawSchedules = {
+    jtp:     [{ days: [2, 5], h: 23, m: 15 }],  // Tue, Fri 11:15 PM
+    lottox:  [{ days: [3, 6], h: 23, m: 15 }],  // Wed, Sat 11:15 PM
+    fantasy5:[{ days: null,   h: 13, m:  5 }, { days: null, h: 23, m: 15 }], // daily 1:05 PM + 11:15 PM
+    cashpop: [{ days: null,   h:  7, m: 29 }, { days: null, h: 11, m: 29 },
+              { days: null,   h: 14, m: 29 }, { days: null, h: 18, m: 29 },
+              { days: null,   h: 22, m: 29 }],
+  };
+
+  const schedules = drawSchedules[game];
+  if (!schedules) return null;
+
+  const day = nowET.getDay();
+  let lastDraw = null;
+
+  for (const s of schedules) {
+    if (s.days && !s.days.includes(day)) continue;
+    const drawMins = s.h * 60 + s.m;
+    if (nowMins >= drawMins) {
+      const d = new Date(today); d.setHours(s.h, s.m, 0, 0);
+      if (!lastDraw || d > lastDraw) lastDraw = d;
+    }
+  }
+
+  // Also check yesterday for games that may have drawn last night
+  if (!lastDraw) {
+    const yestET = new Date(nowET); yestET.setDate(yestET.getDate() - 1);
+    const yestDay = yestET.getDay();
+    for (const s of schedules) {
+      if (s.days && !s.days.includes(yestDay)) continue;
+      const d = new Date(yestET); d.setHours(s.h, s.m, 0, 0);
+      if (!lastDraw || d > lastDraw) lastDraw = d;
+    }
+  }
+
+  return lastDraw;
+}
+
+function isDataStaleForGame(game, dataTs) {
+  // Data is stale if: a draw has occurred AND it's been >30 min since that draw AND data predates the draw
+  const lastDraw = getLastDrawTime(game);
+  if (!lastDraw) return false;
+  const now = Date.now();
+  const drawTs = lastDraw.getTime();
+  const thirtyMinAfterDraw = drawTs + 30 * 60 * 1000;
+  // Stale if: draw happened, 30 min grace period passed, and our data is older than the draw
+  return now >= thirtyMinAfterDraw && dataTs < drawTs;
+}
+
 async function scrapeJackpot(game) {
   const now = Date.now();
-  // Return from cache if fresh (populated as side effect of draw lookups via scrapeFlDraws)
-  if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return _jackpotCache[game].amount;
-  // Cache cold -- return null, frontend shows "See FL Lottery"
-  // Cache warms automatically when any user looks up a draw date (scrapeFlDraws side effect)
+  // 1. In-memory cache -- fresh if not stale since last draw
+  if (_jackpotCache[game] && !isDataStaleForGame(game, _jackpotCache[game].ts)) return _jackpotCache[game].amount;
+  // 2. File cache -- populated by post-draw refresh via scrapeFlDraws side effect
+  try {
+    const fileCache = JSON.parse(fs.readFileSync(JACKPOT_CACHE_PATH, 'utf8'));
+    if (fileCache[game] && !isDataStaleForGame(game, fileCache[game].ts)) {
+      _jackpotCache[game] = fileCache[game];
+      return fileCache[game].amount;
+    }
+  } catch(e) {}
+  // 3. Data is stale or cache cold -- return null, frontend shows "See FL Lottery"
+  // scrapeFlDraws (called by schedulePostDrawRefreshes after each draw) will refresh this
   return null;
 }
 
@@ -2421,6 +2495,7 @@ function getBoxWays(digits) {
 // JSON draw caches for JTP and Cash Pop -- no PDF parsing on Fly (same pattern as LX/F5)
 const JTP_DRAWS_PATH = path.join(__dirname, 'jtp_draws.json');
 const CP_DRAWS_PATH  = path.join(__dirname, 'cashpop_draws.json');
+const JACKPOT_CACHE_PATH = path.join(__dirname, 'jackpot_cache.json');
 let jtpDrawsCache = null;
 let cpDrawsCache  = null;
 
