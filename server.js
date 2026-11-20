@@ -2293,18 +2293,18 @@ app.get('/latestdraw/cashpop', async (req, res) => {
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const yesterdayET = new Date(nowET); yesterdayET.setDate(yesterdayET.getDate() - 1); yesterdayET.setHours(22, 29, 0, 0);
     if (d.ts < yesterdayET.getTime()) {
-      // PDF is behind -- try scraping today's date
+      // PDF is behind -- use _scrapeCache if available, otherwise scrape once
       const target = new Date(nowET);
       const mo = String(target.getMonth() + 1).padStart(2, '0');
       const dy = String(target.getDate()).padStart(2, '0');
       const yr = target.getFullYear();
       const dateStr = mo + '/' + dy + '/' + yr;
-      const scraped = await scrapeFlDraws('cashpop', dateStr, null).catch(() => null);
-      if (scraped && scraped.sessions && scraped.sessions.length) {
-        // Build numbers array in session order from scraped data
+      const cacheKey = 'cashpop|' + dateStr + '|';
+      const sc = _scrapeCache[cacheKey] || await scrapeFlDraws('cashpop', dateStr, null).catch(() => null);
+      if (sc && sc.sessions && sc.sessions.length) {
         const sessionOrder = ['Morning','Matinee','Afternoon','Evening','Late Night'];
         const numbers = sessionOrder.map(name => {
-          const s = scraped.sessions.find(x => x.name === name);
+          const s = sc.sessions.find(x => x.name === name);
           return s ? s.number : null;
         }).filter(n => n !== null);
         if (numbers.length) return res.json({ date: dateStr, numbers });

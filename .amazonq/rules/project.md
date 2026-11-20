@@ -287,6 +287,8 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 10. Payout Assistant card
 11. Email My Lines card (hidden until generated)
 
+**CRITICAL: Every `<div class="game-panel">` MUST have a matching closing `</div>` before the next game panel starts.** A missing closing tag causes all subsequent panels to render inside the unclosed panel, breaking every game that follows. Always verify panel closure after any HTML restructuring.
+
 ### Generate button — MUST use `class="generate-btn"`
 - Full-width, gradient blue, 18px bold, shadow, hover lift — defined in CSS
 - Label format: `{emoji} Generate Lines` for all games
@@ -435,15 +437,22 @@ GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` 
 POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
-- Return the most recent draw **from PDF only** — no puppeteer, no `getAvailableDates` call
-- PDF is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
-- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw)
-- `/latestdraw/lottox` → `{ date, numbers }` (6 numbers, most recent draw)
-- `/latestdraw/fantasy5` → `{ evening: { date, numbers } | null, midday: { date, numbers } | null }` (most recent of each type)
-- `/latestdraw/cashpop` → `{ date, numbers }` (5 numbers from PDF — one per session)
-- On page load the frontend fetches all four and auto-populates `xDrawn`, the date input, and the drawn balls display in **gold**
+- Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
+- PDF/JSON is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
+- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw) — PDF only, no scraper needed (JTP draws Tue/Fri, PDF updates same night)
+- `/latestdraw/lottox` → `{ date, numbers }` — JSON cache first; if newest draw is older than the most recent expected Wed/Sat draw, falls back to scraper
+- `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache first; if newest draw is more than a day old, falls back to scraping yesterday's draws
+- `/latestdraw/cashpop` → `{ date, numbers }` — PDF first; if newest draw is more than a day old, falls back to scraping today's date
+- `/latestdraw/pick` → `{ evening, midday }` — PDF only (Pick PDFs update same day)
+- On page load the frontend fetches all and auto-populates `xDrawn`, the date input, and the drawn balls display in **gold**
 - `/latestdraw/*` excluded from rate limiting
-- **NEVER call `getAvailableDates()` or `scrapeFlDraws()` from `/latestdraw/*`** — these run on every page load and will OOM the server
+- **NEVER call `getAvailableDates()` or `scrapeFlDraws()` from `/latestdraw/*` unless as a stale-data fallback** — these run on every page load and will OOM the server if called unconditionally
+- **Stale detection pattern for JSON-cached games (LX, F5, CP)**:
+  - Compute the most recent expected draw time in ET
+  - If `draws[0].ts < expectedDrawTime`, scrape the most recent date
+  - Always wrap scraper call in `.catch(() => null)` — fall back to JSON if scrape fails
+  - For Cash Pop: scrape today's date; rebuild `numbers` array from `sessions` in session order
+  - For Fantasy 5: scrape yesterday's evening + midday in parallel; return scraped if found
 
 ### POST /check/lottox body
 ```json
@@ -568,6 +577,8 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 **Why deltas run at startup**: every deploy resets the server with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after ensures the JSON is current without any manual intervention. The mtime guard in each function makes this a no-op if the PDF hasn't changed since the last delta run -- so it's safe and cheap on normal restarts.
 
 **mtime guard in appendXxxDeltas()**: stores `lxLastPdfMtime` / `f5LastPdfMtime`. If the PDF mtime hasn't changed since the last delta check, the parse is skipped entirely. This prevents redundant parses when refresh is called multiple times without a new draw.
+
+**Why deltas also run at startup**: every deploy resets the container with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after `downloadPDFs()` ensures the JSON is current without any manual intervention. The mtime guard makes this a no-op if the PDF hasn't changed since the last delta run.
 
 ### When to run generate_draw_cache.js locally
 - When adding a new game (initial JSON build)
