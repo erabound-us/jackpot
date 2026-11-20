@@ -358,6 +358,9 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 6. Results heading uses `section-header` + `badge blue` + `updated-label`
 7. Button label says `Generate Lines` (or `Generate Numbers` for Cash Pop)
 8. During generation: `btn.textContent = 'Generating...'`
+9. Date chips use `rgba(79,142,247,0.12)` background, `rgba(79,142,247,0.3)` border, `color:var(--accent)` — **never purple** (`rgba(99,91,255,...)` or `#a78bfa`)
+10. Press hint only on games with a press counter (JTP, LX, F5) — not on CP or Pick
+11. Email blurb only on games with a press hint — not on CP or Pick
 
 
 - Every game panel has a live draw banner showing next draw date/time, countdown, and Sales Open/Closed badge
@@ -798,7 +801,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20d`
+Latest stable: `backups/stable-2026-11-20e`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -1085,8 +1088,29 @@ res.json({ dates: dates.slice(0, 5) });
 - No "Latest" option in any dropdown
 - Reset always restores to latest, never clears to blank
 - Date chips show `MM/DD` format, clickable, above the date input
+- **Date chip colors MUST use blue accent** — `background:rgba(79,142,247,0.12);border:1px solid rgba(79,142,247,0.3);color:var(--accent)` — never purple (`rgba(99,91,255,...)` or `#a78bfa`)
 - `xLookupDraw()` always sends 4-digit year (`parts[0]` not `parts[0].slice(2)`)
 - Error handler always checks `data.resultsUrl` and renders as clickable link
+
+## UI Color Standards
+These are the only intentional non-blue color usages. Everything else must use `var(--accent)` (blue `#4f8ef7`).
+
+| Usage | Color | Reason |
+|-------|-------|--------|
+| Powerball / Mega Millions "coming soon" panels | `rgba(99,91,255,...)` purple | Distinct brand identity for non-FL games |
+| Pick 2/3/4/5 game selector buttons | `rgba(99,91,255,...)` purple | Deliberate sub-game switcher theme, distinct from main game UI |
+| Donate buttons (all panels + FAQ) | `linear-gradient(135deg,#635bff,#4f46e5)` | Stripe brand color |
+| Jackpot amounts in draw banners | `var(--yellow)` `#f59e0b` | Draws attention to prize amount |
+| Best line label + balls | `var(--yellow)` | Highlights top-ranked line |
+| Latest draw balls (gold) | `rgba(245,158,11,0.15);color:var(--yellow)` | Distinguishes latest from historical |
+| Historical draw balls (green) | `rgba(34,197,94,0.15);color:var(--green)` | Distinguishes historical from latest |
+| Matched number inputs | `.num-input.matched` — `rgba(34,197,94,0.1);color:var(--green)` | Shows which numbers matched |
+| Winner check result rows | `.check-line-result.winner` — green border | Highlights winning lines |
+| Total winnings amount | `var(--yellow)` | Draws attention to prize |
+| EZMatch / Double Play winner rows | `var(--accent)` border | Distinguishes add-on wins |
+| Jackpot winner rows | `var(--yellow)` | Highest prize tier |
+
+**Never use purple for any standard game UI element** — date chips, buttons, balls, labels, or cost bars on JTP, LX, F5, CP, or Pick panels must use blue (`var(--accent)`) or the semantic colors above.
 
 ## Mobile Layout — Line Input Rows
 - `.line-input-row` uses `flex-direction:column` so the line label sits **above** the number inputs, not beside them — prevents wrapping on narrow screens (iPhone 12 etc.)
