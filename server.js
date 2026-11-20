@@ -84,7 +84,7 @@ app.use(express.json({ limit: '20kb' }));
 let _serverReady = false;
 app.use((req, res, next) => {
   if (_serverReady || req.path === '/health') return next();
-  res.status(503).json({ error: 'Server warming up. Try again in a moment.' });
+  res.set('Cache-Control', 'no-store').status(503).json({ error: 'Server warming up. Try again in a moment.' });
 });
 
 // Clean up rate limit, strike, and blacklist maps every 5 minutes
