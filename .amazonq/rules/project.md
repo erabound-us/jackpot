@@ -850,6 +850,7 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - LX: `getLottoXDraws()` reads `lottox_draws.json`; `appendLottoXDeltas()` updates it
 - F5: `getFantasy5Draws()` reads `fantasy5_draws.json`; `appendFantasy5Deltas()` updates it
 - Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` serialization (PDFs are small enough, but serialized to prevent concurrent crashes)
+- **All 4 Pick PDFs are pre-warmed at startup** (sequentially after delta chain) so the first user request hits the cache instead of a cold ~4-5s parse. Without this, switching Pick games triggers cold parses that stack up and timeout. Pattern: `.then(() => getPickText('pick2')).catch(()=>{}).then(() => getPickText('pick3'))...`
 - **JTP frequency PDF** (`PDF_PATHS.frequency`) is still parsed directly in `/analyze` -- acceptable since it's called infrequently and not on page load
 - **Rule: never parse a PDF on Fly.io in a page-load route** -- use JSON cache + delta pattern for all games
 

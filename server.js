@@ -1388,6 +1388,10 @@ async function start() {
     downloadPDFs()
       .then(() => appendJtpDeltas()).catch(() => {})
       .then(() => appendCpDeltas()).catch(() => {})
+      .then(() => getPickText('pick2')).catch(() => {})
+      .then(() => getPickText('pick3')).catch(() => {})
+      .then(() => getPickText('pick4')).catch(() => {})
+      .then(() => getPickText('pick5')).catch(() => {})
       .then(() => appendLottoXDeltas())
       .then(() => appendFantasy5Deltas()).catch(() => {});
     // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
