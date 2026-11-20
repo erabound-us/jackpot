@@ -1384,10 +1384,12 @@ async function start() {
     // Hard timeout: mark server ready after 90s regardless
     setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
     try { getLottoXDraws(); getFantasy5Draws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
-    _serverReady = true;
-    console.log('Server ready.');
-    // Download PDFs then run delta detection to catch any draws missed since last deploy
-    downloadPDFs().then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
+    // Download PDFs, warm JTP+CP caches, then run delta detection
+    downloadPDFs()
+      .then(() => getJtpText()).catch(() => {})
+      .then(() => getCpText()).catch(() => {})
+      .then(() => { _serverReady = true; console.log('Server ready.'); })
+      .then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
   });
 }
 
