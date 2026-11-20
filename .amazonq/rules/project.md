@@ -803,8 +803,8 @@ fetch('/draws/pick?game=' + _game + '&date=' + date)
 When a user clicks a new date chip before the previous lookup resolves, abort the previous request immediately. Store the AbortController in a `window._xLookupAC` variable:
 
 - At the top of `xLookupDraw()`: `if (window._xLookupAC) window._xLookupAC.abort();` then create a new one
-- Pass `signal: window._xLookupAC.signal` to the fetch
-- Aborting closes the server connection immediately, preventing the scraper from launching for the abandoned request
+- Pass `signal: window._xLookupAC.signal` to **every** fetch inside the function — including inner fetch helpers like `_pFetch` and `_f5Fetch`. A common bug is creating a new `AbortController` inside the helper function instead of reusing the outer one, which means the abort never actually cancels the request.
+- Add a 60s timeout: `setTimeout(function(){if(window._xLookupAC)window._xLookupAC.abort();},60000);`
 - The `.catch()` already handles AbortError silently (fetch rejects with AbortError, caught by existing `.catch(function(){...})`)
 - **All 5 games implement this**: `window._jtpLookupAC`, `window._lxLookupAC`, `window._cpLookupAC`, `window._f5LookupAC`, `window._pickLookupAC`
 - **When adding a new game**: declare `window._xLookupAC` and abort+replace it at the top of `xLookupDraw()`
@@ -971,7 +971,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20v`
+Latest stable: `backups/stable-2026-11-20w`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
