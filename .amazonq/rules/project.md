@@ -434,7 +434,9 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 ### Games without a jackpot (Cash Pop, Pick 2-5)
 - Do NOT add a jackpot element to their banners
 - Do NOT add them to `JACKPOT_GAME_URLS`
-- Their banner center col shows draw-specific info (draw name for Cash Pop, draw name + FL Lottery link for Pick)
+- Their banner center col shows draw-specific info: draw name + FL Lottery link
+- Cash Pop center col: `Draw Name` label + `<div id="cpDrawName">` + `<a class="jackpot-link">View on FL Lottery</a>`
+- Pick center col: `Draw` label + `<div id="pickDrawName">` + `<a class="jackpot-link" id="pickLotteryLink">View on FL Lottery</a>`
 
 ## API Surface
 GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/jackpot?game=` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/refresh/status`
