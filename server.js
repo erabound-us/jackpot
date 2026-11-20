@@ -421,11 +421,8 @@ function generateLines(freq, draws, count = 6, seenLines = new Set()) {
 }
 
 async function runAnalysis(count = 6, sid = null) {
-  const [histText, freqText] = await Promise.all([
-    getJtpText(),
-    extractPDFText(PDF_PATHS.frequency)
-  ]);
-  const draws = parseHistoryPDF(histText);
+  const draws = getJtpDraws();
+  const freqText = await extractPDFText(PDF_PATHS.frequency);
   const freq  = parseFrequencyPDF(freqText);
   if (draws.length < 10) throw new Error(`Only ${draws.length} draws parsed from history PDF.`);
   if (Object.keys(freq).length < 20) throw new Error(`Only ${Object.keys(freq).length} numbers parsed from frequency PDF.`);
@@ -1385,11 +1382,10 @@ async function start() {
     setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
     try { getLottoXDraws(); getFantasy5Draws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
     // Download PDFs, warm JTP+CP caches, then run delta detection
-    downloadPDFs()
-      .then(() => getJtpText()).catch(() => {})
-      .then(() => getCpText()).catch(() => {})
-      .then(() => { _serverReady = true; console.log('Server ready.'); })
-      .then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
+    try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
+    _serverReady = true;
+    console.log('Server ready.');
+    downloadPDFs().then(() => appendJtpDeltas()).catch(() => {}).then(() => appendCpDeltas()).catch(() => {}).then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
   });
 }
 
@@ -1459,8 +1455,7 @@ function scoreCashPop(n, freq, draws, totalDraws) {
 }
 
 async function runAnalysisCashPop(count = 5, sid = null) {
-  const text = await getCpText();
-  const draws = parseCashPopHistoryPDF(text);
+  const draws = getCpDraws();
   if (draws.length < 5) throw new Error('Only ' + draws.length + ' Cash Pop draws parsed.');
   const freq = {};
   draws.forEach(d => d.numbers.forEach(n => { freq[n] = (freq[n] || 0) + 1; }));
@@ -1517,7 +1512,8 @@ app.post('/refresh/cashpop', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
   enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => {
     lastAutoRefreshCP = null;
-  }));
+    cpDrawsCache = null;
+  }).then(() => appendCpDeltas()).catch(() => {}));
   clearSession(sid);
   res.json({ queued: true, game: 'cashpop' });
 });
@@ -2069,7 +2065,7 @@ app.get('/draws/jtp', async (req, res) => {
   if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No JTP draw on that date (draws Tue & Fri).', resultsUrl: FL_RESULTS_URLS.jtp });
   const pdfDate = normDateForPDF(date);
   try {
-    const draws = parseHistoryPDF(await getJtpText());
+    const draws = getJtpDraws();
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
@@ -2163,7 +2159,7 @@ function expandYear(date) {
 
 app.get('/draws/jtp/available', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await getJtpText());
+    const draws = getJtpDraws();
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===2||day===5; });
     const dates = filtered.slice(0, 5).map(d => expandYear(d.date));
     // Stale check: find most recent Tue(2) or Fri(5) that has passed in ET
@@ -2244,7 +2240,7 @@ app.get('/draws/fantasy5/available', async (req, res) => {
 });
 app.get('/draws/cashpop/available', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await getCpText());
+    const draws = getCpDraws();
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
     // Stale check: only prepend a date if a draw has actually occurred but isn't in the PDF yet.
     // CP first draw is Morning 7:29 AM ET. Before that, most recent draw was yesterday.
@@ -2273,7 +2269,7 @@ app.get('/draws/cashpop', async (req, res) => {
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   // PDF fallback first - has 5 numbers per date (one per session)
   try {
-    const draws = parseCashPopHistoryPDF(await getCpText());
+    const draws = getCpDraws();
     const pdfDate = normDateForPDF(date);
     const match = draws.find(d => d.date === date || d.date === pdfDate);
     if (match) {
@@ -2296,7 +2292,7 @@ app.get('/draws/cashpop', async (req, res) => {
 
 app.get('/latestdraw/jtp', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await getJtpText());
+    const draws = getJtpDraws();
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     res.json({ date: d.date, numbers: d.numbers });
@@ -2373,7 +2369,7 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
 
 app.get('/latestdraw/cashpop', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await getCpText());
+    const draws = getCpDraws();
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     // Check if PDF is stale -- Cash Pop draws every day, newest should be today or yesterday
@@ -2539,38 +2535,59 @@ function getBoxWays(digits) {
   return perms / denom;
 }
 
-// mtime cache for JTP and CP PDFs -- serializes concurrent parses to prevent OOM crashes
-let jtpParsePromise = null;
-let jtpCache = null;
-let cpParsePromise = null;
-let cpCache = null;
+// JSON draw caches for JTP and Cash Pop -- no PDF parsing on Fly (same pattern as LX/F5)
+const JTP_DRAWS_PATH = path.join(__dirname, 'jtp_draws.json');
+const CP_DRAWS_PATH  = path.join(__dirname, 'cashpop_draws.json');
+let jtpDrawsCache = null;
+let cpDrawsCache  = null;
 
-async function getJtpText() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATHS.history).mtimeMs; } catch(e) { throw new Error('JTP PDF not yet downloaded.'); }
-  if (jtpCache && jtpCache.mtime === mtime) return jtpCache.text;
-  if (!jtpParsePromise) {
-    jtpParsePromise = extractPDFText(PDF_PATHS.history).then(text => {
-      jtpCache = { text, mtime };
-      jtpParsePromise = null;
-      return text;
-    }).catch(e => { jtpParsePromise = null; throw e; });
-  }
-  return jtpParsePromise;
+function getJtpDraws() {
+  if (!jtpDrawsCache) jtpDrawsCache = JSON.parse(fs.readFileSync(JTP_DRAWS_PATH, 'utf8'));
+  return jtpDrawsCache;
 }
 
-async function getCpText() {
+function getCpDraws() {
+  if (!cpDrawsCache) cpDrawsCache = JSON.parse(fs.readFileSync(CP_DRAWS_PATH, 'utf8'));
+  return cpDrawsCache;
+}
+
+// Delta updaters for JTP and Cash Pop JSON caches
+let jtpLastPdfMtime = null;
+async function appendJtpDeltas() {
   let mtime;
-  try { mtime = fs.statSync(PDF_PATH_CP).mtimeMs; } catch(e) { throw new Error('Cash Pop PDF not yet downloaded.'); }
-  if (cpCache && cpCache.mtime === mtime) return cpCache.text;
-  if (!cpParsePromise) {
-    cpParsePromise = extractPDFText(PDF_PATH_CP).then(text => {
-      cpCache = { text, mtime };
-      cpParsePromise = null;
-      return text;
-    }).catch(e => { cpParsePromise = null; throw e; });
-  }
-  return cpParsePromise;
+  try { mtime = fs.statSync(PDF_PATHS.history).mtimeMs; } catch(e) { return; }
+  if (mtime === jtpLastPdfMtime) { console.log('JTP: PDF unchanged, skipping delta.'); return; }
+  const existing = getJtpDraws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await extractPDFText(PDF_PATHS.history); } catch(e) { return; }
+  jtpLastPdfMtime = mtime;
+  const all = parseHistoryPDF(text);
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log('JTP: no new draws.'); return; }
+  const merged = [...newDraws, ...existing].slice(0, 500);
+  jtpDrawsCache = merged;
+  fs.writeFileSync(JTP_DRAWS_PATH, JSON.stringify(merged, null, 2));
+  console.log('JTP: appended ' + newDraws.length + ' new draws.');
+}
+
+let cpLastPdfMtime = null;
+async function appendCpDeltas() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_CP).mtimeMs; } catch(e) { return; }
+  if (mtime === cpLastPdfMtime) { console.log('CP: PDF unchanged, skipping delta.'); return; }
+  const existing = getCpDraws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await extractPDFText(PDF_PATH_CP); } catch(e) { return; }
+  cpLastPdfMtime = mtime;
+  const all = parseCashPopHistoryPDF(text);
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log('CP: no new draws.'); return; }
+  const merged = [...newDraws, ...existing].slice(0, 500);
+  cpDrawsCache = merged;
+  fs.writeFileSync(CP_DRAWS_PATH, JSON.stringify(merged, null, 2));
+  console.log('CP: appended ' + newDraws.length + ' new draws.');
 }
 
 // mtime cache for Pick PDFs (~1s parse, under JSON cache threshold)
@@ -2968,7 +2985,7 @@ function schedulePostDrawRefreshes() {
   scheduleDaily(23, 20, () => {
     const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
     if (jtpDays.includes(day)) {
-      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; }));
+      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
       console.log('Post-draw refresh queued: JTP');
     }
     if (lxDays.includes(day)) {

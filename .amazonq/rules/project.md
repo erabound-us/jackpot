@@ -598,8 +598,11 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 5. No `getXxxText()` cache function needed -- JSON replaces it entirely
 
 ### PDFs under 1 MB (JTP, Cash Pop)
-- Use `getJtpText()` and `getCpText()` mtime cache functions with `jtpParsePromise`/`cpParsePromise` serialization -- prevents concurrent parse crashes under load
+- **JTP and Cash Pop now use JSON caches** (`jtp_draws.json`, `cashpop_draws.json`) -- same pattern as LX/F5. `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io shared CPU, so no PDF parsing happens on Fly for these games.
+- `getJtpDraws()` and `getCpDraws()` read from JSON files (instant, no parse)
+- `appendJtpDeltas()` and `appendCpDeltas()` run after each scheduled refresh to update the JSON with new draws
 - JTP frequency PDF (`PDF_PATHS.frequency`) is still parsed directly -- called only from `/analyze`, not from page-load routes, so concurrency risk is low
+- **When adding a new game with any PDF**: use JSON cache pattern regardless of PDF size -- `pdf2json` is not safe for concurrent use on Fly.io
 
 - JTP History PDF: `https://files.floridalottery.com/exptkt/jtp.pdf`
 - JTP Frequency PDF: `https://files.floridalottery.com/exptkt/jackpot-triple-play_number-frequency-chart.pdf`
@@ -628,9 +631,9 @@ Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, th
 ### Current PDF parse times (measured locally, Nov 2026)
 | PDF | Local parse time | Est. Fly time | Needs cache | Needs startup warm |
 |-----|-----------------|---------------|-------------|-------------------|
-| jtp.pdf (~65KB text) | ~280ms | ~1s | Yes (mtime) | No |
+| jtp.pdf (~65KB text) | ~280ms | ~1s | Yes (JSON) | No |
 | jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
-| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | Yes (mtime) | No |
+| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | Yes (JSON) | No |
 | pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~4s | Yes (mtime) | No |
 | pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~5s | Yes (mtime) | No |
 | pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~5s | Yes (mtime) | No |
@@ -655,7 +658,7 @@ downloadPDFs()
 
 ### When adding a new game -- PDF checklist
 1. Benchmark the PDF parse time locally using the node command above
-2. If est. Fly time < 3s: add a `getXxxText()` mtime cache function with `xxxParsePromise` serialization (same pattern as `getJtpText()`/`getCpText()`) -- prevents concurrent parse crashes even for fast PDFs
+2. **All games**: use JSON cache + delta pattern (`getXxxDraws()` / `appendXxxDeltas()`) -- `pdf2json` is not safe for concurrent use on Fly.io regardless of PDF size. Only exception: JTP frequency PDF (parsed directly in `/analyze` only).
 3. If est. Fly time > 3s: add `getXxxText()` cache function with `xxxParsePromise` serialization and `fs.statSync` try/catch guard
 4. If est. Fly time > 8s (or > 2s local): add `getXxxText()` to the startup warming chain in `server.listen()` callback
 5. Always add `PDF_URL_X` and `PDF_PATH_X` to the top constants block and `downloadPDFs()` Promise.all
@@ -814,13 +817,15 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - `_scrapeInFlight` prevents concurrent Chrome launches for the same date
 - Together they ensure at most one Chrome instance per unique game+date+drawType at any time
 
-**PDF parse serialization (`jtpParsePromise`, `cpParsePromise`, `pickParsePromise`)**
-All PDF-parsed games use a parse promise serializer to prevent concurrent parses crashing the process (exit_code=134/SIGABRT under memory pressure):
-- JTP: `getJtpText()` with `jtpParsePromise` + `jtpCache`
-- Cash Pop: `getCpText()` with `cpParsePromise` + `cpCache`
-- Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` + `pickCache[game]`
-- LX and F5 use JSON caches (no PDF parse on Fly at all)
-If a parse is already in progress, new callers await the same promise instead of starting a new parse. Cache is mtime-based and busted in `downloadPDFs()` when a new PDF is downloaded.
+**PDF parse serialization (`pickParsePromise`) and JSON caches**
+`pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io. The solution is JSON caches -- no PDF parsing on Fly at all:
+- JTP: `getJtpDraws()` reads `jtp_draws.json`; `appendJtpDeltas()` updates it after each draw
+- Cash Pop: `getCpDraws()` reads `cashpop_draws.json`; `appendCpDeltas()` updates it after each draw
+- LX: `getLottoXDraws()` reads `lottox_draws.json`; `appendLottoXDeltas()` updates it
+- F5: `getFantasy5Draws()` reads `fantasy5_draws.json`; `appendFantasy5Deltas()` updates it
+- Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` serialization (PDFs are small enough, but serialized to prevent concurrent crashes)
+- **JTP frequency PDF** (`PDF_PATHS.frequency`) is still parsed directly in `/analyze` -- acceptable since it's called infrequently and not on page load
+- **Rule: never parse a PDF on Fly.io in a page-load route** -- use JSON cache + delta pattern for all games
 
 **Rate limiting** (global cap 120 req/min, per-route limits) bounds the maximum concurrent load. The serialized refresh queue ensures PDF downloads never run concurrently.
 
@@ -947,7 +952,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20i`
+Latest stable: `backups/stable-2026-11-20j`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
