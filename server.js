@@ -2220,7 +2220,31 @@ app.get('/latestdraw/lottox', async (req, res) => {
   try {
     const draws = getLottoXDraws();
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    // Check if JSON is stale -- scrape the most recent date from the FL Lottery site
+    // to see if there are newer draws not yet in the PDF/JSON
     const d = draws[0];
+    const newestTs = d.ts;
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    // Find the most recent Wed/Sat draw that should have completed (draw at 11:15 PM ET)
+    const lastDrawET = new Date(nowET);
+    for (let i = 0; i < 7; i++) {
+      const day = lastDrawET.getDay();
+      if ((day === 3 || day === 6) && (i > 0 || nowET.getHours() >= 23 || (nowET.getHours() === 23 && nowET.getMinutes() >= 15))) break;
+      if (i === 0 && (day === 3 || day === 6)) { lastDrawET.setDate(lastDrawET.getDate() - 1); continue; }
+      lastDrawET.setDate(lastDrawET.getDate() - 1);
+    }
+    lastDrawET.setHours(23, 15, 0, 0);
+    if (newestTs < lastDrawET.getTime()) {
+      // JSON is behind -- try scraping today's date from the FL Lottery site
+      const mo = String(lastDrawET.getMonth() + 1).padStart(2, '0');
+      const dy = String(lastDrawET.getDate()).padStart(2, '0');
+      const yr = lastDrawET.getFullYear();
+      const dateStr = mo + '/' + dy + '/' + yr;
+      const scraped = await scrapeFlDraws('lottox', dateStr, null).catch(() => null);
+      if (scraped && scraped.numbers && scraped.numbers.length === 6) {
+        return res.json({ date: dateStr, numbers: scraped.numbers });
+      }
+    }
     res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2231,6 +2255,28 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const evening = draws.find(d => d.drawType === 'EVENING');
     const midday  = draws.find(d => d.drawType === 'MIDDAY');
+    // Check if JSON is stale -- Fantasy 5 draws every day, so newest should be today or yesterday
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const newestTs = draws[0].ts;
+    const yesterdayET = new Date(nowET); yesterdayET.setDate(yesterdayET.getDate() - 1); yesterdayET.setHours(23, 15, 0, 0);
+    if (newestTs < yesterdayET.getTime()) {
+      // JSON is more than a day behind -- try scraping yesterday's evening draw
+      const target = new Date(nowET); target.setDate(target.getDate() - 1);
+      const mo = String(target.getMonth() + 1).padStart(2, '0');
+      const dy = String(target.getDate()).padStart(2, '0');
+      const yr = target.getFullYear();
+      const dateStr = mo + '/' + dy + '/' + yr;
+      const [scrapedEve, scrapedMid] = await Promise.all([
+        scrapeFlDraws('fantasy5', dateStr, 'EVENING').catch(() => null),
+        scrapeFlDraws('fantasy5', dateStr, 'MIDDAY').catch(() => null)
+      ]);
+      if (scrapedEve || scrapedMid) {
+        return res.json({
+          evening: scrapedEve ? { date: dateStr, numbers: scrapedEve.numbers } : (evening ? { date: evening.date, numbers: evening.numbers } : null),
+          midday:  scrapedMid ? { date: dateStr, numbers: scrapedMid.numbers } : (midday  ? { date: midday.date,  numbers: midday.numbers  } : null)
+        });
+      }
+    }
     res.json({
       evening: evening ? { date: evening.date, numbers: evening.numbers } : null,
       midday:  midday  ? { date: midday.date,  numbers: midday.numbers  } : null
