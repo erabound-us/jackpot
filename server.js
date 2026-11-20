@@ -1385,13 +1385,15 @@ async function start() {
     try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
     _serverReady = true;
     console.log('Server ready.');
+    // Warm all 4 Pick PDF caches sequentially right after server is ready
+    // pickParsePromise already serializes per-game, but we chain them to avoid concurrent parses
+    ['pick2','pick3','pick4','pick5'].reduce(
+      (p, g) => p.then(() => getPickText(g).catch(() => {})),
+      Promise.resolve()
+    );
     downloadPDFs()
       .then(() => appendJtpDeltas()).catch(() => {})
       .then(() => appendCpDeltas()).catch(() => {})
-      .then(() => getPickText('pick2')).catch(() => {})
-      .then(() => getPickText('pick3')).catch(() => {})
-      .then(() => getPickText('pick4')).catch(() => {})
-      .then(() => getPickText('pick5')).catch(() => {})
       .then(() => appendLottoXDeltas())
       .then(() => appendFantasy5Deltas()).catch(() => {});
     // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
