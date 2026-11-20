@@ -256,7 +256,7 @@
     <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
   </div>
   <div class="card" style="margin-bottom:12px;">
-    <h2>&#127922; Check My Numbers</h2>
+    <h2>&#9989; Check My Numbers</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your 3 lines &mdash; we'll look up the winning numbers automatically.</div>
     <div style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
@@ -405,7 +405,7 @@
   </div>
 
   <div class="card" style="margin-bottom:12px;">
-    <h2>&#127922; Check My Numbers</h2>
+    <h2>&#9989; Check My Numbers</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your line &mdash; we'll look up the winning numbers automatically.</div>
     <div style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
@@ -551,7 +551,7 @@
   </div>
 
   <div class="card" style="margin-bottom:12px;">
-    <h2>&#127922; Check My Numbers</h2>
+    <h2>&#9989; Check My Numbers</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Select a draw date and session to look up the winning number.</div>
     <div style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
@@ -694,7 +694,7 @@
   </div>
 
   <div class="card" style="margin-bottom:12px;">
-    <h2>&#127922; Check My Numbers</h2>
+    <h2>&#9989; Check My Numbers</h2>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your line &mdash; we'll look up the winning numbers automatically.</div>
     <div style="margin-bottom:12px;">
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
@@ -790,7 +790,7 @@
 
   <!-- Game selector -->
   <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;flex-wrap:wrap;">
-    <button id="pickBtn2" onclick="pickSetGame('pick2')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#10004;&#65039; Pick 2</button>
+    <button id="pickBtn2" onclick="pickSetGame('pick2')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#9996;&#65039; Pick 2</button>
     <button id="pickBtn3" onclick="pickSetGame('pick3')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#128290; Pick 3</button>
     <button id="pickBtn4" onclick="pickSetGame('pick4')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.4);background:rgba(99,91,255,0.08);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">&#127919; Pick 4</button>
     <button id="pickBtn5" onclick="pickSetGame('pick5')" style="padding:6px 14px;border-radius:8px;border:1px solid rgba(99,91,255,0.8);background:rgba(99,91,255,0.25);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">&#127922; Pick 5</button>
@@ -890,7 +890,7 @@
 
   <!-- Chat -->
   <div class="card">
-    <h2>&#129302; Payout Assistant</h2>
+    <h2>&#128172; Payout Assistant</h2>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
       <span class="chip" onclick="pickQuickAsk('What do I win for a straight?')">Straight prize</span>
       <span class="chip" onclick="pickQuickAsk('How does Fireball work?')">Fireball</span>
@@ -2480,7 +2480,7 @@ var pickCountdownInterval = null;
 
 var PICK_DIGITS = { pick2:2, pick3:3, pick4:4, pick5:5 };
 var PICK_LABELS = { pick2:'Pick 2', pick3:'Pick 3', pick4:'Pick 4', pick5:'Pick 5' };
-var PICK_ICONS  = { pick2:'&#10004;&#65039;', pick3:'&#128290;', pick4:'&#127919;', pick5:'&#127922;' };
+var PICK_ICONS  = { pick2:'&#9996;&#65039;', pick3:'&#128290;', pick4:'&#127919;', pick5:'&#127922;' };
 var PICK_DESCS  = {
   pick2: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 2 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!',
   pick3: 'AI-powered positional frequency analysis on the complete official Florida Lottery draw history. Pick 3 digits (0&ndash;9) for 50&cent; or $1 &mdash; <strong style="color:var(--text);">two draws every day</strong>: Midday (1:05 PM) &amp; Evening (11:15 PM) ET (Florida local time). Add Fireball for extra winning combinations!',
@@ -2494,7 +2494,7 @@ var PICK_LINKS  = {
   pick5: 'https://floridalottery.com/games/draw-games/pick-5'
 };
 
-function pickSetGame(g) {
+function pickSetGame(g, skipTabSync) {
   pickGame = g;
   var n = PICK_DIGITS[g];
   // Update header
@@ -2508,10 +2508,12 @@ function pickSetGame(g) {
     else { btn.style.background='rgba(99,91,255,0.08)'; btn.style.border='1px solid rgba(99,91,255,0.4)'; btn.style.color='var(--text)'; btn.style.fontWeight='600'; }
   });
   // Sync tab bar to the active Pick game
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
-  document.querySelectorAll('.tab').forEach(function(t){
-    if (t.getAttribute('onclick')==="switchTab('"+g+"')") t.classList.add('active');
-  });
+  if (!skipTabSync) {
+    document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+    document.querySelectorAll('.tab').forEach(function(t){
+      if (t.getAttribute('onclick')==="switchTab('"+g+"')") t.classList.add('active');
+    });
+  }
   // Rebuild check inputs
   var ci = document.getElementById('pickCheckInputs');
   ci.innerHTML = '';
@@ -2837,7 +2839,7 @@ function pickQuickAsk(q){document.getElementById('pickChatInput').value=q;pickSe
 document.getElementById('pickChatInput').addEventListener('keydown',function(e){if(e.key==='Enter')pickSendChat();});
 
 // Initialize Pick panel
-pickSetGame('pick5');
+pickSetGame('pick5', true);
 fetch('/nextdraw/pick').then(function(r){return r.json();}).then(function(d){pickStartCountdown(d);}).catch(function(){});
 fetch('/draws/pick/available?game=pick5').then(function(r){return r.json();}).then(function(d){pickRenderChips(d.dates);}).catch(function(){});
 

@@ -712,6 +712,43 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 - Raw emoji chars (e.g. `'🍀'`) and Unicode escapes (e.g. `'\u{1F4B0}'`) are safe with `textContent`.
 - Apply `innerHTML` to every game's `xSendEmail()` `.finally()` reset when building a new game.
 
+## Emoji Standards
+
+Every game and UI element has a canonical emoji. **Never mix emojis between games or UI sections.**
+
+### Game Icons (used in tab bar, panel header, generate button, PICK_ICONS)
+| Game | Emoji | HTML Entity |
+|------|-------|-------------|
+| Jackpot Triple Play | 🎱 | `&#127921;` |
+| Lotto X (Florida Lotto) | 🍀 | `🍀` (raw) |
+| Cash Pop | 💰 | `&#128176;` |
+| Fantasy 5 | 🌟 | `&#127775;` |
+| Pick 5 | 🎲 | `&#127922;` |
+| Pick 4 | 🎯 | `&#127919;` |
+| Pick 3 | 🔢 | `&#128290;` |
+| Pick 2 | ✌️ | `&#9996;&#65039;` |
+| Powerball | ⚡ | `&#9889;` |
+| Mega Millions | 💫 | `&#128171;` |
+
+### Card Section Emojis (consistent across ALL games)
+| Section | Emoji | HTML Entity |
+|---------|-------|-------------|
+| Check My Numbers | ✅ | `&#9989;` |
+| Payout Assistant | 💬 | `&#128172;` |
+| Recommended Lines/Numbers | 🏆 | `&#127942;` |
+| Recent Winning Numbers | 📅 | `&#128197;` |
+| Number Frequency | 📊 | `&#128202;` |
+| Email My Lines/Numbers | 📌 | `&#128140;` |
+| FAQ modal title | ❓ | `&#10067;` |
+| Email Settings | ⚙️ | `&#9881;` |
+
+### Rules
+- **Check My Numbers MUST use ✅ (`&#9989;`) on every game** — never 🎲 or any game icon
+- **Payout Assistant MUST use 💬 (`&#128172;`) on every game** — never 🤖 or any game icon
+- **Generate button label uses the game's own icon** — `{game emoji} Generate Lines`
+- **Tab bar, panel header icon, generate button, and PICK_ICONS must all use the same emoji for each game**
+- **When adding a new game**: assign it a unique emoji not used by any existing game, add it to this table, use it consistently in all 4 places above
+
 ## HTTP Cache-Control Headers
 
 Three middleware layers ensure browsers and proxies never cache stale responses:
@@ -830,7 +867,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20f`
+Latest stable: `backups/stable-2026-11-20g`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
