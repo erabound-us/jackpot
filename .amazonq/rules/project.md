@@ -806,21 +806,28 @@ When a user clicks a new date chip before the previous lookup resolves, abort th
 
 ### Server-Side Concurrency
 
-**Scraper deduplication (`_scrapeInFlight`)**
-Concurrent requests for the same game+date would each launch a Chrome instance, risking OOM. `_scrapeInFlight` is a key→Promise map that deduplicates concurrent scrapes:
+**Scraper deduplication (`_scrapeInFlight`) + global lock (`_scrapeGlobalLock`)**
+Concurrent requests for the same game+date would each launch a Chrome instance, risking OOM. Two layers of protection:
+1. `_scrapeInFlight` — key→Promise map, deduplicates concurrent scrapes for the **same** game+date
+2. `_scrapeGlobalLock` — promise chain, serializes all scrapes globally so only **one Chrome instance runs at a time** across all games and dates
+
 ```js
 const _scrapeInFlight = {};
+let _scrapeGlobalLock = Promise.resolve();
 async function scrapeFlDraws(game, dateStr, drawType) {
   const _key = game + '|' + dateStr + '|' + (drawType || '');
-  if (_scrapeInFlight[_key]) return _scrapeInFlight[_key]; // reuse in-flight promise
-  _scrapeInFlight[_key] = _scrapeFlDrawsImpl(...).finally(() => delete _scrapeInFlight[_key]);
+  if (_scrapeInFlight[_key]) return _scrapeInFlight[_key]; // same date already in flight
+  // Queue behind global lock -- only one Chrome at a time
+  _scrapeInFlight[_key] = _scrapeGlobalLock
+    .then(() => _scrapeFlDrawsImpl(game, dateStr, drawType))
+    .finally(() => { delete _scrapeInFlight[_key]; });
+  _scrapeGlobalLock = _scrapeInFlight[_key].catch(() => {});
   return _scrapeInFlight[_key];
 }
 ```
-- The actual implementation is in `_scrapeFlDrawsImpl`
 - `_scrapeCache` (result cache) prevents re-scraping already-fetched dates
-- `_scrapeInFlight` prevents concurrent Chrome launches for the same date
-- Together they ensure at most one Chrome instance per unique game+date+drawType at any time
+- Together: same date → deduplicated; different dates → serialized; cached dates → instant
+- **Never bypass `scrapeFlDraws`** — always call the outer function, never `_scrapeFlDrawsImpl` directly
 
 **PDF parse serialization (`pickParsePromise`) and JSON caches**
 `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io. The solution is JSON caches -- no PDF parsing on Fly at all:
@@ -957,7 +964,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20l`
+Latest stable: `backups/stable-2026-11-20m`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)

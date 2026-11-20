@@ -1905,6 +1905,7 @@ app.post('/refresh/fantasy5', (req, res) => {
 let _browser = null;
 const _scrapeCache = {};
 const _scrapeInFlight = {}; // key -> Promise, deduplicates concurrent scrapes for same date
+let _scrapeGlobalLock = Promise.resolve(); // ensures only one Chrome instance runs at a time
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
     _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
@@ -1940,7 +1941,9 @@ function extractAndCacheJackpot(game, html) {
 async function scrapeFlDraws(game, dateStr, drawType) {
   const _key = game + '|' + dateStr + '|' + (drawType || '');
   if (_scrapeInFlight[_key]) return _scrapeInFlight[_key];
-  _scrapeInFlight[_key] = _scrapeFlDrawsImpl(game, dateStr, drawType).finally(function() { delete _scrapeInFlight[_key]; });
+  // Serialize through global lock -- only one Chrome instance at a time across all games/dates
+  _scrapeInFlight[_key] = _scrapeGlobalLock.then(() => _scrapeFlDrawsImpl(game, dateStr, drawType)).finally(function() { delete _scrapeInFlight[_key]; });
+  _scrapeGlobalLock = _scrapeInFlight[_key].catch(() => {});
   return _scrapeInFlight[_key];
 }
 async function _scrapeFlDrawsImpl(game, dateStr, drawType) {
