@@ -2171,7 +2171,17 @@ app.get('/draws/fantasy5/available', async (req, res) => {
       dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    res.json({ dates });
+    // Stale check: F5 draws at 1:05 PM and 11:15 PM ET every day
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const midday = new Date(nowET); midday.setHours(13, 5, 0, 0);
+    const expectedTs = nowET >= midday ? midday.getTime() : (midday.getTime() - 86400000);
+    if (!draws.length || draws[0].ts < expectedTs) {
+      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+      const dy = String(nowET.getDate()).padStart(2, '0');
+      const todayStr = mo + '/' + dy + '/' + nowET.getFullYear();
+      if (!dates.includes(todayStr)) dates.unshift(todayStr);
+    }
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/cashpop/available', async (req, res) => {
