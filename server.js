@@ -2356,24 +2356,28 @@ app.get('/latestdraw/cashpop', async (req, res) => {
 });
 async function scrapeJackpot(game) {
   const now = Date.now();
-  if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return _jackpotCache[game].amount;
-  if (!JACKPOT_GAME_URLS[game]) return null;
-  let page;
-  try {
-    const browser = await getBrowser();
-    page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0');
-    await page.goto(JACKPOT_GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 15000 });
-    const html = await page.content();
-    await page.close(); page = null;
-    closeBrowser();
-    extractAndCacheJackpot(game, html);
-    return _jackpotCache[game] ? _jackpotCache[game].amount : null;
-  } catch(e) {
-    if (page) { try { await page.close(); } catch(_) {} }
-    closeBrowser();
-    return null;
+  const cached = _jackpotCache[game];
+  if (cached && now - cached.ts < 5 * 60 * 1000) return cached.amount;
+  // Cache cold -- launch Puppeteer to fetch the page
+  const url = JACKPOT_GAME_URLS[game];
+  if (!url) return null;
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      try { await page.waitForSelector('.game-numbers__number', { timeout: 4000 }); } catch(_) {}
+      const html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot(game, html);
+      return _jackpotCache[game] ? _jackpotCache[game].amount : null;
+    } catch(e) {
+      console.warn('Jackpot scrape attempt ' + (_try+1) + ' failed for ' + game + ': ' + e.message);
+      if (_try === 0) { _browser = null; }
+    }
   }
+  return null;
 }
 
 app.get('/jackpot', async (req, res) => {
