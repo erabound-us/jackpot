@@ -968,7 +968,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20q`
+Latest stable: `backups/stable-2026-11-20r`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -1163,6 +1163,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
 - **General rule**: ALL `/draws/<game>/available` endpoints MUST include stale-detection. Daily-draw games (F5, CP, Pick) prepend today/yesterday based on first draw cutoff. Specific-day games (JTP Tue/Fri, LX Wed/Sat) walk back to find the most recent draw day that has passed its 11:15 PM ET cutoff and prepend it if missing.
 - **Gap-fill, not single-date prepend**: if the JSON/PDF is multiple days stale (e.g. after a long outage or missed delta), a single-date prepend only fixes the most recent gap. Use a loop that walks back from the most recent draw day until it hits a date already in the list, prepending all missing dates. Cap at 7 iterations to prevent infinite loops.
+- **CRITICAL: Never speculatively prepend today's date for PDF-backed games (CP, F5, Pick)** -- the PDF only updates once per day (end of day). If today's data isn't in the JSON yet, it means the PDF hasn't updated. Prepending today would trigger the scraper which is unstable. Instead, just return what's in the JSON -- `appendXxxDeltas()` will add today's data automatically once the PDF updates tonight.
 - **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
   - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
   - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.

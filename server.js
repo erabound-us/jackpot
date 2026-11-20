@@ -2257,23 +2257,8 @@ app.get('/draws/fantasy5/available', async (req, res) => {
       dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    // Stale check: fill in ALL missing draw dates between last JSON entry and now.
-    // F5 draws every day at 1:05 PM (Midday) and 11:15 PM (Evening) ET.
-    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
-    // Walk back from most recent draw day to fill gaps
-    const check = new Date(nowET >= middayCutoff ? nowET : new Date(nowET.getTime() - 86400000));
-    check.setHours(0, 0, 0, 0);
-    const toAdd = [];
-    for (let i = 0; i < 7; i++) {
-      const mo = String(check.getMonth() + 1).padStart(2, '0');
-      const dy = String(check.getDate()).padStart(2, '0');
-      const dateStr = mo + '/' + dy + '/' + check.getFullYear();
-      if (dates.includes(dateStr)) break; // reached existing data
-      toAdd.push(dateStr);
-      check.setDate(check.getDate() - 1);
-    }
-    toAdd.reverse().forEach(d => dates.unshift(d));
+    // Return the 5 most recent dates from the JSON.
+    // appendFantasy5Deltas() keeps JSON current after each draw -- no speculative gap-fill needed.
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2281,22 +2266,9 @@ app.get('/draws/cashpop/available', async (req, res) => {
   try {
     const draws = getCpDraws();
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
-    // Stale check: fill ALL missing draw dates between last JSON entry and now.
-    // CP draws every day, first draw Morning 7:29 AM ET.
-    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const morningCutoff = new Date(nowET); morningCutoff.setHours(7, 29, 0, 0);
-    const cpCheck = new Date(nowET >= morningCutoff ? nowET : new Date(nowET.getTime() - 86400000));
-    cpCheck.setHours(0, 0, 0, 0);
-    const cpToAdd = [];
-    for (let i = 0; i < 7; i++) {
-      const mo = String(cpCheck.getMonth() + 1).padStart(2, '0');
-      const dy = String(cpCheck.getDate()).padStart(2, '0');
-      const dateStr = mo + '/' + dy + '/' + cpCheck.getFullYear();
-      if (dates.includes(dateStr)) break;
-      cpToAdd.push(dateStr);
-      cpCheck.setDate(cpCheck.getDate() - 1);
-    }
-    cpToAdd.reverse().forEach(d => dates.unshift(d));
+    // Return the 5 most recent dates from the JSON.
+    // CP PDF updates once per day (end of day) -- today's data won't appear until appendCpDeltas() runs tonight.
+    // Don't prepend today speculatively -- it would trigger the scraper which is unstable.
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2828,22 +2800,8 @@ app.get('/draws/pick/available', async (req, res) => {
       dates.push(d.date);
       if (dates.length >= 5) break;
     }
-    // Stale check: fill ALL missing draw dates between last PDF entry and now.
-    // Pick draws every day, first draw Midday 1:05 PM ET.
-    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
-    const pickCheck = new Date(nowET >= middayCutoff ? nowET : new Date(nowET.getTime() - 86400000));
-    pickCheck.setHours(0, 0, 0, 0);
-    const pickToAdd = [];
-    for (let i = 0; i < 7; i++) {
-      const mo = String(pickCheck.getMonth() + 1).padStart(2, '0');
-      const dy = String(pickCheck.getDate()).padStart(2, '0');
-      const dateStr = mo + '/' + dy + '/' + pickCheck.getFullYear();
-      if (dates.includes(dateStr)) break;
-      pickToAdd.push(dateStr);
-      pickCheck.setDate(pickCheck.getDate() - 1);
-    }
-    pickToAdd.reverse().forEach(d => dates.unshift(d));
+    // Return the 5 most recent dates from the PDF.
+    // Pick PDFs update after each draw -- no speculative gap-fill needed.
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
