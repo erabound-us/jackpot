@@ -1380,8 +1380,8 @@ async function start() {
     try { getLottoXDraws(); getFantasy5Draws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
     _serverReady = true;
     console.log('Server ready.');
-    // Download PDFs in background for delta detection on next refresh
-    downloadPDFs().catch(() => {});
+    // Download PDFs then run delta detection to catch any draws missed since last deploy
+    downloadPDFs().then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
   });
 }
 

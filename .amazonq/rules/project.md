@@ -563,9 +563,9 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 1. `server.listen()` -- health check passes immediately
 2. `getLottoXDraws()` + `getFantasy5Draws()` -- read JSON files into memory (instant, <1ms)
 3. `_serverReady = true` -- gate opens immediately, users can access all routes
-4. `downloadPDFs()` -- downloads all PDFs in background (needed for delta detection on next refresh)
+4. `downloadPDFs()` -- downloads all PDFs in background, then runs `appendLottoXDeltas()` + `appendFantasy5Deltas()` sequentially to catch any draws missed since the last deploy
 
-**appendXxxDeltas() is NOT called at startup** -- the JSON in the Docker image is already current. New draws only arrive after 11:15 PM ET; the scheduled refresh handles delta detection then. Calling appendXxxDeltas() at startup would trigger a full PDF parse on every deploy for no benefit.
+**Why deltas run at startup**: every deploy resets the server with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after ensures the JSON is current without any manual intervention. The mtime guard in each function makes this a no-op if the PDF hasn't changed since the last delta run -- so it's safe and cheap on normal restarts.
 
 **mtime guard in appendXxxDeltas()**: stores `lxLastPdfMtime` / `f5LastPdfMtime`. If the PDF mtime hasn't changed since the last delta check, the parse is skipped entirely. This prevents redundant parses when refresh is called multiple times without a new draw.
 
