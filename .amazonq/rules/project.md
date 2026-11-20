@@ -145,7 +145,7 @@ Each row: `MM/DD/YYYY  D[-D...] FB N  D[-D...] FB N` (Midday then Evening, 4-dig
 - **Pick PDFs use 4-digit years** (`MM/DD/YYYY`) unlike JTP/LX/F5 which use 2-digit years (`MM/DD/YY`)
 - **Date comparison in `/draws/pick` MUST use `stripLeadingZeros()`** -- date picker sends zero-padded `11/01/2026` but PDF stores `11/1/2026`. Direct string comparison will miss dates with single-digit days/months.
 - `getPickText(game)` uses top-level `fs` (not inline `require('fs')`) -- always use the module-level import
-- **`parsePickHistoryPDF` regex uses `new RegExp(string)` -- backslashes in the string need single-escaping** (`'(\d)'` not `'(\\d)'`). Double-escaping (`\\d`) produces a literal `\d` in the regex, not a digit class, causing most rows to silently not match. Always test with a known PDF line before deploying.
+- **`parsePickHistoryPDF` regex uses `new RegExp(string)` -- backslashes in the string need single-escaping** (`'(\\d)'` not `'(\d)'`). In a JS source file, `'(\\d)'` is two backslashes which at runtime becomes the string `(\d)`, which `new RegExp()` interprets as a digit class. Writing `'(\d)'` in source produces the string `(d)` at runtime (backslash is silently dropped as an unrecognized escape), causing all rows to silently not match. Always test with a known PDF line before deploying.
 
 ### PICK Scoring
 - Positional frequency: how often each digit 0-9 appears at each position (primary signal)

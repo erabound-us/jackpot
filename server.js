@@ -2513,8 +2513,8 @@ async function getPickText(game) {
 function parsePickHistoryPDF(text, numDigits) {
   const draws = [];
   // Each row: DATE  D[-D...] FB N  D[-D...] FB N  (midday then evening)
-  const digitPat = Array(numDigits).fill('(\d)').join('\s*-\s*');
-  const re = new RegExp('(\d{1,2}/\d{1,2}/\d{4})\s+' + digitPat + '\s+FB\s+(\d)\s+' + digitPat + '\s+FB\s+(\d)', 'g');
+  const digitPat = Array(numDigits).fill('(\\d)').join('\\s*-\\s*');
+  const re = new RegExp('(\\d{1,2}/\\d{1,2}/\\d{4})\\s+' + digitPat + '\\s+FB\\s+(\\d)\\s+' + digitPat + '\\s+FB\\s+(\\d)', 'g');
   let m;
   while ((m = re.exec(text)) !== null) {
     const date = m[1];
