@@ -439,7 +439,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 ### /latestdraw/* endpoints
 - Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
 - PDF/JSON is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
-- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw) — PDF only, no scraper needed (JTP draws Tue/Fri, PDF updates same night)
+- `/latestdraw/jtp` → `{ date, numbers }` (6 numbers, most recent draw) — PDF only, no scraper needed
 - `/latestdraw/lottox` → `{ date, numbers }` — JSON cache first; if newest draw is older than the most recent expected Wed/Sat draw, falls back to scraper
 - `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache first; if newest draw is more than a day old, falls back to scraping yesterday's draws
 - `/latestdraw/cashpop` → `{ date, numbers }` — PDF first; if newest draw is more than a day old, falls back to scraping today's date
@@ -451,6 +451,7 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
   - Compute the most recent expected draw time in ET
   - If `draws[0].ts < expectedDrawTime`, scrape the most recent date
   - Always wrap scraper call in `.catch(() => null)` — fall back to JSON if scrape fails
+  - **CRITICAL: Always check `_scrapeCache[cacheKey]` BEFORE calling `scrapeFlDraws()`** — `latestdraw/*` is excluded from rate limiting and called on every page load; if the scraper runs on every call it will OOM the server. The `_scrapeCache` key format is `game|MM/DD/YYYY|` (empty drawType for cashpop). Pattern: `const sc = _scrapeCache[cacheKey] || await scrapeFlDraws(...).catch(() => null);`
   - For Cash Pop: scrape today's date; rebuild `numbers` array from `sessions` in session order
   - For Fantasy 5: scrape yesterday's evening + midday in parallel; return scraped if found
 
@@ -989,6 +990,8 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - `/latestdraw/cashpop` — PDF only, returns `{ date, numbers }` (5 numbers)
 - Frontend on page load: sets date input + session dropdown to latest draw, shows winning number in **gold**
 - Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
+- **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
+- **`/draws/cashpop/available` stale-detection**: if the newest PDF draw is older than yesterday's last draw time (10:29 PM ET), today's date is prepended to the returned list. This mirrors the same stale-detection logic in `/latestdraw/cashpop` so today's date always appears in the chips even when the PDF hasn't updated yet.
 
 ## Draw Session / Draw Type Selectors — Rules
 - **Never add a "Latest" option** to any draw type or session dropdown — it confuses players who expect to see results for a specific draw

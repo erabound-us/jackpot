@@ -2177,7 +2177,16 @@ app.get('/draws/fantasy5/available', async (req, res) => {
 app.get('/draws/cashpop/available', async (req, res) => {
   try {
     const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
-    res.json({ dates: draws.slice(0, 5).map(d => expandYear(d.date)) });
+    const dates = draws.slice(0, 5).map(d => expandYear(d.date));
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const yesterdayET = new Date(nowET); yesterdayET.setDate(yesterdayET.getDate() - 1); yesterdayET.setHours(22, 29, 0, 0);
+    if (!draws.length || draws[0].ts < yesterdayET.getTime()) {
+      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+      const dy = String(nowET.getDate()).padStart(2, '0');
+      const todayStr = mo + '/' + dy + '/' + nowET.getFullYear();
+      if (!dates.includes(todayStr)) dates.unshift(todayStr);
+    }
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 

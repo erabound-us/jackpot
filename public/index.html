@@ -1877,7 +1877,7 @@ function cpClearCheck() {
   document.getElementById('cpMultiplier').value = '';
   document.getElementById('cpCheckResult').innerHTML = '';
   cpLastWin = null;
-  if (cpLatestDate) { document.getElementById('cpDrawDate').value = cpLatestDate; document.getElementById('cpDrawSession').value = cpLatestSession || 'Morning'; cpLookupDraw(); }
+  if (cpLatestDate) { document.getElementById('cpDrawDate').value = cpLatestDate; document.getElementById('cpDrawSession').value = cpLatestSession || 'Morning'; cpLookupDraw(true); }
 }
 
 function cpAppendMsg(role, text) {
@@ -1890,7 +1890,7 @@ function cpAppendMsg(role, text) {
   return div;
 }
 
-function cpLookupDraw() {
+function cpLookupDraw(forceLatest) {
   var dateVal = document.getElementById('cpDrawDate').value;
   var session = document.getElementById('cpDrawSession').value;
   var msg = document.getElementById('cpDrawLookupMsg');
@@ -1923,7 +1923,7 @@ function cpLookupDraw() {
       if (inp) inp.value = target.number;
       msg.textContent = '';
       display.style.display = 'block';
-      var _isLatest = cpLatestDate && document.getElementById('cpDrawDate').value === cpLatestDate;
+      var _isLatest = forceLatest || (cpLatestDate && document.getElementById('cpDrawDate').value === cpLatestDate);
       var _ballStyle = _isLatest ? 'background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)' : 'background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4)';
       document.getElementById('cpDrawnBalls').innerHTML =
         '<div class="hball" style="' + _ballStyle + ';width:36px;height:36px;font-size:13px;">' + target.number + '</div>' +
@@ -2388,7 +2388,13 @@ function cpPickDate(d){var p=d.split('/');document.getElementById('cpDrawDate').
 fetch('/draws/jtp/available').then(function(r){return r.json();}).then(function(d){renderDateChips('jtpDateChips',d.dates,'jtpPickDate');}).catch(function(){});
 fetch('/draws/lottox/available').then(function(r){return r.json();}).then(function(d){renderDateChips('lxDateChips',d.dates,'lxPickDate');}).catch(function(){});
 fetch('/draws/fantasy5/available').then(function(r){return r.json();}).then(function(d){renderDateChips('f5DateChips',d.dates,'f5PickDate');}).catch(function(){});
-fetch('/draws/cashpop/available').then(function(r){return r.json();}).then(function(d){renderDateChips('cpDateChips',d.dates,'cpPickDate');}).catch(function(){});
+fetch('/draws/cashpop/available').then(function(r){return r.json();}).then(function(d){
+  renderDateChips('cpDateChips',d.dates,'cpPickDate');
+  if (!cpLatestDate && d.dates && d.dates.length) {
+    var p=d.dates[0].split('/'); var yr=parseInt(p[2]); if(yr<100)yr+=2000;
+    cpLatestDate=yr+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');
+  }
+}).catch(function(){});
 
 setInterval(function() {
   fetch('/nextdraw').then(function(r){return r.json();}).then(function(d){startCountdown({nextDraw:d});}).catch(function(){});
@@ -2445,7 +2451,7 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
   var p=d.date.split('/'); var yr=parseInt(p[2]); if(yr<100)yr+=2000;
   cpLatestDate=yr+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');
   document.getElementById('cpDrawDate').value=cpLatestDate;
-  cpLookupDraw();
+  cpLookupDraw(true);
 }).catch(function(){});
 
 // Fetch live jackpot amounts for JTP, Lotto X, Fantasy 5
