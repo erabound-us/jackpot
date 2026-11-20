@@ -587,7 +587,7 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 - When adding a new game (initial JSON build)
 - After a long outage where many draws were missed and the delta would be large
 - Never needs to run on Fly -- JSON is always current via deltas
-- **`generate_draw_cache.js` covers all 4 JSON-cached games**: JTP, Cash Pop, Lotto X, Fantasy 5
+- **`generate_draw_cache.js` covers all 8 JSON-cached games**: JTP, Cash Pop, Lotto X, Fantasy 5, Pick 2, Pick 3, Pick 4, Pick 5
 - **CRITICAL: parsers in `generate_draw_cache.js` MUST match the server parsers in `server.js` exactly** -- if they diverge, the initial JSON will have wrong/missing data. When updating a server parser, update `generate_draw_cache.js` too. Always verify output has consecutive dates before committing.
 
 ### When adding a new game with PDF > 1 MB
@@ -634,10 +634,10 @@ Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, th
 | jtp.pdf (~65KB text) | ~280ms | ~1s | Yes (JSON) | No |
 | jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
 | cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | Yes (JSON) | No |
-| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~4s | Yes (mtime) | No |
-| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~5s | Yes (mtime) | No |
-| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~5s | Yes (mtime) | No |
-| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~5s | Yes (mtime) | No |
+| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~25s on Fly | Yes (JSON) | No |
+| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
+| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
+| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
 | lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | Yes | Yes |
 | fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | Yes | Yes |
 

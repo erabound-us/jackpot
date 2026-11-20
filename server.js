@@ -1385,12 +1385,7 @@ async function start() {
     try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
     _serverReady = true;
     console.log('Server ready.');
-    // Warm all 4 Pick PDF caches sequentially right after server is ready
-    // pickParsePromise already serializes per-game, but we chain them to avoid concurrent parses
-    ['pick2','pick3','pick4','pick5'].reduce(
-      (p, g) => p.then(() => getPickText(g).catch(() => {})),
-      Promise.resolve()
-    );
+    // Pick games now use JSON caches (getPickDraws) -- no PDF warming needed
     downloadPDFs()
       .then(() => appendJtpDeltas()).catch(() => {})
       .then(() => appendCpDeltas()).catch(() => {})
@@ -2495,6 +2490,18 @@ function getBoxWays(digits) {
 // JSON draw caches for JTP and Cash Pop -- no PDF parsing on Fly (same pattern as LX/F5)
 const JTP_DRAWS_PATH = path.join(__dirname, 'jtp_draws.json');
 const CP_DRAWS_PATH  = path.join(__dirname, 'cashpop_draws.json');
+const PICK_DRAWS_PATHS = {
+  pick2: path.join(__dirname, 'pick2_draws.json'),
+  pick3: path.join(__dirname, 'pick3_draws.json'),
+  pick4: path.join(__dirname, 'pick4_draws.json'),
+  pick5: path.join(__dirname, 'pick5_draws.json'),
+};
+let pickDrawsCache = { pick2: null, pick3: null, pick4: null, pick5: null };
+
+function getPickDraws(game) {
+  if (!pickDrawsCache[game]) pickDrawsCache[game] = JSON.parse(fs.readFileSync(PICK_DRAWS_PATHS[game], 'utf8'));
+  return pickDrawsCache[game];
+}
 const JACKPOT_CACHE_PATH = path.join(__dirname, 'jackpot_cache.json');
 let jtpDrawsCache = null;
 let cpDrawsCache  = null;
@@ -2793,11 +2800,9 @@ app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
 
 app.get('/latestdraw/pick', async (req, res) => {
   const game = (req.query.game || 'pick5').toLowerCase();
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game. Use pick2, pick3, pick4, or pick5.' });
+  if (!PICK_DRAWS_PATHS[game]) return res.status(400).json({ error: 'Invalid game. Use pick2, pick3, pick4, or pick5.' });
   try {
-    const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
+    const draws = getPickDraws(game);
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const evening = draws.find(d => d.drawType === 'EVENING');
     const midday  = draws.find(d => d.drawType === 'MIDDAY');
@@ -2816,8 +2821,7 @@ app.get('/draws/pick', async (req, res) => {
   const type = (draw || '').toUpperCase();
   const numDigits = parseInt(game.replace('pick',''));
   try {
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
+    const draws = getPickDraws(game);
     const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, digits: match.digits, fireball: match.fireball });
   } catch(e) {}
@@ -2827,19 +2831,15 @@ app.get('/draws/pick', async (req, res) => {
 
 app.get('/draws/pick/available', async (req, res) => {
   const game = (req.query.game || 'pick5').toLowerCase();
-  if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
+  if (!PICK_DRAWS_PATHS[game]) return res.status(400).json({ error: 'Invalid game.' });
   try {
-    const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
+    const draws = getPickDraws(game);
     const seen = new Set(); const dates = [];
     for (const d of draws) {
       if (seen.has(d.date)) continue; seen.add(d.date);
-      dates.push(d.date);
+      dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    // Return the 5 most recent dates from the PDF.
-    // Pick PDFs update after each draw -- no speculative gap-fill needed.
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2849,8 +2849,7 @@ app.get('/analyze/pick', async (req, res) => {
   if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
   try {
     const numDigits = parseInt(game.replace('pick',''));
-    const text = await getPickText(game);
-    const draws = parsePickHistoryPDF(text, numDigits);
+    const draws = getPickDraws(game);
     if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
     const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 50);
     const sid = req.query.sid || null;
@@ -2902,6 +2901,29 @@ app.post('/chat/pick', (req, res) => {
   res.json({ reply: chatReplyPick(message, context) });
 });
 
+// Delta updaters for Pick JSON caches
+const pickLastPdfMtime = { pick2: null, pick3: null, pick4: null, pick5: null };
+
+async function appendPickDeltas(game) {
+  const pdfPath = PDF_PATHS_PICK[game];
+  let mtime;
+  try { mtime = fs.statSync(pdfPath).mtimeMs; } catch(e) { return; }
+  if (mtime === pickLastPdfMtime[game]) { console.log(game + ': PDF unchanged, skipping delta.'); return; }
+  const existing = getPickDraws(game);
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await getPickText(game); } catch(e) { return; }
+  pickLastPdfMtime[game] = mtime;
+  const numDigits = parseInt(game.replace('pick', ''));
+  const all = parsePickHistoryPDF(text, numDigits);
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log(game + ': no new draws.'); return; }
+  const merged = [...newDraws, ...existing].slice(0, 500);
+  pickDrawsCache[game] = merged;
+  fs.writeFileSync(PICK_DRAWS_PATHS[game], JSON.stringify(merged, null, 2));
+  console.log(game + ': appended ' + newDraws.length + ' new draws.');
+}
+
 function schedulePostDrawRefreshes() {
   const f5Times  = [[13, 10], [23, 20]];
   const pickTimes = [[13, 10], [23, 20]]; // Pick games draw same times as Fantasy 5
@@ -2917,7 +2939,7 @@ function schedulePostDrawRefreshes() {
 
   pickTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
     Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
+      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
     });
     console.log('Post-draw refresh queued: Pick 2-5');
   }));

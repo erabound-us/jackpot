@@ -95,6 +95,10 @@ function parseFantasy5(text) {
   return draws.filter(d => d.ts <= Date.now() && d.ts > new Date('2000-01-01').getTime());
 }
 
+// Must match parsePickHistoryPDF in server.js exactly
+// NOTE: The regex must use single backslash in source (\d not \\d)
+// This file uses eval() to extract the parser from server.js to guarantee they match
+
 async function main() {
   console.log('Generating JTP draw cache...');
   const jtpText = await extractPDFText(path.join(__dirname, 'jtp.pdf'));
@@ -119,6 +123,22 @@ async function main() {
   const f5Draws = parseFantasy5(f5Text);
   fs.writeFileSync(path.join(__dirname, 'fantasy5_draws.json'), JSON.stringify(f5Draws.slice(0, 500), null, 2));
   console.log(`  Wrote ${Math.min(f5Draws.length, 500)} draws (of ${f5Draws.length} total) -> fantasy5_draws.json (latest: ${f5Draws[0].date} ${f5Draws[0].drawType})`);
+
+  // Pick games -- extract parser from server.js to guarantee exact match
+  const serverSrc = require('fs').readFileSync(require('path').join(__dirname, 'server.js'), 'utf8');
+  const fnStart = serverSrc.indexOf('function parsePickHistoryPDF');
+  const fnEnd = serverSrc.indexOf('\nfunction scorePickDigits');
+  eval(serverSrc.substring(fnStart, fnEnd));
+
+  for (const game of ['pick2', 'pick3', 'pick4', 'pick5']) {
+    const numDigits = parseInt(game.replace('pick', ''));
+    const pdfPath = path.join(__dirname, game + '_winning-numbers-history.pdf');
+    console.log('Generating ' + game + ' cache...');
+    const text = await extractPDFText(pdfPath);
+    const draws = parsePickHistoryPDF(text, numDigits);
+    fs.writeFileSync(path.join(__dirname, game + '_draws.json'), JSON.stringify(draws.slice(0, 500), null, 2));
+    console.log('  Wrote ' + Math.min(draws.length, 500) + ' draws -> ' + game + '_draws.json (latest: ' + (draws[0] ? draws[0].date + ' ' + draws[0].drawType : 'none') + ')');
+  }
 
   console.log('Done.');
 }
