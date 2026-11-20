@@ -828,6 +828,7 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - `_scrapeCache` (result cache) prevents re-scraping already-fetched dates
 - Together: same date → deduplicated; different dates → serialized; cached dates → instant
 - **Never bypass `scrapeFlDraws`** — always call the outer function, never `_scrapeFlDrawsImpl` directly
+- **Draw-time guard before every scraper call**: before calling `scrapeFlDraws`, verify the draw has actually occurred in ET. If the requested date is today and the draw time hasn't passed yet, return 404 immediately — no Chrome launch. Draw cutoffs: JTP/LX 11:15 PM ET; F5 Midday 1:05 PM / Evening 11:15 PM ET; CP per-session (Morning 7:29, Matinee 11:29, Afternoon 2:29, Evening 6:29, Late Night 10:29 ET). Future dates always return 404 immediately.
 
 **PDF parse serialization (`pickParsePromise`) and JSON caches**
 `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io. The solution is JSON caches -- no PDF parsing on Fly at all:
@@ -964,7 +965,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20m`
+Latest stable: `backups/stable-2026-11-20n`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -1158,6 +1159,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
 - **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
 - **General rule**: ALL `/draws/<game>/available` endpoints MUST include stale-detection. Daily-draw games (F5, CP, Pick) prepend today/yesterday based on first draw cutoff. Specific-day games (JTP Tue/Fri, LX Wed/Sat) walk back to find the most recent draw day that has passed its 11:15 PM ET cutoff and prepend it if missing.
+- **Gap-fill, not single-date prepend**: if the JSON/PDF is multiple days stale (e.g. after a long outage or missed delta), a single-date prepend only fixes the most recent gap. Use a loop that walks back from the most recent draw day until it hits a date already in the list, prepending all missing dates. Cap at 7 iterations to prevent infinite loops.
 - **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
   - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
   - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.

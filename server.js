@@ -2072,6 +2072,15 @@ app.get('/draws/jtp', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
+  // Guard: only scrape if the draw has actually occurred (JTP draws Tue/Fri 11:15 PM ET)
+  const _nowET_jtp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const _reqParts_jtp = date.split('/');
+  const _yr_jtp = parseInt(_reqParts_jtp[2]);
+  const _reqDate_jtp = new Date(_yr_jtp < 100 ? 2000 + _yr_jtp : _yr_jtp, parseInt(_reqParts_jtp[0]) - 1, parseInt(_reqParts_jtp[1]));
+  const _isToday_jtp = _reqDate_jtp.toDateString() === _nowET_jtp.toDateString();
+  if (_reqDate_jtp > _nowET_jtp) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
+  if (_isToday_jtp && (_nowET_jtp.getHours() * 60 + _nowET_jtp.getMinutes()) < 23 * 60 + 15)
+    return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.jtp });
   const scraped = await scrapeFlDraws('jtp', date, null);
   if (scraped) return res.json({ date, numbers: scraped.numbers });
   delete _availCache['jtp']; // invalidate chips cache so stale dates clear
@@ -2088,6 +2097,16 @@ app.get('/draws/lottox', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
+  // Guard: only scrape if the draw has actually occurred (LX draws Wed/Sat 11:15 PM ET)
+  const _nowET_lx = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const _reqParts_lx = date.split('/');
+  const _yr_lx = parseInt(_reqParts_lx[2]);
+  const _reqDate_lx = new Date(_yr_lx < 100 ? 2000 + _yr_lx : _yr_lx, parseInt(_reqParts_lx[0]) - 1, parseInt(_reqParts_lx[1]));
+  const _isToday_lx = _reqDate_lx.toDateString() === _nowET_lx.toDateString();
+  const _isFuture_lx = _reqDate_lx > _nowET_lx;
+  if (_isFuture_lx) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
+  if (_isToday_lx && (_nowET_lx.getHours() * 60 + _nowET_lx.getMinutes()) < 23 * 60 + 15)
+    return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.lottox });
   const scraped = await scrapeFlDraws('lottox', date, null);
   if (scraped) return res.json({ date, numbers: scraped.numbers });
   delete _availCache['lottox'];
@@ -2104,6 +2123,18 @@ app.get('/draws/fantasy5', async (req, res) => {
     const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
+  // Guard: only scrape if the requested draw has actually occurred
+  const _nowET_f5 = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const _reqParts_f5 = date.split('/');
+  const _reqDate_f5 = new Date(_reqParts_f5[2].length === 2 ? '20' + _reqParts_f5[2] : _reqParts_f5[2], parseInt(_reqParts_f5[0]) - 1, parseInt(_reqParts_f5[1]));
+  const _isToday_f5 = _reqDate_f5.toDateString() === _nowET_f5.toDateString();
+  const _isFuture_f5 = _reqDate_f5 > _nowET_f5;
+  if (_isFuture_f5) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
+  if (_isToday_f5) {
+    const _cutoff_f5 = type === 'EVENING' ? 23 * 60 + 15 : 13 * 60 + 5;
+    const _nowMins_f5 = _nowET_f5.getHours() * 60 + _nowET_f5.getMinutes();
+    if (_nowMins_f5 < _cutoff_f5) return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
+  }
   const scraped = await scrapeFlDraws('fantasy5', date, type);
   if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
   delete _availCache['fantasy5'];
@@ -2218,26 +2249,23 @@ app.get('/draws/fantasy5/available', async (req, res) => {
       dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    // Stale check: only prepend a date if a draw has actually occurred but isn't in the JSON yet.
-    // F5 draws at 1:05 PM (Midday) and 11:15 PM (Evening) ET.
-    // Before 1:05 PM: most recent draw was yesterday Evening -- check if yesterday is in dates.
-    // After 1:05 PM: most recent draw was today Midday -- check if today is in dates.
+    // Stale check: fill in ALL missing draw dates between last JSON entry and now.
+    // F5 draws every day at 1:05 PM (Midday) and 11:15 PM (Evening) ET.
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
-    let missingDate;
-    if (nowET >= middayCutoff) {
-      // Today's Midday has drawn -- today should be in chips
-      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
-      const dy = String(nowET.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
-    } else {
-      // Before today's Midday -- yesterday Evening was the last draw
-      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
-      const mo = String(yest.getMonth() + 1).padStart(2, '0');
-      const dy = String(yest.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
+    // Walk back from most recent draw day to fill gaps
+    const check = new Date(nowET >= middayCutoff ? nowET : new Date(nowET.getTime() - 86400000));
+    check.setHours(0, 0, 0, 0);
+    const toAdd = [];
+    for (let i = 0; i < 7; i++) {
+      const mo = String(check.getMonth() + 1).padStart(2, '0');
+      const dy = String(check.getDate()).padStart(2, '0');
+      const dateStr = mo + '/' + dy + '/' + check.getFullYear();
+      if (dates.includes(dateStr)) break; // reached existing data
+      toAdd.push(dateStr);
+      check.setDate(check.getDate() - 1);
     }
-    if (!dates.includes(missingDate)) dates.unshift(missingDate);
+    toAdd.reverse().forEach(d => dates.unshift(d));
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2245,24 +2273,22 @@ app.get('/draws/cashpop/available', async (req, res) => {
   try {
     const draws = getCpDraws();
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
-    // Stale check: only prepend a date if a draw has actually occurred but isn't in the PDF yet.
-    // CP first draw is Morning 7:29 AM ET. Before that, most recent draw was yesterday.
+    // Stale check: fill ALL missing draw dates between last JSON entry and now.
+    // CP draws every day, first draw Morning 7:29 AM ET.
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const morningCutoff = new Date(nowET); morningCutoff.setHours(7, 29, 0, 0);
-    let missingDate;
-    if (nowET >= morningCutoff) {
-      // At least Morning has drawn today -- today should be in chips
-      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
-      const dy = String(nowET.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
-    } else {
-      // Before today's first draw -- yesterday was the last draw day
-      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
-      const mo = String(yest.getMonth() + 1).padStart(2, '0');
-      const dy = String(yest.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
+    const cpCheck = new Date(nowET >= morningCutoff ? nowET : new Date(nowET.getTime() - 86400000));
+    cpCheck.setHours(0, 0, 0, 0);
+    const cpToAdd = [];
+    for (let i = 0; i < 7; i++) {
+      const mo = String(cpCheck.getMonth() + 1).padStart(2, '0');
+      const dy = String(cpCheck.getDate()).padStart(2, '0');
+      const dateStr = mo + '/' + dy + '/' + cpCheck.getFullYear();
+      if (dates.includes(dateStr)) break;
+      cpToAdd.push(dateStr);
+      cpCheck.setDate(cpCheck.getDate() - 1);
     }
-    if (!dates.includes(missingDate)) dates.unshift(missingDate);
+    cpToAdd.reverse().forEach(d => dates.unshift(d));
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2282,11 +2308,23 @@ app.get('/draws/cashpop', async (req, res) => {
       if (target) return res.json({ date, session: target.name, number: target.number, allSessions });
     }
   } catch(e) {}
+  // Guard: only scrape if the requested session has actually occurred
+  const _nowET_cp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const _reqParts_cp = date.split('/');
+  const _reqDate_cp = new Date(parseInt(_reqParts_cp[2]), parseInt(_reqParts_cp[0]) - 1, parseInt(_reqParts_cp[1]));
+  const _isToday_cp = _reqDate_cp.toDateString() === _nowET_cp.toDateString();
+  const _isFuture_cp = _reqDate_cp > _nowET_cp;
+  if (_isFuture_cp) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
+  if (_isToday_cp && session) {
+    const _sessionCutoffs = { morning: 7*60+29, matinee: 11*60+29, afternoon: 14*60+29, evening: 18*60+29, 'late night': 22*60+29 };
+    const _cutoff_cp = _sessionCutoffs[session.toLowerCase()];
+    const _nowMins_cp = _nowET_cp.getHours() * 60 + _nowET_cp.getMinutes();
+    if (_cutoff_cp && _nowMins_cp < _cutoff_cp) return res.status(404).json({ error: 'That session has not drawn yet.', resultsUrl: FL_RESULTS_URLS.cashpop });
+  }
   const scraped = await scrapeFlDraws('cashpop', date, session || null);
   if (scraped && scraped.sessions && scraped.sessions.length) {
     const target = session ? scraped.sessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : scraped.sessions[scraped.sessions.length-1];
     if (target) return res.json({ date, session: target.name, number: target.number, allSessions: scraped.sessions });
-    // Session requested but not yet drawn
     return res.status(404).json({ error: 'That session has not drawn yet for this date.', allSessions: scraped.sessions, resultsUrl: FL_RESULTS_URLS.cashpop });
   }
   delete _availCache['cashpop'];
@@ -2778,21 +2816,22 @@ app.get('/draws/pick/available', async (req, res) => {
       dates.push(d.date);
       if (dates.length >= 5) break;
     }
-    // Stale check: Pick draws at 1:05 PM (Midday) and 11:15 PM (Evening) ET every day
+    // Stale check: fill ALL missing draw dates between last PDF entry and now.
+    // Pick draws every day, first draw Midday 1:05 PM ET.
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
-    let missingDate;
-    if (nowET >= middayCutoff) {
-      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
-      const dy = String(nowET.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
-    } else {
-      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
-      const mo = String(yest.getMonth() + 1).padStart(2, '0');
-      const dy = String(yest.getDate()).padStart(2, '0');
-      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
+    const pickCheck = new Date(nowET >= middayCutoff ? nowET : new Date(nowET.getTime() - 86400000));
+    pickCheck.setHours(0, 0, 0, 0);
+    const pickToAdd = [];
+    for (let i = 0; i < 7; i++) {
+      const mo = String(pickCheck.getMonth() + 1).padStart(2, '0');
+      const dy = String(pickCheck.getDate()).padStart(2, '0');
+      const dateStr = mo + '/' + dy + '/' + pickCheck.getFullYear();
+      if (dates.includes(dateStr)) break;
+      pickToAdd.push(dateStr);
+      pickCheck.setDate(pickCheck.getDate() - 1);
     }
-    if (!dates.includes(missingDate)) dates.unshift(missingDate);
+    pickToAdd.reverse().forEach(d => dates.unshift(d));
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
