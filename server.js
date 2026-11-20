@@ -2084,21 +2084,8 @@ app.get('/draws/jtp', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
-  // Guard: only scrape if the draw has actually occurred (JTP draws Tue/Fri 11:15 PM ET)
-  const _nowET_jtp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const _todayET_jtp = String(_nowET_jtp.getMonth()+1).padStart(2,'0')+'/'+String(_nowET_jtp.getDate()).padStart(2,'0')+'/'+_nowET_jtp.getFullYear();
-  const _reqParts_jtp = date.split('/');
-  const _reqYr_jtp = parseInt(_reqParts_jtp[2].length === 2 ? '20' + _reqParts_jtp[2] : _reqParts_jtp[2]);
-  const _reqMo_jtp = parseInt(_reqParts_jtp[0]); const _reqDy_jtp = parseInt(_reqParts_jtp[1]);
-  const _todayP_jtp = _todayET_jtp.split('/');
-  const _isToday_jtp = _reqMo_jtp === parseInt(_todayP_jtp[0]) && _reqDy_jtp === parseInt(_todayP_jtp[1]) && _reqYr_jtp === parseInt(_todayP_jtp[2]);
-  const _isFuture_jtp = _reqYr_jtp > parseInt(_todayP_jtp[2]) || (_reqYr_jtp === parseInt(_todayP_jtp[2]) && (_reqMo_jtp > parseInt(_todayP_jtp[0]) || (_reqMo_jtp === parseInt(_todayP_jtp[0]) && _reqDy_jtp > parseInt(_todayP_jtp[1]))));
-  if (_isFuture_jtp) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
-  if (_isToday_jtp && (_nowET_jtp.getHours() * 60 + _nowET_jtp.getMinutes()) < 23 * 60 + 15)
-    return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.jtp });
-  const scraped = await scrapeFlDraws('jtp', date, null);
-  if (scraped) return res.json({ date, numbers: scraped.numbers });
-  delete _availCache['jtp']; // invalidate chips cache so stale dates clear
+  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
+  delete _availCache['jtp'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
 });
 
@@ -2112,20 +2099,7 @@ app.get('/draws/lottox', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
-  // Guard: only scrape if the draw has actually occurred (LX draws Wed/Sat 11:15 PM ET)
-  const _nowET_lx = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const _todayET_lx = String(_nowET_lx.getMonth()+1).padStart(2,'0')+'/'+String(_nowET_lx.getDate()).padStart(2,'0')+'/'+_nowET_lx.getFullYear();
-  const _reqParts_lx = date.split('/');
-  const _reqYr_lx = parseInt(_reqParts_lx[2].length === 2 ? '20' + _reqParts_lx[2] : _reqParts_lx[2]);
-  const _reqMo_lx = parseInt(_reqParts_lx[0]); const _reqDy_lx = parseInt(_reqParts_lx[1]);
-  const _todayP_lx = _todayET_lx.split('/');
-  const _isToday_lx = _reqMo_lx === parseInt(_todayP_lx[0]) && _reqDy_lx === parseInt(_todayP_lx[1]) && _reqYr_lx === parseInt(_todayP_lx[2]);
-  const _isFuture_lx = _reqYr_lx > parseInt(_todayP_lx[2]) || (_reqYr_lx === parseInt(_todayP_lx[2]) && (_reqMo_lx > parseInt(_todayP_lx[0]) || (_reqMo_lx === parseInt(_todayP_lx[0]) && _reqDy_lx > parseInt(_todayP_lx[1]))));
-  if (_isFuture_lx) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
-  if (_isToday_lx && (_nowET_lx.getHours() * 60 + _nowET_lx.getMinutes()) < 23 * 60 + 15)
-    return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.lottox });
-  const scraped = await scrapeFlDraws('lottox', date, null);
-  if (scraped) return res.json({ date, numbers: scraped.numbers });
+  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
   delete _availCache['lottox'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
@@ -2140,23 +2114,7 @@ app.get('/draws/fantasy5', async (req, res) => {
     const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
-  // Guard: only scrape if the requested draw has actually occurred
-  const _nowET_f5 = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const _todayET_f5 = String(_nowET_f5.getMonth()+1).padStart(2,'0')+'/'+String(_nowET_f5.getDate()).padStart(2,'0')+'/'+_nowET_f5.getFullYear();
-  const _reqParts_f5 = date.split('/');
-  const _reqYr_f5 = parseInt(_reqParts_f5[2].length === 2 ? '20' + _reqParts_f5[2] : _reqParts_f5[2]);
-  const _reqMo_f5 = parseInt(_reqParts_f5[0]); const _reqDy_f5 = parseInt(_reqParts_f5[1]);
-  const _todayP_f5 = _todayET_f5.split('/');
-  const _isToday_f5 = _reqMo_f5 === parseInt(_todayP_f5[0]) && _reqDy_f5 === parseInt(_todayP_f5[1]) && _reqYr_f5 === parseInt(_todayP_f5[2]);
-  const _isFuture_f5 = _reqYr_f5 > parseInt(_todayP_f5[2]) || (_reqYr_f5 === parseInt(_todayP_f5[2]) && (_reqMo_f5 > parseInt(_todayP_f5[0]) || (_reqMo_f5 === parseInt(_todayP_f5[0]) && _reqDy_f5 > parseInt(_todayP_f5[1]))));
-  if (_isFuture_f5) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
-  if (_isToday_f5) {
-    const _cutoff_f5 = type === 'EVENING' ? 23 * 60 + 15 : 13 * 60 + 5;
-    const _nowMins_f5 = _nowET_f5.getHours() * 60 + _nowET_f5.getMinutes();
-    if (_nowMins_f5 < _cutoff_f5) return res.status(404).json({ error: 'That draw has not occurred yet.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
-  }
-  const scraped = await scrapeFlDraws('fantasy5', date, type);
-  if (scraped) return res.json({ date, drawType: scraped.drawType || type, numbers: scraped.numbers });
+  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
   delete _availCache['fantasy5'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
 });
@@ -2300,29 +2258,7 @@ app.get('/draws/cashpop', async (req, res) => {
       if (target) return res.json({ date, session: target.name, number: target.number, allSessions });
     }
   } catch(e) {}
-  // Guard: only scrape if the requested session has actually occurred
-  const _nowET_cp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const _todayET_cp = String(_nowET_cp.getMonth()+1).padStart(2,'0')+'/'+String(_nowET_cp.getDate()).padStart(2,'0')+'/'+_nowET_cp.getFullYear();
-  const _reqParts_cp = date.split('/');
-  const _reqYr_cp = parseInt(_reqParts_cp[2]);
-  const _reqMo_cp = parseInt(_reqParts_cp[0]);
-  const _reqDy_cp = parseInt(_reqParts_cp[1]);
-  const _todayParts_cp = _todayET_cp.split('/');
-  const _isToday_cp = _reqMo_cp === parseInt(_todayParts_cp[0]) && _reqDy_cp === parseInt(_todayParts_cp[1]) && _reqYr_cp === parseInt(_todayParts_cp[2]);
-  const _isFuture_cp = _reqYr_cp > parseInt(_todayParts_cp[2]) || (_reqYr_cp === parseInt(_todayParts_cp[2]) && (_reqMo_cp > parseInt(_todayParts_cp[0]) || (_reqMo_cp === parseInt(_todayParts_cp[0]) && _reqDy_cp > parseInt(_todayParts_cp[1]))));
-  if (_isFuture_cp) return res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
-  if (_isToday_cp && session) {
-    const _sessionCutoffs = { morning: 7*60+29, matinee: 11*60+29, afternoon: 14*60+29, evening: 18*60+29, 'late night': 22*60+29 };
-    const _cutoff_cp = _sessionCutoffs[session.toLowerCase()];
-    const _nowMins_cp = _nowET_cp.getHours() * 60 + _nowET_cp.getMinutes();
-    if (_cutoff_cp && _nowMins_cp < _cutoff_cp) return res.status(404).json({ error: 'That session has not drawn yet.', resultsUrl: FL_RESULTS_URLS.cashpop });
-  }
-  const scraped = await scrapeFlDraws('cashpop', date, session || null);
-  if (scraped && scraped.sessions && scraped.sessions.length) {
-    const target = session ? scraped.sessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : scraped.sessions[scraped.sessions.length-1];
-    if (target) return res.json({ date, session: target.name, number: target.number, allSessions: scraped.sessions });
-    return res.status(404).json({ error: 'That session has not drawn yet for this date.', allSessions: scraped.sessions, resultsUrl: FL_RESULTS_URLS.cashpop });
-  }
+  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
   delete _availCache['cashpop'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
 });

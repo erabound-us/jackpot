@@ -1018,6 +1018,8 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 
 **CRITICAL order**: PDF must be checked FIRST. Never call puppeteer for dates that are already in the PDF — it wastes memory and causes OOM crashes on 512MB.
 
+**Chrome/Puppeteer is DISABLED in all `/draws/*` routes** — `scrapeFlDraws` is NOT called from any draw lookup route. Chrome crashes the server (exit_code=134/SIGABRT) on Fly.io's shared CPU under any concurrent load. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON/PDF. The frontend renders this as a "View official results" link. `scrapeFlDraws` is only called from `getAvailableDates()` (used by `schedulePostDrawRefreshes`, not page-load routes) and `scrapeJackpot` (cache-only, never launches Chrome directly).
+
 ### Why puppeteer is required
 - The FL Lottery website is **JavaScript-rendered** — a plain `https.get()` returns an empty shell with no draw data
 - The FL Lottery Azure API (`apim-website-prod-eastus.azure-api.net`) requires browser-generated auth tokens — cannot be called server-side
