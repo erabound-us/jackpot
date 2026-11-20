@@ -888,6 +888,7 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
 3. Add xSendChat() with AbortController (15s), context injection, and .finally() re-enable
 4. Add xQuickAsk(q) function
 5. For multi-draw games: use sequential fetch with fallback, not Promise.all
+6. **Every `xLookupDraw()` MUST have a stale response guard** — capture `var _xDate = dateVal` before the fetch, return early in `.then()` if `input.value !== _xDate`. For multi-game panels also capture and check the current game. See Race Conditions & Concurrency section for the full pattern.
 
 ## When Adding a New Game — Email Checklist
 1. Add `xEmailCard` div (hidden by default, shown after line generation)
@@ -1204,7 +1205,7 @@ res.json({ dates: dates.slice(0, 5) });
 2. Add `<div id="xDateChips">` above the date input in Check My Numbers
 3. Add session/draw-type selector if game has multiple draws per day — label it **"Session"**, never "Draw" or "Latest"
 4. Add `xPickDate(d)` function — converts `MM/DD/YYYY` to `YYYY-MM-DD`, calls `xLookupDraw()`
-5. Add `xLookupDraw()` — fetches without session param first to get all available sessions, then picks requested or falls back to latest; uses `_isLatest` comparison for gold/green color
+5. Add `xLookupDraw()` — fetches without session param first to get all available sessions, then picks requested or falls back to latest; uses `_isLatest` comparison for gold/green color; **MUST include stale response guard**: capture `var _xDate = dateVal` before the fetch, check `input.value !== _xDate` at the top of `.then()` and return early if stale (see Race Conditions section)
 6. For multi-session games: fetch all sessions in parallel (like Fantasy 5) or fetch without session and use `allSessions` (like Cash Pop)
 7. On page load: fetch `/draws/<game>/available` → `renderDateChips('xDateChips', d.dates, 'xPickDate')`
 8. On page load: fetch `/latestdraw/<game>` → store `xLatestDate`, set date input + session dropdown, show gold balls
