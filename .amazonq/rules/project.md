@@ -805,7 +805,7 @@ When a user clicks a new date chip before the previous lookup resolves, abort th
 - At the top of `xLookupDraw()`: `if (window._xLookupAC) window._xLookupAC.abort();` then create a new one
 - Pass `signal: window._xLookupAC.signal` to **every** fetch inside the function — including inner fetch helpers like `_pFetch` and `_f5Fetch`. A common bug is creating a new `AbortController` inside the helper function instead of reusing the outer one, which means the abort never actually cancels the request.
 - Add a 60s timeout: `setTimeout(function(){if(window._xLookupAC)window._xLookupAC.abort();},60000);`
-- The `.catch()` already handles AbortError silently (fetch rejects with AbortError, caught by existing `.catch(function(){...})`)
+- The `.catch()` must handle AbortError silently: `if (e && e.name === 'AbortError') { msg.textContent = ''; return; }` — clearing the message resets the UI so subsequent lookups work. For inner fetch helpers that return `null` on abort (F5 `_f5Fetch`, Pick `_pFetch`): check `_signal.aborted` at the top of the final `.then()` and return silently — otherwise `null` propagates and shows "No draw found" leaving the UI broken
 - **All 5 games implement this**: `window._jtpLookupAC`, `window._lxLookupAC`, `window._cpLookupAC`, `window._f5LookupAC`, `window._pickLookupAC`
 - **When adding a new game**: declare `window._xLookupAC` and abort+replace it at the top of `xLookupDraw()`
 
@@ -971,7 +971,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20w`
+Latest stable: `backups/stable-2026-11-20x`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)

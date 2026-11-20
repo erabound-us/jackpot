@@ -1152,7 +1152,7 @@ function jtpLookupDraw() {
         return '<div class="hball" style="' + jtpBallStyle + ';width:36px;height:36px;font-size:13px;">' + n + '</div>';
       }).join('');
     })
-    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+    .catch(function(e) { if (e && e.name === 'AbortError') { msg.textContent = ''; return; } msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
 }
 
 function checkNumbers() {
@@ -1561,7 +1561,7 @@ function lxLookupDraw() {
         return '<div class="hball" style="' + lxBallStyle + ';width:36px;height:36px;font-size:13px;">' + n + '</div>';
       }).join('');
     })
-    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+    .catch(function(e) { if (e && e.name === 'AbortError') { msg.textContent = ''; return; } msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
 }
 
 function lxCheckNumbers() {
@@ -1941,7 +1941,7 @@ function cpLookupDraw(forceLatest) {
         '<div class="hball" style="' + _ballStyle + ';width:36px;height:36px;font-size:13px;">' + target.number + '</div>' +
         '<span style="font-size:12px;color:var(--muted);margin-left:8px;">' + target.name + '</span>';
     })
-    .catch(function() { msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
+    .catch(function(e) { if (e && e.name === 'AbortError') { msg.textContent = ''; return; } msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; });
 }
 function cpSendChat() {
   var input = document.getElementById('cpChatInput');
@@ -2271,6 +2271,7 @@ function f5LookupDraw() {
     if (r && !r.error) return r;
     return _f5Fetch(_fallback);
   }).then(function(target) {
+    if (_f5Signal.aborted) { document.getElementById('f5DrawLookupMsg').textContent = ''; return; }
     if (document.getElementById('f5DrawDate').value !== _f5Date) return;
     if (!target || target.error) {
       msg.style.color = 'var(--red)';
@@ -2652,6 +2653,7 @@ function pickLookupDraw() {
     if (r && !r.error) return r;
     return _pFetch(_fallback);
   }).then(function(data){
+    if (_pickSignal.aborted) { document.getElementById('pickDrawLookupMsg').textContent = ''; return; }
     if (pickGame !== _game || document.getElementById('pickDrawDate').value !== _date) return;
     if (!data || data.error) {
       msg.style.color='var(--red)';
