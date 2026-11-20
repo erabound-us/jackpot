@@ -1389,18 +1389,19 @@ async function start() {
       .then(() => appendJtpDeltas()).catch(() => {})
       .then(() => appendCpDeltas()).catch(() => {})
       .then(() => appendLottoXDeltas())
-      .then(() => appendFantasy5Deltas()).catch(() => {})
-      .then(() => {
-        // Warm jackpot cache -- one game at a time through global lock (scrapeFlDraws side effect)
-        const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        const mo = String(nowET.getMonth()+1).padStart(2,'0');
-        const dy = String(nowET.getDate()).padStart(2,'0');
-        const dateStr = mo+'/'+dy+'/'+nowET.getFullYear();
-        return ['jtp','lottox','fantasy5'].reduce(
-          (p, game) => p.then(() => scrapeFlDraws(game, dateStr, null).catch(() => {})),
-          Promise.resolve()
-        );
-      }).catch(() => {});
+      .then(() => appendFantasy5Deltas()).catch(() => {});
+    // Warm jackpot cache 2 minutes after startup -- delayed to let server fully settle
+    // Runs one game at a time through _scrapeGlobalLock; errors swallowed
+    setTimeout(function warmJackpots() {
+      const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const mo = String(nowET.getMonth()+1).padStart(2,'0');
+      const dy = String(nowET.getDate()).padStart(2,'0');
+      const dateStr = mo+'/'+dy+'/'+nowET.getFullYear();
+      ['jtp','lottox','fantasy5'].reduce(
+        (p, game) => p.then(() => scrapeFlDraws(game, dateStr, null).catch(() => {})),
+        Promise.resolve()
+      );
+    }, 2 * 60 * 1000);
   });
 }
 
