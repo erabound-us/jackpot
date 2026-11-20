@@ -798,7 +798,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20c`
+Latest stable: `backups/stable-2026-11-20d`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -991,7 +991,31 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - Frontend on page load: sets date input + session dropdown to latest draw, shows winning number in **gold**
 - Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
 - **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
-- **`/draws/cashpop/available` stale-detection**: if the newest PDF draw is older than yesterday's last draw time (10:29 PM ET), today's date is prepended to the returned list. This mirrors the same stale-detection logic in `/latestdraw/cashpop` so today's date always appears in the chips even when the PDF hasn't updated yet.
+- **`/draws/<game>/available` stale-detection rule** — daily-draw games (F5, Cash Pop, Pick) MUST prepend the most recent draw date when the data source is behind. Games that only draw on specific days (JTP Tue/Fri, Lotto X Wed/Sat) are exempt.
+- **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
+  - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
+  - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.
+  - **Pick 2-5**: first draw is Midday 1:05 PM ET. Same rule as Fantasy 5.
+- Pattern (used in both F5 and Cash Pop `/available` routes):
+```js
+const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+const firstDrawCutoff = new Date(nowET); firstDrawCutoff.setHours(H, M, 0, 0); // game's first draw time
+let missingDate;
+if (nowET >= firstDrawCutoff) {
+  // today's first draw has occurred
+  const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+  const dy = String(nowET.getDate()).padStart(2, '0');
+  missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
+} else {
+  // before today's first draw -- yesterday was the last draw day
+  const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
+  const mo = String(yest.getMonth() + 1).padStart(2, '0');
+  const dy = String(yest.getDate()).padStart(2, '0');
+  missingDate = mo + '/' + dy + '/' + yest.getFullYear();
+}
+if (!dates.includes(missingDate)) dates.unshift(missingDate);
+res.json({ dates: dates.slice(0, 5) });
+```
 
 ## Draw Session / Draw Type Selectors — Rules
 - **Never add a "Latest" option** to any draw type or session dropdown — it confuses players who expect to see results for a specific draw

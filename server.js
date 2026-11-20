@@ -2171,16 +2171,26 @@ app.get('/draws/fantasy5/available', async (req, res) => {
       dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    // Stale check: F5 draws at 1:05 PM and 11:15 PM ET every day
+    // Stale check: only prepend a date if a draw has actually occurred but isn't in the JSON yet.
+    // F5 draws at 1:05 PM (Midday) and 11:15 PM (Evening) ET.
+    // Before 1:05 PM: most recent draw was yesterday Evening -- check if yesterday is in dates.
+    // After 1:05 PM: most recent draw was today Midday -- check if today is in dates.
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const midday = new Date(nowET); midday.setHours(13, 5, 0, 0);
-    const expectedTs = nowET >= midday ? midday.getTime() : (midday.getTime() - 86400000);
-    if (!draws.length || draws[0].ts < expectedTs) {
+    const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
+    let missingDate;
+    if (nowET >= middayCutoff) {
+      // Today's Midday has drawn -- today should be in chips
       const mo = String(nowET.getMonth() + 1).padStart(2, '0');
       const dy = String(nowET.getDate()).padStart(2, '0');
-      const todayStr = mo + '/' + dy + '/' + nowET.getFullYear();
-      if (!dates.includes(todayStr)) dates.unshift(todayStr);
+      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
+    } else {
+      // Before today's Midday -- yesterday Evening was the last draw
+      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
+      const mo = String(yest.getMonth() + 1).padStart(2, '0');
+      const dy = String(yest.getDate()).padStart(2, '0');
+      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
     }
+    if (!dates.includes(missingDate)) dates.unshift(missingDate);
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2188,14 +2198,24 @@ app.get('/draws/cashpop/available', async (req, res) => {
   try {
     const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
+    // Stale check: only prepend a date if a draw has actually occurred but isn't in the PDF yet.
+    // CP first draw is Morning 7:29 AM ET. Before that, most recent draw was yesterday.
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const yesterdayET = new Date(nowET); yesterdayET.setDate(yesterdayET.getDate() - 1); yesterdayET.setHours(22, 29, 0, 0);
-    if (!draws.length || draws[0].ts < yesterdayET.getTime()) {
+    const morningCutoff = new Date(nowET); morningCutoff.setHours(7, 29, 0, 0);
+    let missingDate;
+    if (nowET >= morningCutoff) {
+      // At least Morning has drawn today -- today should be in chips
       const mo = String(nowET.getMonth() + 1).padStart(2, '0');
       const dy = String(nowET.getDate()).padStart(2, '0');
-      const todayStr = mo + '/' + dy + '/' + nowET.getFullYear();
-      if (!dates.includes(todayStr)) dates.unshift(todayStr);
+      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
+    } else {
+      // Before today's first draw -- yesterday was the last draw day
+      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
+      const mo = String(yest.getMonth() + 1).padStart(2, '0');
+      const dy = String(yest.getDate()).padStart(2, '0');
+      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
     }
+    if (!dates.includes(missingDate)) dates.unshift(missingDate);
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
