@@ -1129,7 +1129,9 @@ function jtpLookupDraw() {
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
   var _jtpDate = dateVal;
-  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
+  if (window._jtpLookupAC) window._jtpLookupAC.abort();
+  window._jtpLookupAC = new AbortController(); setTimeout(function(){if(window._jtpLookupAC)window._jtpLookupAC.abort();},60000);
+  (function(){return fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy),{signal:window._jtpLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (document.getElementById('jtpDrawDate').value !== _jtpDate) return;
@@ -1536,7 +1538,9 @@ function lxLookupDraw() {
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
   var _lxDate = dateVal;
-  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy),{signal:_ac.signal});})()
+  if (window._lxLookupAC) window._lxLookupAC.abort();
+  window._lxLookupAC = new AbortController(); setTimeout(function(){if(window._lxLookupAC)window._lxLookupAC.abort();},60000);
+  (function(){return fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy),{signal:window._lxLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (document.getElementById('lxDrawDate').value !== _lxDate) return;
@@ -1909,7 +1913,9 @@ function cpLookupDraw(forceLatest) {
   msg.style.color = 'var(--muted)';
   msg.textContent = 'Looking up...';
   var _cpDate = dateVal;
-  (function(){var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);return fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy),{signal:_ac.signal});})()
+  if (window._cpLookupAC) window._cpLookupAC.abort();
+  window._cpLookupAC = new AbortController(); setTimeout(function(){if(window._cpLookupAC)window._cpLookupAC.abort();},60000);
+  (function(){return fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy),{signal:window._cpLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (document.getElementById('cpDrawDate').value !== _cpDate) return;
@@ -2254,6 +2260,8 @@ function f5LookupDraw() {
   var _primary = drawType === 'EVENING' ? 'EVENING' : 'MIDDAY';
   var _fallback = _primary === 'EVENING' ? 'MIDDAY' : 'EVENING';
   var _f5Date = dateVal;
+  if (window._f5LookupAC) window._f5LookupAC.abort();
+  window._f5LookupAC = new AbortController();
   function _f5Fetch(dt) {
     var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
     return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
@@ -2632,6 +2640,8 @@ function pickLookupDraw() {
   msg.style.color='var(--muted)'; msg.textContent='Looking up...';
   var _primary = drawType; var _fallback = drawType==='EVENING'?'MIDDAY':'EVENING';
   var _game = pickGame; var _date = dateVal;
+  if (window._pickLookupAC) window._pickLookupAC.abort();
+  window._pickLookupAC = new AbortController();
   function _pFetch(dt) {
     var _ac=new AbortController();setTimeout(function(){_ac.abort();},60000);
     return fetch('/draws/pick?game='+_game+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_ac.signal}).then(function(r){return r.json();}).catch(function(){return null;});
