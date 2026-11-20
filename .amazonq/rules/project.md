@@ -382,7 +382,7 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 ### How the cache is populated — zero extra Puppeteer launches
 - `_jackpotCache` — server-side object: `game -> { amount, ts }`, 5-minute TTL
 - `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` if the cache is stale. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
-- `scrapeJackpot(game)` — reads `_jackpotCache` first; only launches Puppeteer if cache is cold (e.g. server just started and no draw lookup has run yet). This is the fallback path, not the normal path.
+- `scrapeJackpot(game)` — reads `_jackpotCache` first; only launches Puppeteer if cache is cold. Opens the game page, calls `extractAndCacheJackpot` on the HTML, returns the cached amount. **This function MUST be defined** — it is called by the `/jackpot` route. If removed accidentally, all three jackpot banners show `—` and the route returns 500.
 - **Normal flow**: user opens page → `/latestdraw/<game>` → PDF hit (no scrape) → jackpot cache still cold → frontend fetches `/jackpot?game=<game>` → `scrapeJackpot` launches Puppeteer once → caches result. Subsequent `/jackpot` calls return instantly from cache. Any draw lookup that triggers `scrapeFlDraws` also refreshes the jackpot cache as a side effect.
 
 ### Jackpot extraction patterns (in `extractAndCacheJackpot`)
@@ -970,7 +970,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20r`
+Latest stable: `backups/stable-2026-11-20s`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)

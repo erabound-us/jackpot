@@ -2354,6 +2354,28 @@ app.get('/latestdraw/cashpop', async (req, res) => {
     res.json({ date: d.date, numbers: d.numbers });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+async function scrapeJackpot(game) {
+  const now = Date.now();
+  if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return _jackpotCache[game].amount;
+  if (!JACKPOT_GAME_URLS[game]) return null;
+  let page;
+  try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0');
+    await page.goto(JACKPOT_GAME_URLS[game], { waitUntil: 'domcontentloaded', timeout: 15000 });
+    const html = await page.content();
+    await page.close(); page = null;
+    closeBrowser();
+    extractAndCacheJackpot(game, html);
+    return _jackpotCache[game] ? _jackpotCache[game].amount : null;
+  } catch(e) {
+    if (page) { try { await page.close(); } catch(_) {} }
+    closeBrowser();
+    return null;
+  }
+}
+
 app.get('/jackpot', async (req, res) => {
   const game = (req.query.game || '').toLowerCase();
   if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'game must be jtp, lottox, or fantasy5' });
