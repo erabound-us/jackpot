@@ -422,7 +422,7 @@ function generateLines(freq, draws, count = 6, seenLines = new Set()) {
 
 async function runAnalysis(count = 6, sid = null) {
   const [histText, freqText] = await Promise.all([
-    extractPDFText(PDF_PATHS.history),
+    getJtpText(),
     extractPDFText(PDF_PATHS.frequency)
   ]);
   const draws = parseHistoryPDF(histText);
@@ -1457,7 +1457,7 @@ function scoreCashPop(n, freq, draws, totalDraws) {
 }
 
 async function runAnalysisCashPop(count = 5, sid = null) {
-  const text = await extractPDFText(PDF_PATH_CP);
+  const text = await getCpText();
   const draws = parseCashPopHistoryPDF(text);
   if (draws.length < 5) throw new Error('Only ' + draws.length + ' Cash Pop draws parsed.');
   const freq = {};
@@ -2067,7 +2067,7 @@ app.get('/draws/jtp', async (req, res) => {
   if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No JTP draw on that date (draws Tue & Fri).', resultsUrl: FL_RESULTS_URLS.jtp });
   const pdfDate = normDateForPDF(date);
   try {
-    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
+    const draws = parseHistoryPDF(await getJtpText());
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
@@ -2161,16 +2161,49 @@ function expandYear(date) {
 
 app.get('/draws/jtp/available', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
+    const draws = parseHistoryPDF(await getJtpText());
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===2||day===5; });
-    res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
+    const dates = filtered.slice(0, 5).map(d => expandYear(d.date));
+    // Stale check: find most recent Tue(2) or Fri(5) that has passed in ET
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const drawCutoff = new Date(nowET); drawCutoff.setHours(23, 15, 0, 0);
+    let check = new Date(nowET);
+    // Walk back to find most recent Tue or Fri that has passed its 11:15 PM draw
+    for (let i = 0; i < 7; i++) {
+      const d = check.getDay();
+      if ((d === 2 || d === 5) && (i > 0 || nowET >= drawCutoff)) {
+        const mo = String(check.getMonth() + 1).padStart(2, '0');
+        const dy = String(check.getDate()).padStart(2, '0');
+        const missingDate = mo + '/' + dy + '/' + check.getFullYear();
+        if (!dates.includes(missingDate)) dates.unshift(missingDate);
+        break;
+      }
+      check.setDate(check.getDate() - 1);
+    }
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/lottox/available', async (req, res) => {
   try {
     const draws = getLottoXDraws();
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===3||day===6; });
-    res.json({ dates: filtered.slice(0, 5).map(d => expandYear(d.date)) });
+    const dates = filtered.slice(0, 5).map(d => expandYear(d.date));
+    // Stale check: find most recent Wed(3) or Sat(6) that has passed in ET
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const drawCutoff = new Date(nowET); drawCutoff.setHours(23, 15, 0, 0);
+    let check = new Date(nowET);
+    for (let i = 0; i < 7; i++) {
+      const d = check.getDay();
+      if ((d === 3 || d === 6) && (i > 0 || nowET >= drawCutoff)) {
+        const mo = String(check.getMonth() + 1).padStart(2, '0');
+        const dy = String(check.getDate()).padStart(2, '0');
+        const missingDate = mo + '/' + dy + '/' + check.getFullYear();
+        if (!dates.includes(missingDate)) dates.unshift(missingDate);
+        break;
+      }
+      check.setDate(check.getDate() - 1);
+    }
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 app.get('/draws/fantasy5/available', async (req, res) => {
@@ -2209,7 +2242,7 @@ app.get('/draws/fantasy5/available', async (req, res) => {
 });
 app.get('/draws/cashpop/available', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
+    const draws = parseCashPopHistoryPDF(await getCpText());
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
     // Stale check: only prepend a date if a draw has actually occurred but isn't in the PDF yet.
     // CP first draw is Morning 7:29 AM ET. Before that, most recent draw was yesterday.
@@ -2238,7 +2271,7 @@ app.get('/draws/cashpop', async (req, res) => {
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   // PDF fallback first - has 5 numbers per date (one per session)
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
+    const draws = parseCashPopHistoryPDF(await getCpText());
     const pdfDate = normDateForPDF(date);
     const match = draws.find(d => d.date === date || d.date === pdfDate);
     if (match) {
@@ -2261,7 +2294,7 @@ app.get('/draws/cashpop', async (req, res) => {
 
 app.get('/latestdraw/jtp', async (req, res) => {
   try {
-    const draws = parseHistoryPDF(await extractPDFText(PDF_PATHS.history));
+    const draws = parseHistoryPDF(await getJtpText());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     res.json({ date: d.date, numbers: d.numbers });
@@ -2338,7 +2371,7 @@ app.get('/latestdraw/fantasy5', async (req, res) => {
 
 app.get('/latestdraw/cashpop', async (req, res) => {
   try {
-    const draws = parseCashPopHistoryPDF(await extractPDFText(PDF_PATH_CP));
+    const draws = parseCashPopHistoryPDF(await getCpText());
     if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
     const d = draws[0];
     // Check if PDF is stale -- Cash Pop draws every day, newest should be today or yesterday
@@ -2502,6 +2535,40 @@ function getBoxWays(digits) {
   let denom = 1;
   vals.forEach(v => { for (let i = 1; i <= v; i++) denom *= i; });
   return perms / denom;
+}
+
+// mtime cache for JTP and CP PDFs -- serializes concurrent parses to prevent OOM crashes
+let jtpParsePromise = null;
+let jtpCache = null;
+let cpParsePromise = null;
+let cpCache = null;
+
+async function getJtpText() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATHS.history).mtimeMs; } catch(e) { throw new Error('JTP PDF not yet downloaded.'); }
+  if (jtpCache && jtpCache.mtime === mtime) return jtpCache.text;
+  if (!jtpParsePromise) {
+    jtpParsePromise = extractPDFText(PDF_PATHS.history).then(text => {
+      jtpCache = { text, mtime };
+      jtpParsePromise = null;
+      return text;
+    }).catch(e => { jtpParsePromise = null; throw e; });
+  }
+  return jtpParsePromise;
+}
+
+async function getCpText() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_CP).mtimeMs; } catch(e) { throw new Error('Cash Pop PDF not yet downloaded.'); }
+  if (cpCache && cpCache.mtime === mtime) return cpCache.text;
+  if (!cpParsePromise) {
+    cpParsePromise = extractPDFText(PDF_PATH_CP).then(text => {
+      cpCache = { text, mtime };
+      cpParsePromise = null;
+      return text;
+    }).catch(e => { cpParsePromise = null; throw e; });
+  }
+  return cpParsePromise;
 }
 
 // mtime cache for Pick PDFs (~1s parse, under JSON cache threshold)

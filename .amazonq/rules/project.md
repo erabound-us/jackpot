@@ -597,8 +597,9 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 4. Commit the JSON file -- it will be included in the Docker image
 5. No `getXxxText()` cache function needed -- JSON replaces it entirely
 
-### PDFs under 1 MB (JTP, JTP frequency, Cash Pop)
-- Still parsed fresh on every request via direct `extractPDFText(path)` -- fast enough, no JSON cache needed
+### PDFs under 1 MB (JTP, Cash Pop)
+- Use `getJtpText()` and `getCpText()` mtime cache functions with `jtpParsePromise`/`cpParsePromise` serialization -- prevents concurrent parse crashes under load
+- JTP frequency PDF (`PDF_PATHS.frequency`) is still parsed directly -- called only from `/analyze`, not from page-load routes, so concurrency risk is low
 
 - JTP History PDF: `https://files.floridalottery.com/exptkt/jtp.pdf`
 - JTP Frequency PDF: `https://files.floridalottery.com/exptkt/jackpot-triple-play_number-frequency-chart.pdf`
@@ -627,9 +628,9 @@ Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, th
 ### Current PDF parse times (measured locally, Nov 2026)
 | PDF | Local parse time | Est. Fly time | Needs cache | Needs startup warm |
 |-----|-----------------|---------------|-------------|-------------------|
-| jtp.pdf (~65KB text) | ~280ms | ~1s | No | No |
+| jtp.pdf (~65KB text) | ~280ms | ~1s | Yes (mtime) | No |
 | jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
-| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | No | No |
+| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | Yes (mtime) | No |
 | pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~4s | Yes (mtime) | No |
 | pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~5s | Yes (mtime) | No |
 | pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~5s | Yes (mtime) | No |
@@ -654,7 +655,7 @@ downloadPDFs()
 
 ### When adding a new game -- PDF checklist
 1. Benchmark the PDF parse time locally using the node command above
-2. If est. Fly time < 3s: use direct `extractPDFText(PDF_PATH_X)` -- no cache needed
+2. If est. Fly time < 3s: add a `getXxxText()` mtime cache function with `xxxParsePromise` serialization (same pattern as `getJtpText()`/`getCpText()`) -- prevents concurrent parse crashes even for fast PDFs
 3. If est. Fly time > 3s: add `getXxxText()` cache function with `xxxParsePromise` serialization and `fs.statSync` try/catch guard
 4. If est. Fly time > 8s (or > 2s local): add `getXxxText()` to the startup warming chain in `server.listen()` callback
 5. Always add `PDF_URL_X` and `PDF_PATH_X` to the top constants block and `downloadPDFs()` Promise.all
@@ -813,8 +814,13 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - `_scrapeInFlight` prevents concurrent Chrome launches for the same date
 - Together they ensure at most one Chrome instance per unique game+date+drawType at any time
 
-**PDF parse serialization (`pickParsePromise`)**
-Pick PDFs use `pickParsePromise[game]` to serialize concurrent parse requests — if a parse is already in progress, new callers await the same promise instead of starting a new parse. LX and F5 use JSON caches (no parse on Fly). JTP and CP parse fast enough (~1s) that concurrent parses are acceptable under the rate limiter.
+**PDF parse serialization (`jtpParsePromise`, `cpParsePromise`, `pickParsePromise`)**
+All PDF-parsed games use a parse promise serializer to prevent concurrent parses crashing the process (exit_code=134/SIGABRT under memory pressure):
+- JTP: `getJtpText()` with `jtpParsePromise` + `jtpCache`
+- Cash Pop: `getCpText()` with `cpParsePromise` + `cpCache`
+- Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` + `pickCache[game]`
+- LX and F5 use JSON caches (no PDF parse on Fly at all)
+If a parse is already in progress, new callers await the same promise instead of starting a new parse. Cache is mtime-based and busted in `downloadPDFs()` when a new PDF is downloaded.
 
 **Rate limiting** (global cap 120 req/min, per-route limits) bounds the maximum concurrent load. The serialized refresh queue ensures PDF downloads never run concurrently.
 
@@ -888,7 +894,6 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
 3. Add xSendChat() with AbortController (15s), context injection, and .finally() re-enable
 4. Add xQuickAsk(q) function
 5. For multi-draw games: use sequential fetch with fallback, not Promise.all
-6. **Every `xLookupDraw()` MUST have a stale response guard** — capture `var _xDate = dateVal` before the fetch, return early in `.then()` if `input.value !== _xDate`. For multi-game panels also capture and check the current game. See Race Conditions & Concurrency section for the full pattern.
 
 ## When Adding a New Game — Email Checklist
 1. Add `xEmailCard` div (hidden by default, shown after line generation)
@@ -942,7 +947,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20h`
+Latest stable: `backups/stable-2026-11-20i`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -1135,7 +1140,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 - Frontend on page load: sets date input + session dropdown to latest draw, shows winning number in **gold**
 - Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
 - **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
-- **`/draws/<game>/available` stale-detection rule** — daily-draw games (F5, Cash Pop, Pick) MUST prepend the most recent draw date when the data source is behind. Games that only draw on specific days (JTP Tue/Fri, Lotto X Wed/Sat) are exempt.
+- **General rule**: ALL `/draws/<game>/available` endpoints MUST include stale-detection. Daily-draw games (F5, CP, Pick) prepend today/yesterday based on first draw cutoff. Specific-day games (JTP Tue/Fri, LX Wed/Sat) walk back to find the most recent draw day that has passed its 11:15 PM ET cutoff and prepend it if missing.
 - **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
   - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
   - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.
@@ -1205,7 +1210,7 @@ res.json({ dates: dates.slice(0, 5) });
 2. Add `<div id="xDateChips">` above the date input in Check My Numbers
 3. Add session/draw-type selector if game has multiple draws per day — label it **"Session"**, never "Draw" or "Latest"
 4. Add `xPickDate(d)` function — converts `MM/DD/YYYY` to `YYYY-MM-DD`, calls `xLookupDraw()`
-5. Add `xLookupDraw()` — fetches without session param first to get all available sessions, then picks requested or falls back to latest; uses `_isLatest` comparison for gold/green color; **MUST include stale response guard**: capture `var _xDate = dateVal` before the fetch, check `input.value !== _xDate` at the top of `.then()` and return early if stale (see Race Conditions section)
+5. Add `xLookupDraw()` — fetches without session param first to get all available sessions, then picks requested or falls back to latest; uses `_isLatest` comparison for gold/green color
 6. For multi-session games: fetch all sessions in parallel (like Fantasy 5) or fetch without session and use `allSessions` (like Cash Pop)
 7. On page load: fetch `/draws/<game>/available` → `renderDateChips('xDateChips', d.dates, 'xPickDate')`
 8. On page load: fetch `/latestdraw/<game>` → store `xLatestDate`, set date input + session dropdown, show gold balls
