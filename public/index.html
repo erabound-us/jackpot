@@ -2594,7 +2594,7 @@ function pickStartCountdown(nd) {
 }
 
 function pickLoadLatest() {
-  var _ac = new AbortController(); setTimeout(function(){_ac.abort();},10000);
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();},30000);
   var _game = pickGame;
   fetch('/latestdraw/pick?game='+_game, {signal:_ac.signal}).then(function(r){return r.json();}).then(function(d){
     if (pickGame !== _game) return;

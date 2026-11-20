@@ -1390,18 +1390,7 @@ async function start() {
       .then(() => appendCpDeltas()).catch(() => {})
       .then(() => appendLottoXDeltas())
       .then(() => appendFantasy5Deltas()).catch(() => {});
-    // Warm jackpot cache 2 minutes after startup -- delayed to let server fully settle
-    // Runs one game at a time through _scrapeGlobalLock; errors swallowed
-    setTimeout(function warmJackpots() {
-      const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      const mo = String(nowET.getMonth()+1).padStart(2,'0');
-      const dy = String(nowET.getDate()).padStart(2,'0');
-      const dateStr = mo+'/'+dy+'/'+nowET.getFullYear();
-      ['jtp','lottox','fantasy5'].reduce(
-        (p, game) => p.then(() => scrapeFlDraws(game, dateStr, null).catch(() => {})),
-        Promise.resolve()
-      );
-    }, 2 * 60 * 1000);
+    // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
   });
 }
 
