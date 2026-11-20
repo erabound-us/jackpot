@@ -87,6 +87,12 @@ app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store').status(503).json({ error: 'Server warming up. Try again in a moment.' });
 });
 
+// Prevent all API responses from being cached by browsers or proxies
+app.use((req, res, next) => {
+  if (req.path !== '/') res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Clean up rate limit, strike, and blacklist maps every 5 minutes
 setInterval(() => {
   const now = Date.now();
@@ -445,7 +451,7 @@ async function runAnalysis(count = 6, sid = null) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 app.get('/nextdraw', (req, res) => res.json(getNextDraw()));
 

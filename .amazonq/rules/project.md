@@ -712,6 +712,34 @@ When resetting an email send button in a `.finally()` block, always use `btn.inn
 - Raw emoji chars (e.g. `'🍀'`) and Unicode escapes (e.g. `'\u{1F4B0}'`) are safe with `textContent`.
 - Apply `innerHTML` to every game's `xSendEmail()` `.finally()` reset when building a new game.
 
+## HTTP Cache-Control Headers
+
+Three middleware layers ensure browsers and proxies never cache stale responses:
+
+1. **503 warming middleware** — `Cache-Control: no-store` on the warming-up response so browsers never cache a 503 during deploy and show a blank page on the next visit.
+2. **Global API middleware** — `Cache-Control: no-store` on all routes except `GET /`. Placed immediately after the 503 middleware. Prevents any dynamic JSON response (draw data, analysis, chat, etc.) from being cached by browsers, CDNs, or proxies.
+3. **`GET /` (index.html)** — `Cache-Control: no-cache` (not `no-store`). This tells the browser to always revalidate with the server, but allows a 304 Not Modified response if the file hasn't changed — efficient for repeat visits while guaranteeing users always get the latest JS after a deploy.
+
+```js
+// 503 warming (already in place)
+res.set('Cache-Control', 'no-store').status(503).json({ error: 'Server warming up...' });
+
+// Global API no-store (immediately after 503 middleware)
+app.use((req, res, next) => {
+  if (req.path !== '/') res.set('Cache-Control', 'no-store');
+  next();
+});
+
+// GET / no-cache
+app.get('/', (req, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(...); });
+```
+
+**Why `no-cache` vs `no-store` for `GET /`**: `no-store` would force a full re-download of the 200KB HTML on every page load. `no-cache` allows the browser to use its cached copy if the server confirms it's unchanged (304), saving bandwidth while still guaranteeing freshness after deploys.
+
+**When adding a new static file route**: use `res.set('Cache-Control', 'no-cache')` — same as `GET /`.
+**When adding a new API route**: the global middleware handles it automatically — no per-route header needed.
+**Never remove the global API middleware** — without it, browsers may cache JSON responses and show stale data after draws complete.
+
 ### Frontend Fetch -- AbortController Timeouts
 Every user-triggered fetch() in index.html MUST have an AbortController with an appropriate timeout. This prevents mobile connections from hanging indefinitely on slow or dropped requests.
 
@@ -802,7 +830,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20e`
+Latest stable: `backups/stable-2026-11-20f`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
