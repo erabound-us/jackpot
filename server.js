@@ -1908,7 +1908,7 @@ const _scrapeInFlight = {}; // key -> Promise, deduplicates concurrent scrapes f
 let _scrapeGlobalLock = Promise.resolve(); // ensures only one Chrome instance runs at a time
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
+    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer', '--disable-extensions', '--no-first-run'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
   }
   return _browser;
 }
