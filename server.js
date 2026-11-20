@@ -1385,7 +1385,22 @@ async function start() {
     try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
     _serverReady = true;
     console.log('Server ready.');
-    downloadPDFs().then(() => appendJtpDeltas()).catch(() => {}).then(() => appendCpDeltas()).catch(() => {}).then(() => appendLottoXDeltas()).then(() => appendFantasy5Deltas()).catch(() => {});
+    downloadPDFs()
+      .then(() => appendJtpDeltas()).catch(() => {})
+      .then(() => appendCpDeltas()).catch(() => {})
+      .then(() => appendLottoXDeltas())
+      .then(() => appendFantasy5Deltas()).catch(() => {})
+      .then(() => {
+        // Warm jackpot cache -- one game at a time through global lock (scrapeFlDraws side effect)
+        const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const mo = String(nowET.getMonth()+1).padStart(2,'0');
+        const dy = String(nowET.getDate()).padStart(2,'0');
+        const dateStr = mo+'/'+dy+'/'+nowET.getFullYear();
+        return ['jtp','lottox','fantasy5'].reduce(
+          (p, game) => p.then(() => scrapeFlDraws(game, dateStr, null).catch(() => {})),
+          Promise.resolve()
+        );
+      }).catch(() => {});
   });
 }
 

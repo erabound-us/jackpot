@@ -384,7 +384,7 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 - `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` if the cache is stale. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
 - `scrapeJackpot(game)` — reads `_jackpotCache` first; returns null immediately if cache is cold (never launches Chrome directly). Cache is populated as a **free side effect** of `scrapeFlDraws` whenever any user looks up a draw date — the same page load that fetches draw numbers also extracts the jackpot amount via `extractAndCacheJackpot`. **This function MUST be defined** — it is called by the `/jackpot` route. If removed accidentally, all three jackpot banners show `—` and the route returns 500.
 - **`/jackpot` route returns `{ amount: null }` on error** (not 500) — frontend handles null gracefully by showing "See FL Lottery"
-- **Normal flow**: user opens page → `/latestdraw/<game>` → PDF hit (no scrape) → jackpot cache still cold → frontend fetches `/jackpot?game=<game>` → `scrapeJackpot` launches Puppeteer once → caches result. Subsequent `/jackpot` calls return instantly from cache. Any draw lookup that triggers `scrapeFlDraws` also refreshes the jackpot cache as a side effect.
+- **Normal flow**: server starts → `_serverReady = true` → background startup chain runs `scrapeFlDraws` for each jackpot game sequentially (JTP → LX → F5) → `extractAndCacheJackpot` populates `_jackpotCache` as a side effect → subsequent `/jackpot` calls return instantly from cache. The scrapes run through `_scrapeGlobalLock` so only one Chrome instance at a time.
 
 ### Jackpot extraction patterns (in `extractAndCacheJackpot`)
 Patterns are tried in order of specificity against the full page HTML:
@@ -971,7 +971,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20u`
+Latest stable: `backups/stable-2026-11-20v`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
