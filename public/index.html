@@ -837,8 +837,8 @@
     <h2>&#9989; Check My Numbers</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label style="font-size:13px;color:var(--muted);">Date:</label>
-      <input type="date" id="pickDrawDate" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
-      <select id="pickDrawType" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+      <input type="date" id="pickDrawDate" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+      <select id="pickDrawType" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
         <option value="MIDDAY">Midday</option>
         <option value="EVENING">Evening</option>
       </select>
@@ -855,14 +855,14 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
       <label style="font-size:13px;color:var(--muted);">Play type:</label>
-      <select id="pickCheckPlayType" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+      <select id="pickCheckPlayType" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
         <option value="straight">Straight</option>
         <option value="box">Box</option>
         <option value="sb">Straight/Box</option>
         <option value="combo">Combo</option>
       </select>
       <label style="font-size:13px;color:var(--muted);">Play amount:</label>
-      <select id="pickCheckPlayAmount" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
+      <select id="pickCheckPlayAmount" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
         <option value="1">$1.00</option>
         <option value="0.5">$0.50</option>
       </select>
@@ -1745,6 +1745,7 @@ var cpLastNextDraw = null;
 var cpLastWin = null;
 var cpLatestDate = null;
 var cpLatestSession = null;
+var cpWinNum = null;
 
 fetch('/nextdraw/cashpop')
   .then(function(r) { return r.json(); })
@@ -1957,7 +1958,7 @@ function cpSendEmail() {
     document.getElementById('cpEmailStatus').textContent = 'Please enter at least one email address.';
     return;
   }
-  var cpWinNum = parseInt(document.getElementById('cpWinNum').value);
+  var cpWinNum = (typeof window.cpWinNum === 'number' && window.cpWinNum >= 1 && window.cpWinNum <= 15) ? window.cpWinNum : NaN;
   var incLines = document.getElementById('cpEmailIncLines').checked && cpLastNumbers && cpLastNumbers.length > 0;
   var incWinning = document.getElementById('cpEmailIncWinning').checked && !isNaN(cpWinNum) && cpWinNum >= 1 && cpWinNum <= 15;
   if (!incLines) {
