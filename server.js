@@ -1916,6 +1916,13 @@ async function closeBrowser() {
   if (_browser) { try { await _browser.close(); } catch(_) {} _browser = null; }
 }
 
+const JACKPOT_GAME_URLS = {
+  jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+  lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',
+  fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5'
+};
+const _jackpotCache = {}; // game -> { amount, ts }, 5-minute TTL
+
 // Extract jackpot amount from a scraped page HTML and cache it for the given game
 function extractAndCacheJackpot(game, html) {
   if (!['jtp','lottox','fantasy5'].includes(game)) return;
