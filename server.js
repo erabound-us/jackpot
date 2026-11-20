@@ -2513,8 +2513,8 @@ async function getPickText(game) {
 function parsePickHistoryPDF(text, numDigits) {
   const draws = [];
   // Each row: DATE  D[-D...] FB N  D[-D...] FB N  (midday then evening)
-  const digitPat = Array(numDigits).fill('(\\d)').join('\\s*-\\s*');
-  const re = new RegExp('(\\d{1,2}/\\d{1,2}/\\d{4})\\s+' + digitPat + '\\s+FB\\s+(\\d)\\s+' + digitPat + '\\s+FB\\s+(\\d)', 'g');
+  const digitPat = Array(numDigits).fill('(\d)').join('\s*-\s*');
+  const re = new RegExp('(\d{1,2}/\d{1,2}/\d{4})\s+' + digitPat + '\s+FB\s+(\d)\s+' + digitPat + '\s+FB\s+(\d)', 'g');
   let m;
   while ((m = re.exec(text)) !== null) {
     const date = m[1];
@@ -2781,7 +2781,22 @@ app.get('/draws/pick/available', async (req, res) => {
       dates.push(d.date);
       if (dates.length >= 5) break;
     }
-    res.json({ dates });
+    // Stale check: Pick draws at 1:05 PM (Midday) and 11:15 PM (Evening) ET every day
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const middayCutoff = new Date(nowET); middayCutoff.setHours(13, 5, 0, 0);
+    let missingDate;
+    if (nowET >= middayCutoff) {
+      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+      const dy = String(nowET.getDate()).padStart(2, '0');
+      missingDate = mo + '/' + dy + '/' + nowET.getFullYear();
+    } else {
+      const yest = new Date(nowET); yest.setDate(yest.getDate() - 1);
+      const mo = String(yest.getMonth() + 1).padStart(2, '0');
+      const dy = String(yest.getDate()).padStart(2, '0');
+      missingDate = mo + '/' + dy + '/' + yest.getFullYear();
+    }
+    if (!dates.includes(missingDate)) dates.unshift(missingDate);
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 
