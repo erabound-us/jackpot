@@ -181,6 +181,9 @@ All costs are based on the known Florida Lottery price structure and are **subje
 - **Cash Pop**: total = numbers × play amount ($1/$2/$5/$10)
 - Estimator shown in UI above the Generate button, updates live on input change
 - Disclaimer shown in UI and FAQ: *estimated, subject to change, confirm at retailer*
+- **Every game with a Generate button MUST have a `xUpdateCost()` function defined in JS** — the HTML wires `oninput="xUpdateCost()"` and `onchange="xUpdateCost()"` on the count input and add-on checkboxes. If the function is missing the cost bar silently stays blank (no JS error, easy to miss).
+- **`xUpdateCost()` must be called once on page load** (after the function definitions) so the cost bar is populated immediately — pattern: `jtpUpdateCost(); lxUpdateCost(); cpUpdateCost(); f5UpdateCost();`
+- **When adding a new game**: define `xUpdateCost()` in the `// == Cost calculators ==` block alongside the others, and add `xUpdateCost();` to the initial call block at the bottom of that section
 
 ## Chatbot Math Capabilities
 All chatbots (`/chat`, `/chat/lottox`, `/chat/fantasy5`, `/chat/cashpop`, `/chat/pick`) support inline math:
@@ -267,7 +270,94 @@ Florida has no state income tax.
 
 **Pick games share one chatbot** (`/chat/pick`) -- `chatReplyPick` handles all four games. It detects which game is being asked about via `q.match(/pick\s*([2-5])/)` and returns per-game answers. When adding a new digit game, extend this pattern rather than creating a separate chatbot.
 
-## Real-Time Draw Banners
+## Game Panel UI Standard (JTP is the reference implementation)
+
+All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When building a new game, copy the JTP panel structure and adapt only the game-specific content.
+
+### Standard panel order (top to bottom)
+1. Intro header (icon + title + description)
+2. Draw banner (3-column: next draw | jackpot/draw-name | countdown)
+3. Ticket/number count input row + add-on checkboxes
+4. Cost bar (`xCostBar` div with `xCostBreakdown` + `xCostTotal`)
+5. Generate button (`class="generate-btn"`)
+6. Press hint (`class="press-hint"`) + email blurb
+7. Status message (`class="status-msg"`)
+8. Results section (hidden until generated)
+9. Check My Numbers card
+10. Payout Assistant card
+11. Email My Lines card (hidden until generated)
+
+### Generate button — MUST use `class="generate-btn"`
+- Full-width, gradient blue, 18px bold, shadow, hover lift — defined in CSS
+- Label format: `{emoji} Generate Lines` for all games
+- Cash Pop exception: `{emoji} Generate Numbers` (picks numbers not lines)
+- **Never use `class="btn"` for the generate button** — `btn` is not defined in the CSS and renders as an unstyled browser default button
+- During generation: set `btn.textContent = 'Generating...'`; restore in `.finally()`
+- Pick games: `btn.textContent = PICK_ICONS[pickGame] + ' Generate Lines'` in `.finally()`
+
+### Cost bar — MUST use the styled blue bar
+```html
+<div id="xCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+  <div id="xCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+  <div id="xCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+</div>
+```
+- **Never use a plain `<div>` with `textContent`** for the cost bar — it loses the breakdown/total split layout
+- `xCostBreakdown` shows the per-item math; `xCostTotal` shows the bold total
+
+### Card section headings — MUST use `<h2>` inside `.card`
+```html
+<div class="card">
+  <h2>&#127922; Check My Numbers</h2>
+  ...
+</div>
+```
+- **Never use `<div class="card-title">`** — that class is not defined in the CSS
+- All card headings across all games use `<h2>` with the `.card h2` style (15px, font-weight 600)
+
+### Check My Numbers buttons — MUST use `action-btn`
+```html
+<button class="action-btn primary" onclick="xCheckNumbers()">Calculate Winnings</button>
+<button class="action-btn secondary" onclick="xClearCheck()">&#10005; Reset</button>
+```
+- **Never use `class="btn"` or `class="btn btn-secondary"`** for check/clear buttons
+- `action-btn primary` = green background; `action-btn secondary` = transparent with border
+
+### Results section heading — MUST use `section-header` + `badge blue`
+```html
+<div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="xDrawsBadge"></span></div>
+<div class="updated-label" id="xUpdatedLabel"></div>
+```
+- JTP/LX/F5: `Recommended Lines`
+- Cash Pop: `Recommended Numbers`
+- Pick: rendered inline in `pickRenderLines()` — no separate section-header div needed since results are inside the generate card
+
+### Generate controls placement
+- JTP/LX/F5/Cash Pop: count input + cost bar + generate button are **outside any card**, directly in the panel
+- Pick: same rule — the generate controls (count, play amount, type, fireball, cost bar, button) must be **outside a card wrapper**, not nested inside `<div class="card">`
+- The results that appear after generating (lines, freq, history) go inside `.card` divs
+
+### Email card send button
+- Use inline style matching other games: `style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;"`
+- **Never use `class="btn"`** for the email send button
+
+### Press hint + email blurb
+- Both appear immediately after the generate button, before the status message
+- Press hint: `<div class="press-hint" id="xPressHint">Generation <span id="xPressNum">1</span> &mdash; each press produces a unique fresh set</div>`
+- Email blurb: `<div id="xEmailBlurb" style="display:none;...">` — shown/hidden alongside press hint
+- Cash Pop and Pick do not have a press hint or email blurb (no press counter)
+
+### When auditing a new game for consistency, check:
+1. Generate button uses `class="generate-btn"` (not `btn`)
+2. Cost bar uses the two-div blue styled structure (not plain text)
+3. Card headings use `<h2>` (not `card-title` div)
+4. Check/Clear buttons use `action-btn primary/secondary` (not `btn`/`btn-secondary`)
+5. Generate controls are outside any card wrapper
+6. Results heading uses `section-header` + `badge blue` + `updated-label`
+7. Button label says `Generate Lines` (or `Generate Numbers` for Cash Pop)
+8. During generation: `btn.textContent = 'Generating...'`
+
+
 - Every game panel has a live draw banner showing next draw date/time, countdown, and Sales Open/Closed badge
 - On page load each panel fetches its `/nextdraw/*` endpoint once to populate the banner immediately
 - A single shared `setInterval` (60 s) silently re-fetches all four `/nextdraw/*` endpoints in parallel and calls each game's `startCountdown` function to keep banners current across draw boundaries
@@ -696,7 +786,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20a`
+Latest stable: `backups/stable-2026-11-20c`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -942,6 +1032,7 @@ document.getElementById('xDrawnBalls').innerHTML = data.numbers.map(function(n) 
 11. Add `xSendChat()` with `context: { spend, lines, game, won: xLastWin }`
 12. Add `/nextdraw/<game>` fetch to the shared `setInterval` poll
 13. If the game has a jackpot: add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col; add game to the page-load jackpot fetch block (`games` array + `ids` map)
+14. Define `xUpdateCost()` in the `// == Cost calculators ==` block and add `xUpdateCost();` to the initial call block — **required even if the game has no add-ons** (just compute `count * basePrice`). Missing this causes a silent blank cost bar.
 
 **For games sharing a single panel (like Pick 2-5)**:
 - Use a game selector UI (buttons) inside the panel instead of separate panels

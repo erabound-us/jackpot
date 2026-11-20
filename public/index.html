@@ -530,11 +530,11 @@
     <div id="cpCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
     <div id="cpCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
   </div>
-  <button class="generate-btn" id="cpGenerateBtn" onclick="cpGenerate()">&#128176; Suggest Numbers</button>
+  <button class="generate-btn" id="cpGenerateBtn" onclick="cpGenerate()">&#128176; Generate Numbers</button>
   <div class="status-msg" id="cpStatusMsg"></div>
   <div id="cpResults" style="display:none;">
     <div class="card">
-      <div class="section-header"><h2>&#127942; Suggested Numbers</h2><span class="badge blue" id="cpOddsBadge"></span></div>
+      <div class="section-header"><h2>&#127942; Recommended Numbers</h2><span class="badge blue" id="cpOddsBadge"></span></div>
       <div class="updated-label" id="cpUpdatedLabel"></div>
       <div id="cpNumbersContainer" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px 0;"></div>
       <div style="font-size:12px;color:var(--muted);margin-top:8px;">Scored on frequency &amp; recency across 1,700+ draw-days of official history. All 15 numbers have equal base odds (1 in 15).</div>
@@ -796,36 +796,36 @@
   </div>
 
   <!-- Generate -->
-  <div class="card">
-    <div class="card-title" id="pickCardTitle">🎲 Pick 5 — Generate Lines</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Positional frequency + recency analysis across Midday &amp; Evening draws</div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
-      <label style="font-size:13px;color:var(--muted);">Lines:</label>
-      <input type="number" id="pickLineCount" value="6" min="1" max="50" style="width:60px;background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;" oninput="pickUpdateCost()">
-      <label style="font-size:13px;color:var(--muted);">Play:</label>
-      <select id="pickPlayAmount" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
-        <option value="1">$1.00</option>
-        <option value="0.5">$0.50</option>
-      </select>
-      <label style="font-size:13px;color:var(--muted);">Type:</label>
-      <select id="pickPlayType" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
-        <option value="straight">Straight</option>
-        <option value="box">Box</option>
-        <option value="sb">Straight/Box</option>
-        <option value="combo">Combo</option>
-      </select>
-      <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);cursor:pointer;">
-        <input type="checkbox" id="pickFireball" onchange="pickUpdateCost()"> Fireball (+2x cost)
-      </label>
-    </div>
-    <div id="pickCostBar" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
-    <button class="btn" id="pickGenBtn" onclick="pickGenerate()">🎲 Generate Lines</button>
-    <div id="pickStatusMsg" class="status-msg" style="display:none;"></div>
-    <div id="pickResults" style="display:none;margin-top:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span id="pickOddsBadge" style="font-size:11px;color:var(--muted);"></span>
-        <span id="pickUpdatedLabel" style="font-size:11px;color:var(--muted);"></span>
-      </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <label style="font-size:12px;color:var(--muted);">Lines:</label>
+    <input type="number" id="pickLineCount" value="6" min="1" max="50" style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;" oninput="pickUpdateCost()">
+    <span style="font-size:12px;color:var(--muted);">max 50</span>
+    <label style="font-size:12px;color:var(--muted);">Play:</label>
+    <select id="pickPlayAmount" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:8px;font-size:13px;font-weight:700;">
+      <option value="1">$1.00</option>
+      <option value="0.5">$0.50</option>
+    </select>
+    <label style="font-size:12px;color:var(--muted);">Type:</label>
+    <select id="pickPlayType" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:8px;font-size:13px;font-weight:700;">
+      <option value="straight">Straight</option>
+      <option value="box">Box</option>
+      <option value="sb">Straight/Box</option>
+      <option value="combo">Combo</option>
+    </select>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="pickFireball" onchange="pickUpdateCost()" style="width:14px;height:14px;"> Fireball (+2x cost)
+    </label>
+  </div>
+  <div id="pickCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="pickCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="pickCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="pickGenBtn" onclick="pickGenerate()">&#127922; Generate Lines</button>
+  <div class="status-msg" id="pickStatusMsg" style="display:none;"></div>
+  <div id="pickResults" style="display:none;margin-top:4px;">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="pickOddsBadge"></span></div>
+      <div class="updated-label" id="pickUpdatedLabel"></div>
       <div id="pickLinesDisplay"></div>
       <div id="pickFreqDisplay" style="margin-top:12px;"></div>
       <div id="pickHistoryDisplay" style="margin-top:12px;"></div>
@@ -834,7 +834,7 @@
 
   <!-- Check My Numbers -->
   <div class="card">
-    <div class="card-title">&#9989; Check My Numbers</div>
+    <h2>&#9989; Check My Numbers</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label style="font-size:13px;color:var(--muted);">Date:</label>
       <input type="date" id="pickDrawDate" onchange="pickLookupDraw()" style="background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;">
@@ -870,26 +870,26 @@
         <input type="checkbox" id="pickCheckFireball"> Fireball
       </label>
     </div>
-    <button class="btn" onclick="pickCheckNumbers()" style="margin-right:8px;">&#9989; Check</button>
-    <button class="btn btn-secondary" onclick="pickClearCheck()">Clear</button>
+    <button class="action-btn primary" onclick="pickCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="pickClearCheck()">&#10005; Reset</button>
     <div id="pickCheckResult" style="margin-top:10px;"></div>
   </div>
 
   <!-- Email -->
   <div class="card" id="pickEmailCard" style="display:none;">
-    <div class="card-title">&#128140; Email My Lines</div>
+    <h2>&#128140; Email My Lines</h2>
     <div style="margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pickEmailIncLines" checked> My Lines</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="pickEmailIncWinning" checked> Winning Numbers</label>
     </div>
-    <input type="email" id="pickEmailTo" placeholder="your@email.com" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid #2a2d3a;border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;margin-bottom:8px;">
-    <button class="btn" id="pickEmailBtn" onclick="pickSendEmail()">&#128140; Send Lines</button>
+    <input type="email" id="pickEmailTo" placeholder="you@example.com, friend@example.com" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:8px;">
+    <button onclick="pickSendEmail()" id="pickEmailBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Lines</button>
     <div id="pickEmailStatus" style="font-size:12px;margin-top:6px;"></div>
   </div>
 
   <!-- Chat -->
   <div class="card">
-    <div class="card-title">&#129302; Payout Assistant</div>
+    <h2>&#129302; Payout Assistant</h2>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
       <span class="chip" onclick="pickQuickAsk('What do I win for a straight?')">Straight prize</span>
       <span class="chip" onclick="pickQuickAsk('How does Fireball work?')">Fireball</span>
@@ -1804,7 +1804,7 @@ function cpGenerate() {
       var el = document.getElementById('cpStatusMsg');
       el.className = 'status-msg error'; el.textContent = 'Error: ' + err.message; el.style.display = 'block';
     })
-    .finally(function() { btn.disabled = false; btn.textContent = '\u{1F4B0} Suggest Numbers'; });
+    .finally(function() { btn.disabled = false; btn.textContent = '\u{1F4B0} Generate Numbers'; });
 }
 
 function cpRenderHistory(history) {
@@ -2050,6 +2050,7 @@ jtpUpdateCost();
 lxUpdateCost();
 cpUpdateCost();
 f5UpdateCost();
+// pickUpdateCost() is called inside pickSetGame() on init
 
 function f5SendEmail() {
   var to = document.getElementById('f5EmailTo').value.trim();
@@ -2493,7 +2494,6 @@ function pickSetGame(g) {
   document.getElementById('pickHeaderTitle').textContent = PICK_LABELS[g];
   document.getElementById('pickHeaderDesc').innerHTML = PICK_DESCS[g];
   document.getElementById('pickLotteryLink').href = PICK_LINKS[g];
-  document.getElementById('pickCardTitle').innerHTML = PICK_ICONS[g] + ' ' + PICK_LABELS[g] + ' -- Generate Lines';
   ['pick2','pick3','pick4','pick5'].forEach(function(x) {
     var btn = document.getElementById('pickBtn'+x.replace('pick',''));
     if (x === g) { btn.style.background='rgba(99,91,255,0.25)'; btn.style.border='1px solid rgba(99,91,255,0.8)'; btn.style.color='#fff'; btn.style.fontWeight='700'; }
@@ -2531,12 +2531,16 @@ function pickUpdateCost() {
   var pt = document.getElementById('pickPlayType').value;
   var fb = document.getElementById('pickFireball').checked;
   var cost = count * pa * (fb ? 2 : 1);
+  var breakdown, total;
   if (pt === 'combo') {
-    var n = PICK_DIGITS[pickGame];
-    document.getElementById('pickCostBar').textContent = count + ' line(s) x Combo (cost varies by digits) x ' + (fb?'2x Fireball':'') + ' -- estimated $' + (cost*2).toFixed(2) + '-$' + (cost*24).toFixed(2);
+    breakdown = count + ' line(s) x Combo (cost varies by digits)' + (fb ? ' x 2 (Fireball)' : '');
+    total = 'Est. $' + (cost*2).toFixed(2) + '-$' + (cost*24).toFixed(2);
   } else {
-    document.getElementById('pickCostBar').textContent = count + ' line(s) x $' + pa.toFixed(2) + (fb?' x 2 (Fireball)':'') + ' = $' + cost.toFixed(2) + ' estimated';
+    breakdown = count + ' line(s) x $' + pa.toFixed(2) + (fb ? ' x 2 (Fireball)' : '');
+    total = 'Total: $' + cost.toFixed(2);
   }
+  document.getElementById('pickCostBreakdown').textContent = breakdown;
+  document.getElementById('pickCostTotal').textContent = total;
 }
 
 function pickStartCountdown(nd) {
@@ -2644,7 +2648,7 @@ function pickPickDate(d){var p=d.split('/');document.getElementById('pickDrawDat
 
 function pickGenerate() {
   var btn = document.getElementById('pickGenBtn');
-  btn.disabled=true; btn.textContent='Analyzing...';
+  btn.disabled=true; btn.textContent='Generating...';
   var count=Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),50);
   var _ac=new AbortController();setTimeout(function(){_ac.abort();},30000);
   fetch('/analyze/pick?game='+pickGame+'&count='+count+'&sid='+SID,{signal:_ac.signal})
