@@ -2356,27 +2356,10 @@ app.get('/latestdraw/cashpop', async (req, res) => {
 });
 async function scrapeJackpot(game) {
   const now = Date.now();
-  const cached = _jackpotCache[game];
-  if (cached && now - cached.ts < 5 * 60 * 1000) return cached.amount;
-  // Cache cold -- launch Puppeteer to fetch the page
-  const url = JACKPOT_GAME_URLS[game];
-  if (!url) return null;
-  for (let _try = 0; _try < 2; _try++) {
-    try {
-      const browser = await getBrowser();
-      const page = await browser.newPage();
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      try { await page.waitForSelector('.game-numbers__number', { timeout: 4000 }); } catch(_) {}
-      const html = await page.content();
-      await page.close();
-      await closeBrowser();
-      extractAndCacheJackpot(game, html);
-      return _jackpotCache[game] ? _jackpotCache[game].amount : null;
-    } catch(e) {
-      console.warn('Jackpot scrape attempt ' + (_try+1) + ' failed for ' + game + ': ' + e.message);
-      if (_try === 0) { _browser = null; }
-    }
-  }
+  // Return from cache if fresh (populated as side effect of draw lookups via scrapeFlDraws)
+  if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return _jackpotCache[game].amount;
+  // Cache cold -- return null, frontend shows "See FL Lottery"
+  // Cache warms automatically when any user looks up a draw date (scrapeFlDraws side effect)
   return null;
 }
 
@@ -2386,7 +2369,7 @@ app.get('/jackpot', async (req, res) => {
   try {
     const amount = await scrapeJackpot(game);
     res.json({ game, amount });
-  } catch(err) { res.status(500).json({ error: err.message }); }
+  } catch(err) { res.json({ game, amount: null }); }
 });
 
 app.post('/check/fantasy5', (req, res) => {
