@@ -1836,13 +1836,13 @@ function cpRenderFreq(top, bottom) {
 }
 
 function cpCheckNumbers() {
-  var wn = parseInt(document.getElementById('cpWinNum').value);
+  var wn = (typeof cpWinNum === 'number' && cpWinNum >= 1 && cpWinNum <= 15) ? cpWinNum : parseInt(document.getElementById('cpWinNum') ? document.getElementById('cpWinNum').value : '');
   var yn = parseInt(document.getElementById('cpYourNum').value);
   var pa = parseInt(document.getElementById('cpPlayAmt').value);
   var pm = parseInt(document.getElementById('cpMultiplier').value);
   var res = document.getElementById('cpCheckResult');
   if (isNaN(wn) || wn < 1 || wn > 15 || isNaN(yn) || yn < 1 || yn > 15) {
-    res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter valid numbers (1-15) for both fields.</div>'; return;
+    res.innerHTML = '<div style="color:var(--red);font-size:13px;">' + (isNaN(wn) ? 'Select a draw date and session first to load the winning number.' : 'Enter a valid number (1-15) in Your Number.') + '</div>'; return;
   }
   if (isNaN(pm) || pm < 5 || pm > 250) {
     res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter your prize multiplier (5-250) from your ticket.</div>'; return;
