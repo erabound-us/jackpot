@@ -805,6 +805,13 @@ When a user clicks a new date chip before the previous lookup resolves, abort th
 - At the top of `xLookupDraw()`: `if (window._xLookupAC) window._xLookupAC.abort();` then create a new one
 - Pass `signal: window._xLookupAC.signal` to **every** fetch inside the function — including inner fetch helpers like `_pFetch` and `_f5Fetch`. A common bug is creating a new `AbortController` inside the helper function instead of reusing the outer one, which means the abort never actually cancels the request.
 - Add a 60s timeout: `setTimeout(function(){if(window._xLookupAC)window._xLookupAC.abort();},60000);`
+- **All 5 games implement this**: `window._jtpLookupAC`, `window._lxLookupAC`, `window._cpLookupAC`, `window._f5LookupAC`, `window._pickLookupAC`
+- **`pickLoadLatest` also uses `window._pickLatestAC`** — switching Pick games aborts the previous in-flight PDF parse. Without this, switching through all 4 Pick games queues 4 sequential parses (~20s total). Pattern: `if (window._pickLatestAC) window._pickLatestAC.abort(); window._pickLatestAC = new AbortController(); var _ac = window._pickLatestAC;`
+
+**AbortError handling in `.catch()`**:
+- JTP, LX, CP: `.catch(function(e) { if (e && e.name === 'AbortError') { msg.textContent = ''; return; } msg.style.color = 'var(--red)'; msg.textContent = 'Lookup failed.'; })`
+- F5, Pick: inner fetch helpers return `null` on abort — check `_signal.aborted` at the top of the final `.then()` and return silently: `if (_f5Signal.aborted) { msg.textContent = ''; return; }`
+- **Never show 'Lookup failed.' for aborted requests** — it leaves the UI broken and prevents subsequent lookups from working
 - The `.catch()` must handle AbortError silently: `if (e && e.name === 'AbortError') { msg.textContent = ''; return; }` — clearing the message resets the UI so subsequent lookups work. For inner fetch helpers that return `null` on abort (F5 `_f5Fetch`, Pick `_pFetch`): check `_signal.aborted` at the top of the final `.then()` and return silently — otherwise `null` propagates and shows "No draw found" leaving the UI broken
 - **All 5 games implement this**: `window._jtpLookupAC`, `window._lxLookupAC`, `window._cpLookupAC`, `window._f5LookupAC`, `window._pickLookupAC`
 - **When adding a new game**: declare `window._xLookupAC` and abort+replace it at the top of `xLookupDraw()`
