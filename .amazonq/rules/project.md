@@ -787,7 +787,7 @@ fetch('/draws/pick?game=' + _game + '&date=' + date)
 - `f5LookupDraw` — guards on `f5DrawDate.value === _f5Date`
 - `cpLookupDraw` — guards on `cpDrawDate.value === _cpDate`
 - `pickLookupDraw` — guards on `pickGame === _game && pickDrawDate.value === _date`
-- `pickLoadLatest` — guards on `pickGame === _game`
+- `pickLoadLatest` — guards on `pickGame === _game`; also uses `window._pickLatestAC` so switching games aborts the previous in-flight PDF parse request immediately
 - `pickRenderChips` (available dates fetch) — guards on `pickGame === _g` via IIFE closure
 
 **Generate functions** are guarded by `btn.disabled = true` during the fetch — no stale guard needed since the button prevents concurrent calls.
@@ -971,7 +971,7 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20x`
+Latest stable: `backups/stable-2026-11-20z`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
