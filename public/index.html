@@ -621,10 +621,129 @@
 </div>
 
 <div class="game-panel" id="panel-powerball">
-  <div style="background:rgba(99,91,255,0.08);border:1px solid rgba(99,91,255,0.3);border-radius:12px;padding:16px;margin-bottom:12px;text-align:center;">
-    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">⚡ Powerball Analysis — Coming Soon</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;">We're building full AI-driven statistical analysis for Powerball. Please consider donating to help us build this game in the near future!</div>
-    <a href="https://buy.stripe.com/7sYbJ1esngWq1BX37G3Je00" target="_blank" rel="noopener" style="display:inline-block;padding:10px 24px;background:linear-gradient(135deg,#635bff,#4f46e5);color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700;">💜 Donate</a>
+  <div style="text-align:center;margin-bottom:16px;">
+    <div style="font-size:36px;margin-bottom:6px;">&#9889;</div>
+    <div style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">Powerball</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:420px;margin:0 auto;">AI-powered statistical analysis on the complete official Florida Lottery draw history. Pick 5 numbers from 1&#8211;69 + 1 Powerball from 1&#8211;26 for $2 &mdash; draws every <strong style="color:var(--text);">Monday, Wednesday &amp; Saturday</strong> at ~10:59 PM ET (Florida local time).</div>
+  </div>
+  <div class="draw-banner" id="pbDrawBanner">
+    <div class="draw-col">
+      <div class="draw-label">Next Drawing</div>
+      <div class="draw-when" id="pbDrawWhen">&mdash;</div>
+      <div class="draw-sub" id="pbDrawTimeLabel">&mdash;</div>
+    </div>
+    <div class="draw-col center">
+      <div class="draw-label">Current Jackpot</div>
+      <div class="draw-when" id="pbJackpotAmount" style="font-size:15px;color:var(--yellow);">See FL Lottery</div>
+      <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/powerball" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
+    </div>
+    <div class="draw-col right">
+      <div class="countdown" id="pbCountdown">&mdash;</div>
+      <div class="sales-badge" id="pbSalesBadge">&mdash;</div>
+      <div class="draw-sub" id="pbCloseTimeLabel">&mdash;</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <label for="pbLineCount" style="font-size:12px;color:var(--muted);">Number of plays:</label>
+    <input type="number" id="pbLineCount" value="6" min="1" max="100" oninput="pbUpdateCost()"
+      style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;">
+    <span style="font-size:12px;color:var(--muted);">max 100</span>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="pbPowerPlay" onchange="pbUpdateCost()" style="width:14px;height:14px;"> Power Play (+$1)
+    </label>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="pbDoublePlay" onchange="pbUpdateCost()" style="width:14px;height:14px;"> Double Play (+$1)
+    </label>
+  </div>
+  <div id="pbCostBar" style="background:rgba(79,142,247,0.07);border:1px solid rgba(79,142,247,0.18);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="pbCostBreakdown" style="font-size:12px;color:var(--muted);"></div>
+    <div id="pbCostTotal" style="font-size:18px;font-weight:800;color:var(--accent);"></div>
+  </div>
+  <button class="generate-btn" id="pbGenerateBtn" onclick="pbGenerate()">&#9889; Generate Lines</button>
+  <div class="press-hint" id="pbPressHint">Generation <span id="pbPressNum">1</span> &mdash; each press produces a unique fresh set</div>
+  <div id="pbEmailBlurb" style="display:none;text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;">&#128140; <a href="#pbEmailCard" style="color:var(--accent);">Email your lines</a> to create your digital play slip &mdash; then just have the cashier scan it!</div>
+  <div class="status-msg" id="pbStatusMsg"></div>
+  <div id="pbResults" style="display:none;">
+    <div class="card">
+      <div class="section-header"><h2>&#127942; Recommended Lines</h2><span class="badge blue" id="pbDrawsBadge"></span></div>
+      <div class="updated-label" id="pbUpdatedLabel"></div>
+      <div id="pbLinesContainer"></div>
+    </div>
+    <div class="card"><h2>&#128197; Recent Winning Numbers</h2><div id="pbHistoryContainer"></div></div>
+    <div class="card">
+      <h2>&#128202; Number Frequency</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#128293; Most Drawn (White)</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="pbTopTable"></tbody></table></div>
+        <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">&#10052; Least Drawn (White)</div><table><thead><tr><th>#</th><th>Num</th><th>Count</th></tr></thead><tbody id="pbBottomTable"></tbody></table></div>
+      </div>
+    </div>
+    <div class="disclaimer">&#9888; For entertainment only &mdash; lottery outcomes are random. No system guarantees a win.</div>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#9989; Check My Numbers</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Enter your draw date and your play &mdash; we'll look up the winning numbers automatically.</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Draw Date</div>
+      <div id="pbDateChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+      <input type="date" id="pbDrawDate" onchange="pbLookupDraw()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+      <div id="pbDrawnDisplay" style="margin-top:8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Winning Numbers</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;" id="pbDrawnBalls"></div>
+      </div>
+      <div id="pbDrawLookupMsg" style="font-size:12px;margin-top:6px;"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Your Lines</div>
+      <input type="number" id="pbCheckLineCount" value="1" min="1" max="30" oninput="pbRebuildCheckLines()" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:13px;font-weight:700;">
+    </div>
+    <div id="pbLinesInputs"></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Power Play on ticket</div>
+        <select id="pbPowerPlayCheck" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;">
+          <option value="0">None</option>
+          <option value="2">2&times;</option>
+          <option value="3">3&times;</option>
+          <option value="4">4&times;</option>
+          <option value="5">5&times;</option>
+          <option value="10">10&times;</option>
+        </select>
+      </div>
+    </div>
+    <button class="action-btn primary" onclick="pbCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn secondary" onclick="pbClearCheck()">&#10005; Reset</button>
+    <div id="pbCheckResult" style="margin-top:12px;"></div>
+  </div>
+  <div class="card" id="pbEmailCard" style="margin-top:12px;display:none;">
+    <h2>&#128140; Email My Lines</h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Send your generated lines to one or more email addresses.</div>
+    <div style="display:flex;gap:16px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pbEmailIncLines" checked style="width:14px;height:14px;"> My Lines</label>
+      <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pbEmailIncWinning" checked style="width:14px;height:14px;"> Winning Numbers</label>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">To (comma-separated)</div>
+      <input id="pbEmailTo" type="text" placeholder="you@example.com, friend@example.com"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:13px;">
+    </div>
+    <button onclick="pbSendEmail()" id="pbEmailSendBtn" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128140; Send Lines</button>
+    <div id="pbEmailStatus" style="margin-top:8px;font-size:13px;"></div>
+  </div>
+  <div class="card" style="margin-bottom:12px;">
+    <h2>&#128172; Payout Assistant</h2>
+    <div class="chat-chips">
+      <span class="chip" onclick="pbQuickAsk('What are the jackpot odds?')">Jackpot odds</span>
+      <span class="chip" onclick="pbQuickAsk('What do I win for 4 of 5 plus Powerball?')">4+PB prize</span>
+      <span class="chip" onclick="pbQuickAsk('How does Power Play work?')">Power Play</span>
+      <span class="chip" onclick="pbQuickAsk('Take-home on $1000000')">Taxes</span>
+      <span class="chip" onclick="pbQuickAsk('When is the next drawing?')">Draw schedule</span>
+      <span class="chip" onclick="pbQuickAsk('Lump sum vs annuity')">Lump sum</span>
+    </div>
+    <div class="chat-messages" id="pbChatMessages"></div>
+    <div class="chat-input-row">
+      <input class="chat-input" id="pbChatInput" placeholder="Ask about prizes, odds, Power Play, taxes...">
+      <button class="chat-send" id="pbChatSend" onclick="pbSendChat()">Send</button>
+    </div>
   </div>
 </div>
 
@@ -2060,10 +2179,26 @@ function f5UpdateCost() {
   document.getElementById('f5CostTotal').textContent = 'Total: $' + total;
 }
 
+function pbUpdateCost() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('pbLineCount').value) || 6, 1), 100);
+  var pp = document.getElementById('pbPowerPlay').checked;
+  var dp = document.getElementById('pbDoublePlay').checked;
+  var base = count * 2;
+  var ppAmt = pp ? count * 1 : 0;
+  var dpAmt = dp ? count * 1 : 0;
+  var total = base + ppAmt + dpAmt;
+  var parts = count + ' play' + (count !== 1 ? 's' : '') + ' x $2 = $' + base;
+  if (pp) parts += '  +  Power Play ' + count + ' x $1 = $' + ppAmt;
+  if (dp) parts += '  +  Double Play ' + count + ' x $1 = $' + dpAmt;
+  document.getElementById('pbCostBreakdown').textContent = parts;
+  document.getElementById('pbCostTotal').textContent = 'Total: $' + total;
+}
+
 jtpUpdateCost();
 lxUpdateCost();
 cpUpdateCost();
 f5UpdateCost();
+pbUpdateCost();
 // pickUpdateCost() is called inside pickSetGame() on init
 
 function f5SendEmail() {
@@ -2885,7 +3020,304 @@ setInterval(function(){
   fetch('/nextdraw/pick').then(function(r){return r.json();}).then(function(d){pickStartCountdown(d);}).catch(function(){});
 }, 60000);
 
-// When switching to pick2/3/4 tabs, redirect to pick5 panel and set game
+// == Powerball ==
+var pbPressCount = 0;
+var pbCountdownInterval = null;
+var pbLastLines = null;
+var pbLastNextDraw = null;
+var pbLastWin = null;
+var pbLatestDate = null;
+var pbDrawn = [];
+var pbPowerballDrawn = null;
+
+fetch('/nextdraw/powerball')
+  .then(function(r){return r.json();})
+  .then(function(d){pbStartCountdown(d);})
+  .catch(function(){});
+
+function pbStartCountdown(nd) {
+  document.getElementById('pbDrawWhen').textContent = nd.dayName + ', ' + nd.date;
+  document.getElementById('pbDrawTimeLabel').textContent = 'Draw at ' + nd.drawTime;
+  document.getElementById('pbCloseTimeLabel').textContent = 'Sales close ' + nd.closeTime;
+  var badge = document.getElementById('pbSalesBadge');
+  var banner = document.getElementById('pbDrawBanner');
+  badge.textContent = nd.salesOpen ? 'Sales Open' : 'Sales Closed';
+  badge.className = 'sales-badge' + (nd.salesOpen ? '' : ' closed');
+  banner.className = 'draw-banner' + (nd.salesOpen ? '' : ' sales-closed');
+  if (pbCountdownInterval) clearInterval(pbCountdownInterval);
+  var remaining = nd.msUntilDraw;
+  function tick() {
+    if (remaining <= 0) { document.getElementById('pbCountdown').textContent = 'Drawing now!'; return; }
+    var h = Math.floor(remaining / 3600000);
+    var m = Math.floor((remaining % 3600000) / 60000);
+    var s = Math.floor((remaining % 60000) / 1000);
+    document.getElementById('pbCountdown').textContent = h > 0 ? (h + 'h ' + String(m).padStart(2,'0') + 'm') : (m + 'm ' + String(s).padStart(2,'0') + 's');
+    remaining -= 1000;
+  }
+  tick();
+  pbCountdownInterval = setInterval(tick, 1000);
+}
+
+function pbRenderLines(lines) {
+  var container = document.getElementById('pbLinesContainer');
+  pbLastLines = lines;
+  document.getElementById('pbEmailCard').style.display = 'block';
+  var html = '';
+  for (var i = 0; i < lines.length; i++) {
+    var l = lines[i];
+    var balls = l.numbers.map(function(n) {
+      return '<div class="ball">' + n + '</div>';
+    }).join('');
+    var pbBall = '<div class="ball" style="background:rgba(239,68,68,0.15);color:var(--red);border-color:rgba(239,68,68,0.4);">' + l.powerball + '</div>';
+    html += '<div class="line-card' + (i === 0 ? ' best' : '') + '"><div class="line-label">' + (i === 0 ? 'Best' : 'Line ' + l.line) + '</div><div class="balls">' + balls + '<span style="font-size:10px;color:var(--muted);margin:0 4px;align-self:center;">PB</span>' + pbBall + '</div><div class="score-wrap"><div class="score-label">' + l.score + '</div><div class="score-info" title="Score">?<div class="score-tooltip"><strong>What is this score?</strong>Scored on white ball frequency (40 pts), recency (20 pts), pair co-occurrence (15 pts), low/high balance (5 pts), spread across 1-69 (10 pts). Does NOT predict winners.</div></div></div></div>';
+  }
+  container.innerHTML = html;
+}
+
+function pbRenderHistory(history) {
+  var html = '';
+  for (var i = 0; i < history.length; i++) {
+    var d = history[i];
+    var balls = d.numbers.map(function(n){return '<div class="hball">' + n + '</div>';}).join('');
+    var pbBall = '<div class="hball" style="background:rgba(239,68,68,0.15);color:var(--red);border-color:rgba(239,68,68,0.3);">PB ' + d.powerball + '</div>';
+    html += '<div class="history-row"><div class="history-date">' + d.date + '</div><div class="history-balls">' + balls + pbBall + '</div></div>';
+  }
+  document.getElementById('pbHistoryContainer').innerHTML = html;
+}
+
+function pbRenderFreq(top, bottom) {
+  var maxCount = top.length > 0 ? top[0].count : 1;
+  function rows(nums) {
+    var html = '';
+    for (var i = 0; i < nums.length; i++) {
+      var n = nums[i];
+      var pct = Math.round(n.count / maxCount * 100);
+      html += '<tr><td style="color:var(--muted);font-size:11px;">' + (i+1) + '</td><td><span class="num-circle">' + n.number + '</span></td><td><div style="display:flex;align-items:center;gap:6px;"><div class="bar-wrap"><div class="bar-fill" style="width:' + pct + '%"></div></div><span style="color:var(--muted);font-size:11px;min-width:24px;text-align:right;">' + n.count + '</span></div></td></tr>';
+    }
+    return html;
+  }
+  document.getElementById('pbTopTable').innerHTML = rows(top);
+  document.getElementById('pbBottomTable').innerHTML = rows(bottom);
+}
+
+function pbRenderAll(data) {
+  pbStartCountdown(data.nextDraw);
+  pbLastNextDraw = data.nextDraw;
+  document.getElementById('pbDrawsBadge').textContent = data.totalDraws + ' draws analyzed';
+  document.getElementById('pbUpdatedLabel').textContent = 'Data as of: ' + data.lastUpdated;
+  pbRenderHistory(data.recentHistory);
+  pbRenderFreq(data.topNumbers, data.bottomNumbers);
+  document.getElementById('pbResults').style.display = 'block';
+}
+
+function pbGenerate() {
+  var btn = document.getElementById('pbGenerateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  var el = document.getElementById('pbStatusMsg');
+  el.className = 'status-msg'; el.style.display = 'none';
+  var count = Math.min(Math.max(parseInt(document.getElementById('pbLineCount').value) || 6, 1), 100);
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
+  fetch('/analyze/powerball?count=' + count + '&sid=' + SID, {signal:_ac.signal})
+    .then(function(res){return res.json().then(function(data){return{ok:res.ok,data:data};});})
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      pbPressCount++;
+      document.getElementById('pbPressNum').textContent = pbPressCount;
+      document.getElementById('pbPressHint').style.display = 'block';
+      document.getElementById('pbEmailBlurb').style.display = 'block';
+      if (pbPressCount === 1) pbRenderAll(r.data);
+      else pbStartCountdown(r.data.nextDraw);
+      pbRenderLines(r.data.lines);
+    })
+    .catch(function(err) {
+      el.className = 'status-msg error'; el.textContent = 'Error: ' + err.message; el.style.display = 'block';
+    })
+    .finally(function() { btn.disabled = false; btn.textContent = '\u26a1 Generate Lines'; });
+}
+
+function pbRebuildCheckLines() {
+  var count = Math.min(Math.max(parseInt(document.getElementById('pbCheckLineCount').value) || 1, 1), 30);
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    html += '<div class="line-input-row" id="pbLineRow' + i + '"><span class="line-row-label">Line ' + (i+1) + '</span><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
+    html += '<input class="num-input" placeholder="#1" maxlength="2"><input class="num-input" placeholder="#2" maxlength="2"><input class="num-input" placeholder="#3" maxlength="2"><input class="num-input" placeholder="#4" maxlength="2"><input class="num-input" placeholder="#5" maxlength="2">';
+    html += '<span style="font-size:11px;color:var(--muted);margin:0 4px;">PB</span><input class="num-input" placeholder="PB" maxlength="2" style="border-color:rgba(239,68,68,0.4);">';
+    html += '</div></div>';
+  }
+  document.getElementById('pbLinesInputs').innerHTML = html;
+}
+pbRebuildCheckLines();
+
+function pbLookupDraw() {
+  var dateVal = document.getElementById('pbDrawDate').value;
+  var msg = document.getElementById('pbDrawLookupMsg');
+  var display = document.getElementById('pbDrawnDisplay');
+  pbDrawn = []; pbPowerballDrawn = null;
+  display.style.display = 'none';
+  document.getElementById('pbDrawnBalls').innerHTML = '';
+  if (!dateVal) { msg.textContent = ''; return; }
+  var parts = dateVal.split('-');
+  var mmddyyyy = parts[1] + '/' + parts[2] + '/' + parts[0];
+  msg.style.color = 'var(--muted)'; msg.textContent = 'Looking up...';
+  var _pbDate = dateVal;
+  if (window._pbLookupAC) window._pbLookupAC.abort('new-lookup');
+  window._pbLookupAC = new AbortController();
+  setTimeout(function(){if(window._pbLookupAC)window._pbLookupAC.abort('timeout');}, 60000);
+  fetch('/draws/powerball?date=' + encodeURIComponent(mmddyyyy), {signal: window._pbLookupAC.signal})
+    .then(function(r){return r.json();})
+    .then(function(data) {
+      if (document.getElementById('pbDrawDate').value !== _pbDate) return;
+      if (data.error) {
+        msg.style.color = 'var(--red)'; msg.textContent = data.error;
+        if (data.resultsUrl) msg.innerHTML = data.error + ' <a href="' + data.resultsUrl + '" target="_blank" style="color:var(--accent);">View official results</a>';
+        return;
+      }
+      pbDrawn = data.numbers; pbPowerballDrawn = data.powerball;
+      msg.textContent = '';
+      display.style.display = 'block';
+      var isLatest = pbLatestDate && document.getElementById('pbDrawDate').value === pbLatestDate;
+      var ballStyle = isLatest ? 'background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)' : 'background:rgba(34,197,94,0.15);color:var(--green);border-color:rgba(34,197,94,0.4)';
+      var pbBallStyle = isLatest ? 'background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)' : 'background:rgba(239,68,68,0.15);color:var(--red);border-color:rgba(239,68,68,0.4)';
+      document.getElementById('pbDrawnBalls').innerHTML =
+        data.numbers.map(function(n){return '<div class="hball" style="' + ballStyle + ';width:36px;height:36px;font-size:13px;">' + n + '</div>';}).join('') +
+        '<span style="font-size:11px;color:var(--muted);margin:0 6px;">PB</span>' +
+        '<div class="hball" style="' + pbBallStyle + ';width:36px;height:36px;font-size:13px;">' + data.powerball + '</div>';
+    })
+    .catch(function(e){if(e&&e.name==='AbortError'){msg.textContent='';return;} msg.style.color='var(--red)';msg.textContent='Lookup failed.';});
+}
+
+function pbCheckNumbers() {
+  if (!pbDrawn.length || pbPowerballDrawn === null) {
+    document.getElementById('pbCheckResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Select a draw date first.</div>'; return;
+  }
+  var lineRows = document.querySelectorAll('#pbLinesInputs .line-input-row');
+  var allResults = []; var totalWin = 0; var pending = lineRows.length;
+  var resultEl = document.getElementById('pbCheckResult');
+  resultEl.innerHTML = '';
+  var pp = parseInt(document.getElementById('pbPowerPlayCheck').value) || 0;
+  for (var r = 0; r < lineRows.length; r++) {
+    var inputs = lineRows[r].querySelectorAll('.num-input');
+    var line = [];
+    for (var j = 0; j < 5; j++) {
+      var v = parseInt(inputs[j].value.trim());
+      if (isNaN(v) || v < 1 || v > 69) { resultEl.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter all 5 white numbers (1-69) for Line ' + (r+1) + '.</div>'; return; }
+      line.push(v);
+    }
+    var pbPlayed = parseInt(inputs[5].value.trim());
+    if (isNaN(pbPlayed) || pbPlayed < 1 || pbPlayed > 26) { resultEl.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter Powerball (1-26) for Line ' + (r+1) + '.</div>'; return; }
+    (function(lineNums, pbP, idx) {
+      var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 15000);
+      fetch('/check/powerball', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({drawn:pbDrawn,powerballDrawn:pbPowerballDrawn,line:lineNums,powerballPlayed:pbP,powerPlay:pp}),signal:_ac.signal})
+        .then(function(res){return res.json();})
+        .then(function(data) {
+          allResults[idx] = data;
+          totalWin += data.prize || 0;
+          pending--;
+          if (pending > 0) return;
+          var html = '';
+          allResults.forEach(function(d, i) {
+            var isWin = d.isJackpot || d.prize > 0;
+            var color = d.isJackpot ? 'var(--yellow)' : (isWin ? 'var(--green)' : 'var(--muted)');
+            var label = allResults.length > 1 ? 'Line ' + (i+1) : 'Your Line';
+            html += '<div class="check-line-result' + (isWin ? ' winner' : '') + '"><span style="font-weight:700;">' + label + '</span> &mdash; ' + d.whiteCount + ' white match' + (d.whiteCount!==1?'es':'') + (d.pbMatch?' + PB':'') + ' &mdash; <span style="color:' + color + ';font-weight:700;">' + d.prizeDisplay + '</span></div>';
+          });
+          pbLastWin = totalWin;
+          var totalLabel = totalWin > 0 ? 'Estimated Winnings' : 'No Prize This Draw';
+          html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount" style="color:' + (totalWin>0?'var(--yellow)':'var(--muted)') + ';">' + (totalWin>0?'approx $'+totalWin.toLocaleString():'$0') + '</div></div>';
+          resultEl.innerHTML = html;
+        })
+        .catch(function(err){resultEl.innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';});
+    })(line, pbPlayed, r);
+  }
+}
+
+function pbClearCheck() {
+  document.getElementById('pbCheckLineCount').value = '1';
+  pbRebuildCheckLines();
+  document.getElementById('pbPowerPlayCheck').value = '0';
+  document.getElementById('pbCheckResult').innerHTML = '';
+  document.getElementById('pbDrawDate').value = '';
+  document.getElementById('pbDrawnDisplay').style.display = 'none';
+  document.getElementById('pbDrawnBalls').innerHTML = '';
+  document.getElementById('pbDrawLookupMsg').textContent = '';
+  pbDrawn = []; pbPowerballDrawn = null; pbLastWin = null;
+}
+
+function pbAppendMsg(role, text) {
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + role; div.textContent = text;
+  var msgs = document.getElementById('pbChatMessages');
+  msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight; return div;
+}
+
+function pbSendChat() {
+  var input = document.getElementById('pbChatInput');
+  var msg = input.value.trim(); if (!msg) return;
+  input.value = '';
+  var btn = document.getElementById('pbChatSend'); btn.disabled = true;
+  pbAppendMsg('user', msg);
+  var thinking = pbAppendMsg('thinking', 'Thinking...');
+  var tickets = pbLastLines ? pbLastLines.length : 0;
+  var pp = document.getElementById('pbPowerPlay').checked;
+  var dp = document.getElementById('pbDoublePlay').checked;
+  var spend = tickets * (2 + (pp?1:0) + (dp?1:0));
+  var ctx = tickets > 0 ? { spend: spend, lines: tickets, game: 'powerball', won: pbLastWin } : null;
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 15000);
+  fetch('/chat/powerball', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,context:ctx}),signal:_ac.signal})
+    .then(function(r){return r.json();})
+    .then(function(data){thinking.remove();pbAppendMsg('bot',data.reply||data.error||'No response.');})
+    .catch(function(){thinking.remove();pbAppendMsg('bot','Error reaching server.');})
+    .finally(function(){btn.disabled=false;input.focus();});
+}
+
+function pbSendEmail() {
+  var to = document.getElementById('pbEmailTo').value.trim();
+  if (!to) { document.getElementById('pbEmailStatus').style.color='var(--red)'; document.getElementById('pbEmailStatus').textContent='Please enter at least one email address.'; return; }
+  var incLines = document.getElementById('pbEmailIncLines').checked && pbLastLines && pbLastLines.length > 0;
+  var incWinning = document.getElementById('pbEmailIncWinning').checked && pbDrawn.length > 0;
+  if (!incLines) { document.getElementById('pbEmailStatus').style.color='var(--red)'; document.getElementById('pbEmailStatus').textContent='Generate lines first before sending.'; return; }
+  var btn = document.getElementById('pbEmailSendBtn'); btn.disabled = true; btn.textContent = 'Sending...';
+  document.getElementById('pbEmailStatus').textContent = '';
+  var lines = pbLastLines.map(function(l,i){return{line:i+1,numbers:l.numbers.concat([l.powerball]),score:l.score};});
+  var winNums = incWinning ? pbDrawn.concat([pbPowerballDrawn]) : null;
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
+  fetch('/email', {method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to:to,lines:lines,nextDraw:pbLastNextDraw,game:'powerball',winningNumbers:winNums,winDrawDate:incWinning?document.getElementById('pbDrawDate').value:null,winPrize:(incWinning&&pbLastWin!=null)?pbLastWin:null}),signal:_ac.signal})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error){document.getElementById('pbEmailStatus').style.color='var(--red)';document.getElementById('pbEmailStatus').textContent=data.error;}
+      else{document.getElementById('pbEmailStatus').style.color='var(--green)';document.getElementById('pbEmailStatus').textContent='Sent to '+data.sent+' recipient'+(data.sent>1?'s':'')+'.';}
+    })
+    .catch(function(err){document.getElementById('pbEmailStatus').style.color='var(--red)';document.getElementById('pbEmailStatus').textContent='Error: '+err.message;})
+    .finally(function(){btn.disabled=false;btn.innerHTML='&#128140; Send Lines';});
+}
+
+function pbQuickAsk(q){document.getElementById('pbChatInput').value=q;pbSendChat();}
+document.getElementById('pbChatInput').addEventListener('keydown',function(e){if(e.key==='Enter')pbSendChat();});
+
+function pbPickDate(d){var p=d.split('/');document.getElementById('pbDrawDate').value=p[2]+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0');pbLookupDraw();}
+fetch('/draws/powerball/available').then(function(r){return r.json();}).then(function(d){renderDateChips('pbDateChips',d.dates,'pbPickDate');}).catch(function(){});
+
+fetch('/latestdraw/powerball').then(function(r){return r.json();}).then(function(d){
+  if(d.error)return;
+  pbDrawn=d.numbers; pbPowerballDrawn=d.powerball;
+  pbLatestDate=mmddyyToInputDate(d.date);
+  document.getElementById('pbDrawDate').value=pbLatestDate;
+  document.getElementById('pbDrawnDisplay').style.display='block';
+  var ballStyle='background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4)';
+  document.getElementById('pbDrawnBalls').innerHTML=
+    d.numbers.map(function(n){return '<div class="hball" style="'+ballStyle+';width:36px;height:36px;font-size:13px;">'+n+'</div>';}).join('')+
+    '<span style="font-size:11px;color:var(--muted);margin:0 6px;">PB</span>'+
+    '<div class="hball" style="background:rgba(245,158,11,0.15);color:var(--yellow);border-color:rgba(245,158,11,0.4);width:36px;height:36px;font-size:13px;">'+d.powerball+'</div>';
+}).catch(function(){});
+
+// Add Powerball to 60s poll
+setInterval(function(){
+  fetch('/nextdraw/powerball').then(function(r){return r.json();}).then(function(d){pbStartCountdown(d);}).catch(function(){});
+}, 60000);
+
+// When switching to powerball tab
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.game-panel').forEach(function(p){p.classList.remove('active');});
@@ -2897,7 +3329,6 @@ function switchTab(id) {
     document.getElementById('panel-'+id).classList.add('active');
   }
 }
-</script>
 
 <!-- FAQ Modal -->
 <div class="modal-overlay" id="faqModal" onclick="if(event.target===this)closeFAQ()">

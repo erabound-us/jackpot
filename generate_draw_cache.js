@@ -140,6 +140,28 @@ async function main() {
     console.log('  Wrote ' + Math.min(draws.length, 500) + ' draws -> ' + game + '_draws.json (latest: ' + (draws[0] ? draws[0].date + ' ' + draws[0].drawType : 'none') + ')');
   }
 
+  console.log('Generating Powerball draw cache...');
+  const pbText = await extractPDFText(path.join(__dirname, 'powerball_winning-numbers-history.pdf'));
+  const pbRe = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+PB\s+(\d{1,2})\s+(?:X\d+\s+)?POWERBALL(?!\s+DP)/g;
+  const pbDraws = [];
+  let pbM;
+  while ((pbM = pbRe.exec(pbText)) !== null) {
+    const date = pbM[1];
+    const nums = pbM[2].match(/\d+/g);
+    if (!nums || nums.length < 5) continue;
+    const white = nums.slice(0, 5).map(Number).filter(n => n >= 1 && n <= 69);
+    const pb = parseInt(pbM[3]);
+    if (white.length !== 5 || pb < 1 || pb > 26) continue;
+    const parts = date.split('/');
+    let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+    const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
+    if (ts > Date.now() || ts < new Date('1992-01-01').getTime()) continue;
+    pbDraws.push({ date, numbers: white, powerball: pb, ts });
+  }
+  pbDraws.sort((a, b) => b.ts - a.ts);
+  fs.writeFileSync(path.join(__dirname, 'powerball_draws.json'), JSON.stringify(pbDraws.slice(0, 500), null, 2));
+  console.log(`  Wrote ${Math.min(pbDraws.length, 500)} draws (of ${pbDraws.length} total) -> powerball_draws.json (latest: ${pbDraws[0] ? pbDraws[0].date : 'none'})`);
+
   console.log('Done.');
 }
 

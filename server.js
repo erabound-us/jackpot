@@ -1383,7 +1383,7 @@ async function start() {
     process.stdout.write('Loading draw caches and downloading PDFs...');
     // Hard timeout: mark server ready after 90s regardless
     setTimeout(() => { if (!_serverReady) { _serverReady = true; console.log('Server ready (startup timeout).'); } }, 90000);
-    try { getLottoXDraws(); getFantasy5Draws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
+    try { getLottoXDraws(); getFantasy5Draws(); getPbDraws(); console.log(' done.'); } catch(e) { console.log(' warning: ' + e.message); }
     // Download PDFs, warm JTP+CP caches, then run delta detection
     try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
     _serverReady = true;
@@ -1393,7 +1393,8 @@ async function start() {
       .then(() => appendJtpDeltas()).catch(() => {})
       .then(() => appendCpDeltas()).catch(() => {})
       .then(() => appendLottoXDeltas())
-      .then(() => appendFantasy5Deltas()).catch(() => {});
+      .then(() => appendFantasy5Deltas()).catch(() => {})
+      .then(() => appendPbDeltas()).catch(() => {});
     // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
   });
 }
@@ -2332,6 +2333,7 @@ function getLastDrawTime(game) {
   const today = new Date(nowET); today.setSeconds(0, 0);
 
   const drawSchedules = {
+    powerball: [{ days: [1, 3, 6], h: 22, m: 59 }],  // Mon, Wed, Sat 10:59 PM
     jtp:     [{ days: [2, 5], h: 23, m: 15 }],  // Tue, Fri 11:15 PM
     lottox:  [{ days: [3, 6], h: 23, m: 15 }],  // Wed, Sat 11:15 PM
     fantasy5:[{ days: null,   h: 13, m:  5 }, { days: null, h: 23, m: 15 }], // daily 1:05 PM + 11:15 PM
@@ -2955,6 +2957,350 @@ async function appendPickDeltas(game) {
   fs.writeFileSync(PICK_DRAWS_PATHS[game], JSON.stringify(merged, null, 2));
   console.log(game + ': appended ' + newDraws.length + ' new draws.');
 }
+
+// ── Powerball ────────────────────────────────────────────────────────────────
+// 5 white balls 1-69 + 1 Powerball 1-26. Draws Mon/Wed/Sat ~10:59 PM ET.
+// PDF rows: M/D/YY  N N N N N  PB N  [X#]  POWERBALL  (base game only, skip DP rows)
+
+function parsePbHistoryPDF(text) {
+  const draws = [];
+  const re = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+PB\s+(\d{1,2})\s+(?:X\d+\s+)?POWERBALL(?!\s+DP)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const date = m[1];
+    const nums = m[2].match(/\d+/g);
+    if (!nums || nums.length < 5) continue;
+    const white = nums.slice(0, 5).map(Number).filter(n => n >= 1 && n <= 69);
+    const pb = parseInt(m[3]);
+    if (white.length !== 5 || pb < 1 || pb > 26) continue;
+    const parts = date.split('/');
+    let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+    const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
+    if (ts > Date.now() || ts < new Date('1992-01-01').getTime()) continue;
+    draws.push({ date, numbers: white, powerball: pb, ts });
+  }
+  draws.sort((a, b) => b.ts - a.ts);
+  return draws.slice(0, 500);
+}
+
+function getPbDraws() {
+  if (!pbDrawsCache) pbDrawsCache = JSON.parse(fs.readFileSync(PB_DRAWS_PATH, 'utf8'));
+  return pbDrawsCache;
+}
+
+let pbLastPdfMtime = null;
+async function appendPbDeltas() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_PB).mtimeMs; } catch(e) { return; }
+  if (mtime === pbLastPdfMtime) { console.log('PB: PDF unchanged, skipping delta.'); return; }
+  const existing = getPbDraws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  let text;
+  try { text = await extractPDFText(PDF_PATH_PB); } catch(e) { return; }
+  pbLastPdfMtime = mtime;
+  const all = parsePbHistoryPDF(text);
+  const newDraws = all.filter(d => d.ts > newestTs);
+  if (!newDraws.length) { console.log('PB: no new draws.'); return; }
+  const merged = [...newDraws, ...existing].slice(0, 500);
+  pbDrawsCache = merged;
+  fs.writeFileSync(PB_DRAWS_PATH, JSON.stringify(merged, null, 2));
+  console.log('PB: appended ' + newDraws.length + ' new draws.');
+}
+
+function getNextDrawPowerball() {
+  const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const DRAW_DAYS = [1, 3, 6]; // Mon=1, Wed=3, Sat=6
+  const DRAW_H = 22, DRAW_M = 59, CLOSE_H = 22, CLOSE_M = 0;
+  const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const candidate = new Date(nowET);
+  candidate.setSeconds(0, 0);
+  for (let i = 0; i < 8; i++) {
+    if (DRAW_DAYS.includes(candidate.getDay())) {
+      candidate.setHours(DRAW_H, DRAW_M, 0, 0);
+      if (candidate > nowET) break;
+    }
+    candidate.setDate(candidate.getDate() + 1);
+    candidate.setHours(0, 0, 0, 0);
+  }
+  const salesClose = new Date(candidate);
+  salesClose.setHours(CLOSE_H, CLOSE_M, 0, 0);
+  return {
+    dayName: DAY_NAMES[candidate.getDay()],
+    date: MON_NAMES[candidate.getMonth()] + ' ' + candidate.getDate() + ', ' + candidate.getFullYear(),
+    drawTime: '10:59 PM ET', closeTime: '10:00 PM ET',
+    salesOpen: nowET < salesClose, msUntilDraw: candidate - nowET
+  };
+}
+
+function scorePowerball(nums, freq, draws, totalDraws) {
+  const numArrays = draws.map(d => d.numbers);
+  let score = 0;
+  const maxFreq = Math.max(...Object.values(freq));
+  nums.forEach(n => { score += (freq[n] || 0) / maxFreq * 40; });
+  const recent = numArrays.slice(0, 50);
+  nums.forEach(n => {
+    const lastIdx = recent.map((d, i) => d.includes(n) ? i : -1).filter(i => i >= 0).pop();
+    if (lastIdx !== undefined) score += (lastIdx / recent.length) * 20;
+  });
+  const pairCounts = {};
+  numArrays.forEach(d => {
+    for (let i = 0; i < d.length; i++)
+      for (let j = i + 1; j < d.length; j++) {
+        const k = d[i] + '-' + d[j];
+        pairCounts[k] = (pairCounts[k] || 0) + 1;
+      }
+  });
+  for (let i = 0; i < nums.length; i++)
+    for (let j = i + 1; j < nums.length; j++) {
+      const k = Math.min(nums[i],nums[j]) + '-' + Math.max(nums[i],nums[j]);
+      score += (pairCounts[k] || 0) / totalDraws * 15;
+    }
+  const low = nums.filter(n => n <= 34).length;
+  score += (2 - Math.abs(low - 2)) * 5;
+  const sorted = [...nums].sort((a, b) => a - b);
+  score += Math.min((sorted[4] - sorted[0]) / 68, 1) * 10;
+  return score;
+}
+
+function generatePbLines(freq, pbFreq, draws, count, seenLines) {
+  const totalDraws = draws.length;
+  const pool = Array.from({ length: 69 }, (_, i) => i + 1)
+    .sort((a, b) => (freq[b] || 0) - (freq[a] || 0)).slice(0, 40);
+  const pbPool = Array.from({ length: 26 }, (_, i) => i + 1)
+    .sort((a, b) => (pbFreq[b] || 0) - (pbFreq[a] || 0)).slice(0, 16);
+  const candidateTarget = Math.max(5000, count * 100);
+  const usedCombos = new Set();
+  const candidates = [];
+  for (let attempt = 0; attempt < candidateTarget; attempt++) {
+    const candidate = [];
+    const available = [...pool];
+    while (candidate.length < 5) {
+      const weights = available.map(n => (freq[n] || 1));
+      const total = weights.reduce((a, b) => a + b, 0);
+      let r = Math.random() * total, idx = 0;
+      for (; idx < weights.length - 1; idx++) { r -= weights[idx]; if (r <= 0) break; }
+      candidate.push(available[idx]);
+      available.splice(idx, 1);
+    }
+    candidate.sort((a, b) => a - b);
+    const pbIdx = Math.floor(Math.random() * pbPool.length);
+    const pb = pbPool[pbIdx];
+    const key = candidate.join(',') + '|' + pb;
+    if (!usedCombos.has(key)) {
+      usedCombos.add(key);
+      const penalty = seenLines.has(key) ? 30 : 0;
+      candidates.push({ nums: candidate, powerball: pb, score: scorePowerball(candidate, freq, draws, totalDraws) - penalty });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  const lines = [];
+  for (const c of candidates) {
+    if (lines.length >= count) break;
+    if (!lines.some(l => l.nums.filter(n => c.nums.includes(n)).length > 3)) lines.push(c);
+  }
+  for (const c of candidates) {
+    if (lines.length >= count) break;
+    if (!lines.includes(c)) lines.push(c);
+  }
+  return lines.slice(0, count);
+}
+
+let lastAutoRefreshPB = null;
+let autoRefreshPBPromise = null;
+
+async function ensureDailyRefreshPB() {
+  const today = todayET();
+  if (lastAutoRefreshPB === today) return;
+  if (autoRefreshPBPromise) return autoRefreshPBPromise;
+  autoRefreshPBPromise = downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => {
+    lastAutoRefreshPB = today;
+    autoRefreshPBPromise = null;
+    console.log('Auto-refreshed Powerball PDF for ' + today);
+  }).catch(err => {
+    autoRefreshPBPromise = null;
+    console.warn('Powerball auto-refresh failed: ' + err.message + ' (using cached PDF)');
+  });
+  return autoRefreshPBPromise;
+}
+
+async function runAnalysisPowerball(count, sid) {
+  const draws = getPbDraws();
+  if (draws.length < 10) throw new Error('Only ' + draws.length + ' Powerball draws in cache.');
+  const freq = {}, pbFreq = {};
+  draws.forEach(d => {
+    d.numbers.forEach(n => { freq[n] = (freq[n] || 0) + 1; });
+    pbFreq[d.powerball] = (pbFreq[d.powerball] || 0) + 1;
+  });
+  const sess = sid ? getSession(sid) : { lines: new Set() };
+  const lines = generatePbLines(freq, pbFreq, draws, count, sess.lines);
+  lines.forEach(l => sess.lines.add(l.nums.join(',') + '|' + l.powerball));
+  const freqStats = Object.entries(freq).map(([n, c]) => ({ number: parseInt(n), count: c })).sort((a, b) => b.count - a.count);
+  const pbFreqStats = Object.entries(pbFreq).map(([n, c]) => ({ number: parseInt(n), count: c })).sort((a, b) => b.count - a.count);
+  return {
+    totalDraws: draws.length, nextDraw: getNextDrawPowerball(),
+    recentHistory: draws.slice(0, 10),
+    lines: lines.map((l, i) => ({ line: i + 1, numbers: l.nums, powerball: l.powerball, score: Math.round(l.score * 10) / 10 })),
+    topNumbers: freqStats.slice(0, 10), bottomNumbers: freqStats.slice(-10).reverse(),
+    topPowerballs: pbFreqStats.slice(0, 5),
+    lastUpdated: draws[0] ? draws[0].date : 'unknown'
+  };
+}
+
+function chatReplyPowerball(question, context) {
+  const q = question.toLowerCase().trim();
+  if (TZ_RE.test(q)) return TZ_REPLY;
+  if (FL_APP_RE.test(q)) return FL_APP_REPLY;
+  const wl = tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context);
+  if (wl) return wl;
+  const taxM = q.match(/(?:take.?home|after.?tax|net|lump.?sum|keep).{0,30}\$(\d[\d,]*)/i) ||
+               q.match(/\$(\d[\d,]*).{0,30}(?:take.?home|after.?tax|net|lump.?sum|keep)/i) ||
+               q.match(/(?:tax|take.?home|net|keep).{0,20}(\d[\d,]+)/i);
+  if (taxM) {
+    const raw = parseInt(taxM[1].replace(/,/g, ''));
+    if (raw >= 1 && raw <= 2000000000) {
+      const wh = raw > 5000 ? Math.round(raw * 0.24) : 0;
+      const net = raw - wh;
+      const ann = raw > 1000000 ? '\n- Annuity (30 yrs): ~$' + Math.round(raw / 30).toLocaleString() + '/yr before tax' : '';
+      return 'Prize: $' + raw.toLocaleString() + ann +
+        '\n- Federal withholding (24%): -$' + wh.toLocaleString() +
+        '\n- Florida state tax: $0' +
+        '\n- Estimated take-home: ~$' + net.toLocaleString() +
+        '\n\nNote: Additional federal tax may be owed at filing (up to 37%). Consult a tax professional.';
+    }
+  }
+  const matchM = q.match(/(\d).{0,10}(?:of|out of).{0,5}5.{0,20}(?:plus|\+|with|and).{0,10}powerball/i) ||
+                 q.match(/powerball.{0,20}(\d).{0,10}(?:of|out of).{0,5}5/i);
+  if (matchM) {
+    const m = parseInt(matchM[1]);
+    const prizes = { 5: 'Jackpot', 4: '$50,000', 3: '$100', 2: '$7', 1: '$4', 0: '$4' };
+    if (m >= 0 && m <= 5) return m + ' of 5 + Powerball: ' + (prizes[m] || 'No prize') + '\n\nTip: ask "take-home on $50000" for exact math.';
+  }
+  const simpleM = q.match(/(\d).{0,10}(?:of|out of).{0,5}5(?!.*powerball)/i);
+  if (simpleM) {
+    const m = parseInt(simpleM[1]);
+    const prizes = { 5: '$1,000,000', 4: '$100', 3: '$7', 2: 'No prize', 1: 'No prize', 0: 'No prize' };
+    if (m >= 0 && m <= 5) return m + ' of 5 (no Powerball): ' + (prizes[m] || 'No prize');
+  }
+  if (/power.?play/.test(q))
+    return 'Power Play (+$1) multiplies non-jackpot prizes by 2x, 3x, 4x, 5x, or 10x (10x only when jackpot is $150M or less).\n\nException: 5-of-5 (Match 5, no Powerball) is always boosted to $2,000,000 with Power Play regardless of the multiplier drawn.\n\nPower Play does NOT apply to the jackpot.\n\nMultiplier odds (jackpot <= $150M): 10x is 1 in 43 | 5x is 1 in 21.5 | 4x is 1 in 14.3 | 3x is 1 in 3.3 | 2x is 1 in 1.8';
+  if (/double.?play/.test(q))
+    return 'Double Play (+$1) uses your same 6 numbers in a separate drawing held after the main Powerball draw.\n\nDouble Play top prize: $10,000,000 (fixed). All other Double Play prizes are set amounts.\nDouble Play cannot be multiplied by Power Play.\nOverall Double Play odds: 1 in 24.87';
+  if (/jackpot|prize|win|payout|how much|worth/.test(q))
+    return 'Powerball prizes (per play):\n\n- 5 of 5 + PB (Jackpot): pari-mutuel, starts ~$20M\n- 5 of 5 (no PB): $1,000,000\n- 4 of 5 + PB: $50,000\n- 4 of 5: $100\n- 3 of 5 + PB: $100\n- 3 of 5: $7\n- 2 of 5 + PB: $7\n- 1 of 5 + PB: $4\n- 0 of 5 + PB: $4\n\nOverall odds: 1 in 24.87\n\nAdd Power Play (+$1) to multiply non-jackpot prizes up to 10x.';
+  if (/odd|chance|probabilit/.test(q))
+    return 'Powerball odds (per play):\n\n- Jackpot (5+PB): 1 in 292,201,338\n- 5 of 5 (no PB): 1 in 11,688,054\n- 4 of 5 + PB: 1 in 913,129\n- 4 of 5: 1 in 36,525\n- 3 of 5 + PB: 1 in 14,494\n- 3 of 5: 1 in 580\n- 2 of 5 + PB: 1 in 701\n- 1 of 5 + PB: 1 in 92\n- 0 of 5 + PB: 1 in 38\n- Any prize: 1 in 24.87';
+  if (/cost|price|how much|ticket.{0,10}cost|how much.{0,10}play|spend/.test(q))
+    return 'Powerball ticket costs (estimated, subject to change):\n\n- Base play: $2 per play\n- Power Play add-on: +$1 per play\n- Double Play add-on: +$1 per play\n\nExamples:\n- 1 play base: $2\n- 1 play + Power Play: $3\n- 6 plays base: $12\n- 6 plays + both add-ons: $24\n\nAlways confirm at your retailer.';
+  if (/how.{0,10}play|rules|work|ticket/.test(q))
+    return 'How to play Powerball:\n\n- Cost: $2 per play\n- Pick 5 numbers from 1-69 (white balls) + 1 Powerball from 1-26\n- Drawings: Monday, Wednesday & Saturday at ~10:59 PM ET\n- Sales close at 10:00 PM ET on draw nights\n- Add Power Play (+$1) to multiply non-jackpot prizes\n- Add Double Play (+$1) for a bonus drawing with a $10M top prize\n- Jackpot paid as 30-year annuity or cash lump sum (~60%)';
+  if (/when|draw|schedul|time|day|monday|wednesday|saturday/.test(q))
+    return 'Powerball drawing schedule:\n\n- Draw days: Monday, Wednesday & Saturday\n- Draw time: ~10:59 PM Eastern Time\n- Sales close: 10:00 PM ET on draw nights\n- Tickets purchased after 10:00 PM go into the next drawing';
+  if (/lump|cash|annuit|payment|option/.test(q))
+    return 'Powerball jackpot payment options:\n\n- Annuity: 30 annual payments, increasing each year\n- Cash lump sum: ~60% of advertised jackpot, paid immediately\n- Must elect cash option within 60 days of the drawing\n- Both options subject to 24% federal withholding\n- Florida has NO state income tax';
+  if (/cancel|void/.test(q))
+    return 'Powerball tickets cannot be canceled once printed. Jackpot Combo tickets also cannot be canceled.';
+  if (/claim|expir|collect|redeem/.test(q))
+    return 'Powerball prize claim:\n\n- Prizes expire 180 days from the drawing date\n- Up to $599: claim at any Florida Lottery retailer\n- $600+: Florida Lottery district office or headquarters\n- Must elect lump sum within 60 days';
+  if (/advance|multiple.?draw/.test(q))
+    return 'Advance Play: up to 39 consecutive Powerball drawings. Not available with Jackpot Combo.';
+  if (/jackpot.?combo|combo.?jackpot/.test(q))
+    return 'Jackpot Combo ($9): a bundle of one Florida Lotto ($2), one Powerball ($2), and one Mega Millions ($5) Quick Pick ticket. No add-ons or Advance Play available with Jackpot Combo.';
+  return 'I can answer questions about Powerball prizes, odds, Power Play, Double Play, taxes, and draw schedule.\n\nTry asking:\n- "What are the jackpot odds?"\n- "What do I win for 4 of 5 + Powerball?"\n- "How does Power Play work?"\n- "Take-home on $1,000,000"\n- "When is the next drawing?"';
+}
+
+app.get('/nextdraw/powerball', (req, res) => res.json(getNextDrawPowerball()));
+
+app.get('/analyze/powerball', async (req, res) => {
+  try {
+    await ensureDailyRefreshPB();
+    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 100);
+    const sid = req.query.sid || null;
+    res.json(await runAnalysisPowerball(count, sid));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/refresh/powerball', (req, res) => {
+  const sid = req.body && req.body.sid ? req.body.sid : null;
+  enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => {
+    lastAutoRefreshPB = null; pbDrawsCache = null; return appendPbDeltas();
+  }));
+  clearSession(sid);
+  res.json({ queued: true, game: 'powerball' });
+});
+
+app.post('/check/powerball', (req, res) => {
+  const { drawn, powerballDrawn, line, powerballPlayed, powerPlay } = req.body;
+  if (!Array.isArray(drawn) || drawn.length !== 5 || !Array.isArray(line) || line.length !== 5)
+    return res.status(400).json({ error: 'Provide drawn (5 numbers) and line (5 numbers).' });
+  const pb = parseInt(powerballDrawn);
+  const pbP = parseInt(powerballPlayed);
+  if (isNaN(pb) || pb < 1 || pb > 26) return res.status(400).json({ error: 'powerballDrawn must be 1-26.' });
+  if (isNaN(pbP) || pbP < 1 || pbP > 26) return res.status(400).json({ error: 'powerballPlayed must be 1-26.' });
+  const VALID_PP = [2, 3, 4, 5, 10];
+  const pp = VALID_PP.includes(parseInt(powerPlay)) ? parseInt(powerPlay) : 0;
+  const drawnSet = new Set(drawn.map(Number));
+  const nums = line.map(Number);
+  const matched = nums.filter(n => drawnSet.has(n));
+  const wCount = matched.length;
+  const pbMatch = pbP === pb;
+  const BASE = {
+    '5+1': 'JACKPOT', '5+0': 1000000,
+    '4+1': 50000,    '4+0': 100,
+    '3+1': 100,      '3+0': 7,
+    '2+1': 7,        '1+1': 4,
+    '0+1': 4,        '0+0': 0
+  };
+  const tier = wCount + (pbMatch ? '+1' : '+0');
+  const raw = BASE[tier] || 0;
+  let prize = 0, prizeDisplay, isJackpot = false;
+  if (raw === 'JACKPOT') { isJackpot = true; prizeDisplay = 'JACKPOT'; }
+  else if (raw > 0) {
+    if (pp > 0 && !isJackpot) {
+      prize = (wCount === 5 && !pbMatch) ? 2000000 : raw * pp;
+    } else { prize = raw; }
+    prizeDisplay = '$' + prize.toLocaleString() + (pp > 0 && !isJackpot ? ' (' + pp + 'x Power Play)' : '');
+  } else { prizeDisplay = 'No prize'; }
+  const wh = prize > 5000 ? Math.round(prize * 0.24) : 0;
+  res.json({ drawn: drawn.map(Number), powerballDrawn: pb, line: nums, powerballPlayed: pbP, matched, whiteCount: wCount, pbMatch, tier, prize, prizeDisplay, isJackpot, powerPlay: pp, withholding: wh, takeHome: prize - wh });
+});
+
+app.get('/latestdraw/powerball', (req, res) => {
+  try {
+    const draws = getPbDraws();
+    if (!draws.length) return res.status(404).json({ error: 'No draws found.' });
+    const d = draws[0];
+    res.json({ date: d.date, numbers: d.numbers, powerball: d.powerball });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/draws/powerball', (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
+  if (!isValidDrawDay(date, [1, 3, 6])) return res.status(404).json({ error: 'No Powerball draw on that date (draws Mon/Wed/Sat).', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
+  try {
+    const draws = getPbDraws();
+    const pdfDate = normDateForPDF(date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
+    if (match) return res.json({ date: match.date, numbers: match.numbers, powerball: match.powerball });
+  } catch(e) {}
+  res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
+});
+
+app.get('/draws/powerball/available', (req, res) => {
+  try {
+    const draws = getPbDraws();
+    const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===1||day===3||day===6; });
+    const dates = filtered.slice(0, 5).map(d => expandYear(d.date));
+    res.json({ dates });
+  } catch(e) { res.json({ dates: [] }); }
+});
+
+app.post('/chat/powerball', (req, res) => {
+  const { message, context } = req.body;
+  if (!message || typeof message !== 'string') return res.status(400).json({ error: 'No message provided.' });
+  res.json({ reply: chatReplyPowerball(message, context) });
+});
 
 function schedulePostDrawRefreshes() {
   const f5Times  = [[13, 10], [23, 20]];
