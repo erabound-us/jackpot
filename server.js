@@ -1945,13 +1945,15 @@ function saveJackpotCacheToFile() {
 }
 
 function extractAndCacheJackpot(game, html) {
-  if (!['jtp','lottox','fantasy5'].includes(game)) return;
+  if (!['jtp','lottox','fantasy5','powerball'].includes(game)) return;
   const now = Date.now();
   if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return; // still fresh
   // Primary: FL Lottery renders jackpot in a span with class="draw-game-jackpot"
   const classM = html.match(/draw-game-jackpot[^>]*>([^<]+)</);
   if (classM) {
     const amount = classM[1].trim();
+    // Reject placeholder/error values that indicate the page didn't fully render
+    if (!amount || amount === 'Not Available' || amount === 'N/A' || amount.length < 2) return;
     _jackpotCache[game] = { amount, ts: now };
     console.log('Jackpot cached from scrape ' + game + ': ' + amount);
     saveJackpotCacheToFile();
