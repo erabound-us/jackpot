@@ -634,7 +634,7 @@
     </div>
     <div class="draw-col center">
       <div class="draw-label">Current Jackpot</div>
-      <div class="draw-when" id="pbJackpotAmount" style="font-size:15px;color:var(--yellow);">See FL Lottery</div>
+      <div class="draw-when" id="pbJackpotAmount" style="font-size:15px;color:var(--yellow);">&mdash;</div>
       <a class="jackpot-link" href="https://floridalottery.com/games/draw-games/powerball" target="_blank" rel="noopener">View on FL Lottery &#8599;</a>
     </div>
     <div class="draw-col right">
@@ -2609,8 +2609,8 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
 
 // Fetch live jackpot amounts for JTP, Lotto X, Fantasy 5
 (function() {
-  var games = ['jtp', 'lottox', 'fantasy5'];
-  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount' };
+  var games = ['jtp', 'lottox', 'fantasy5', 'powerball'];
+  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount', powerball: 'pbJackpotAmount' };
   games.forEach(function(g) {
     fetch('/jackpot?game=' + g).then(function(r){return r.json();}).then(function(d){
       var el = document.getElementById(ids[g]);

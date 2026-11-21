@@ -1927,9 +1927,10 @@ async function closeBrowser() {
 }
 
 const JACKPOT_GAME_URLS = {
-  jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
-  lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',
-  fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5'
+  jtp:       'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+  lottox:    'https://floridalottery.com/games/draw-games/florida-lotto',
+  fantasy5:  'https://floridalottery.com/games/draw-games/fantasy5',
+  powerball: 'https://floridalottery.com/games/draw-games/powerball'
 };
 const _jackpotCache = {}; // game -> { amount, ts }, 5-minute TTL
 
@@ -2420,11 +2421,20 @@ async function forceRefreshJackpot(game) {
 
 app.get('/jackpot', async (req, res) => {
   const game = (req.query.game || '').toLowerCase();
-  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'game must be jtp, lottox, or fantasy5' });
+  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'game must be jtp, lottox, fantasy5 or powerball' });
   try {
     const amount = await scrapeJackpot(game);
     res.json({ game, amount });
   } catch(err) { res.json({ game, amount: null }); }
+});
+
+// Force jackpot refresh for any game — triggers Puppeteer scrape via _scrapeGlobalLock
+app.post('/jackpot/refresh', async (req, res) => {
+  const game = (req.query.game || req.body.game || '').toLowerCase();
+  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'Invalid game' });
+  delete _jackpotCache[game];
+  _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(game)).catch(() => {});
+  res.json({ ok: true, game, queued: true });
 });
 
 app.post('/check/fantasy5', (req, res) => {
@@ -3344,6 +3354,7 @@ function schedulePostDrawRefreshes() {
     const jackpotGames = [];
     if (jtpDays.includes(day)) jackpotGames.push('jtp');
     if (lxDays.includes(day)) jackpotGames.push('lottox');
+    if (pbDays.includes(day)) jackpotGames.push('powerball');
     jackpotGames.forEach(g => {
       delete _jackpotCache[g];
       _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(g)).catch(() => {});
