@@ -130,6 +130,8 @@ const PDF_PATHS_PICK = {
   pick4: path.join(__dirname, 'pick4_winning-numbers-history.pdf'),
   pick5: path.join(__dirname, 'pick5_winning-numbers-history.pdf'),
 };
+const PDF_URL_PB  = 'https://files.floridalottery.com/exptkt/powerball_winning-numbers-history.pdf';
+const PDF_PATH_PB = path.join(__dirname, 'powerball_winning-numbers-history.pdf');
 
 // ── Per-user session state ─────────────────────────────────────────────────────────────────────────────
 // Each browser gets a random session ID. Sessions expire after 2 hours of inactivity.
@@ -191,6 +193,7 @@ async function downloadPDFs() {
     downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { results.lottox  = 'ok'; lxDrawsCache = null; }).catch(e => { results.lottox  = e.message; }),
     downloadFile(PDF_URL_F5,  PDF_PATH_F5).then(() => { results.fantasy5 = 'ok'; f5DrawsCache = null; }).catch(e => { results.fantasy5 = e.message; }),
     downloadFile(PDF_URL_CP,  PDF_PATH_CP).then(() => { results.cashpop  = 'ok'; }).catch(e => { results.cashpop  = e.message; }),
+    downloadFile(PDF_URL_PB,  PDF_PATH_PB).then(() => { results.powerball = 'ok'; pbDrawsCache = null; }).catch(e => { results.powerball = e.message; }),
     ...Object.entries(PDF_URLS_PICK).map(([g, url]) =>
       downloadFile(url, PDF_PATHS_PICK[g]).then(() => { results[g] = 'ok'; pickCache[g] = null; }).catch(e => { results[g] = e.message; })
     ),
@@ -2517,6 +2520,7 @@ function getBoxWays(digits) {
 // JSON draw caches for JTP and Cash Pop -- no PDF parsing on Fly (same pattern as LX/F5)
 const JTP_DRAWS_PATH = path.join(__dirname, 'jtp_draws.json');
 const CP_DRAWS_PATH  = path.join(__dirname, 'cashpop_draws.json');
+const PB_DRAWS_PATH  = path.join(__dirname, 'powerball_draws.json');
 const PICK_DRAWS_PATHS = {
   pick2: path.join(__dirname, 'pick2_draws.json'),
   pick3: path.join(__dirname, 'pick3_draws.json'),
@@ -2532,6 +2536,7 @@ function getPickDraws(game) {
 const JACKPOT_CACHE_PATH = path.join(__dirname, 'jackpot_cache.json');
 let jtpDrawsCache = null;
 let cpDrawsCache  = null;
+let pbDrawsCache  = null;
 
 function getJtpDraws() {
   if (!jtpDrawsCache) jtpDrawsCache = JSON.parse(fs.readFileSync(JTP_DRAWS_PATH, 'utf8'));
@@ -2953,11 +2958,11 @@ async function appendPickDeltas(game) {
 
 function schedulePostDrawRefreshes() {
   const f5Times  = [[13, 10], [23, 20]];
-  const pickTimes = [[13, 10], [23, 20]]; // Pick games draw same times as Fantasy 5
+  const pickTimes = [[13, 10], [23, 20]];
   const cpTimes  = [[7, 34], [11, 34], [14, 34], [18, 34], [22, 34]];
-  // JTP draws Tue(2) & Fri(5); Lotto X draws Wed(3) & Sat(6) — refresh 5 min after 11:15 PM ET
   const jtpDays  = [2, 5];
   const lxDays   = [3, 6];
+  const pbDays   = [1, 3, 6]; // Mon=1, Wed=3, Sat=6
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
@@ -2986,7 +2991,10 @@ function schedulePostDrawRefreshes() {
       enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
       console.log('Post-draw refresh queued: Lotto X');
     }
-    // Refresh jackpot cache for any game that drew tonight -- serialized through global lock
+    if (pbDays.includes(day)) {
+      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
+      console.log('Post-draw refresh queued: Powerball');
+    }
     const jackpotGames = [];
     if (jtpDays.includes(day)) jackpotGames.push('jtp');
     if (lxDays.includes(day)) jackpotGames.push('lottox');
@@ -2996,7 +3004,74 @@ function schedulePostDrawRefreshes() {
     });
   });
 
-  // Fantasy 5 jackpot refreshes on same schedule as draw data -- serialized through global lock
+  // Retry at 13:25 ET for midday draws (Fantasy 5 Midday + Pick Midday at 1:05 PM)
+  scheduleDaily(13, 25, () => {
+    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
+    console.log('Post-draw midday retry queued: Fantasy 5');
+    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+    });
+    console.log('Post-draw midday retry queued: Pick 2-5');
+  });
+
+  // Retry at 23:35 ET for evening draws (Fantasy 5 Evening + Pick Evening + JTP + LX + PB)
+  scheduleDaily(23, 35, () => {
+    const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+    // Fantasy 5 + Pick retry every day
+    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
+    console.log('Post-draw evening retry queued: Fantasy 5');
+    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+    });
+    console.log('Post-draw evening retry queued: Pick 2-5');
+    // JTP + LX + PB only on their draw days
+    if (jtpDays.includes(day)) {
+      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
+      console.log('Post-draw retry queued: JTP');
+    }
+    if (lxDays.includes(day)) {
+      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
+      console.log('Post-draw retry queued: Lotto X');
+    }
+    if (pbDays.includes(day)) {
+      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
+      console.log('Post-draw retry queued: Powerball');
+    }
+  });
+
+  // Cash Pop retries 15 min after each session
+  [[7, 49], [11, 49], [14, 49], [18, 49], [22, 49]].forEach(([h, m]) => scheduleDaily(h, m, () => {
+    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; }));
+    console.log('Post-draw Cash Pop retry queued');
+  }));
+
+  // Midnight retry at 00:05 ET for all evening games — catches very slow PDF updates
+  scheduleDaily(0, 5, () => {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+    const yDay = yesterday.getDay();
+    // Fantasy 5 + Pick draw every day
+    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
+    console.log('Midnight retry queued: Fantasy 5');
+    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+    });
+    console.log('Midnight retry queued: Pick 2-5');
+    // JTP + LX + PB only if yesterday was their draw day
+    if (jtpDays.includes(yDay)) {
+      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
+      console.log('Midnight retry queued: JTP');
+    }
+    if (lxDays.includes(yDay)) {
+      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
+      console.log('Midnight retry queued: Lotto X');
+    }
+    if (pbDays.includes(yDay)) {
+      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
+      console.log('Midnight retry queued: Powerball');
+    }
+  });
+
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     delete _jackpotCache['fantasy5'];
     _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('fantasy5')).catch(() => {});

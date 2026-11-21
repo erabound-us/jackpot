@@ -130,6 +130,17 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - **Max 100 lines per generate** (matches all other games) -- session dedup ensures no duplicates across multiple presses
 - **Pick Combo cost** = $1 × number of combinations per line (not per ticket): Pick 2 = always $2/line; Pick 3 = $3–$6/line; Pick 4 = $4–$24/line; Pick 5 = $5–$120/line. Fireball is NOT available with Combo.
 - **Session isolation**: each browser SID has its own `lines` Set. Pick keys are digit strings (`"37291"`), other game keys are comma-separated numbers (`"1,5,12,22,33,41"`). Structurally impossible to collide — no cross-game bleeding.
+- **`pickUpdateCost()` MUST declare `pt`, `pa`, `fb` variables** before using them. These are read from DOM elements (`pickPlayType`, `pickPlayAmount`, `pickFireball`). If these variables are missing, `pickSetGame()` crashes silently before reaching `pickLoadLatest()`, causing the entire Pick panel (draw banner, drawn balls, countdown) to show blank `—`. Pattern:
+  ```js
+  function pickUpdateCost() {
+    var count = Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),100);
+    var pa = parseFloat(document.getElementById('pickPlayAmount').value);
+    var pt = document.getElementById('pickPlayType').value;
+    var fb = document.getElementById('pickFireball').checked;
+    // ... rest of function
+  }
+  ```
+- **Never add a null guard (`if (!el) return`) to `pickUpdateCost`** — the elements always exist in the DOM (they are in the HTML above the script tag). A null guard causes a premature return that stops `pickSetGame` from reaching `pickLoadLatest`, producing the same blank panel symptom.
 
 ### Official PICK Prizes ($1.00 play, Straight)
 | Game | Straight | Box (varies) | Fireball Straight |
@@ -1009,11 +1020,11 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-21`
+Latest stable: `backups/stable-2026-11-21b`
 
 What's in the latest backup:
-- `server.js` — jackpot two-function architecture, Pick max 100 lines, Combo cost fix
-- `index.html` — Pick max 100, Combo cost estimator corrected, all 8 games
+- `server.js` — jackpot two-function architecture, Pick max 100 lines, all delta updaters
+- `index.html` — Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
 - `project.md` — this file
 
 ## Fly.io Machine
@@ -1291,6 +1302,7 @@ res.json({ dates: dates.slice(0, 5) });
 12. Add `/nextdraw/<game>` fetch to the shared `setInterval` poll
 13. If the game has a jackpot: add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col; add game to the page-load jackpot fetch block (`games` array + `ids` map)
 14. Define `xUpdateCost()` in the `// == Cost calculators ==` block and add `xUpdateCost();` to the initial call block — **required even if the game has no add-ons** (just compute `count * basePrice`). Missing this causes a silent blank cost bar.
+   - **Always declare all DOM-read variables at the top of `xUpdateCost()`** (`count`, `pa`, `pt`, `fb`, etc.) before any conditional logic. If any variable is used before declaration, `pickSetGame`/`xSetGame` crashes silently before `pickLoadLatest`/`xLoadLatest`, leaving the entire panel blank (draw banner `—`, no drawn balls, no countdown). This is the same bug that broke Pick games when `pt`, `pa`, `fb` were accidentally removed from `pickUpdateCost`.
 
 **For games sharing a single panel (like Pick 2-5)**:
 - Use a game selector UI (buttons) inside the panel instead of separate panels
