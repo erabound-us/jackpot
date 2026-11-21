@@ -379,20 +379,31 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 - Cash Pop and Pick games have no jackpot — their banners do not include a jackpot row
 - The jackpot amount is displayed in the center column of the draw banner, in yellow (`var(--yellow)`), between the "Current Jackpot" label and the "View on FL Lottery" link
 
-### How the cache is populated — zero extra Puppeteer launches
-- `_jackpotCache` — server-side object: `game -> { amount, ts }`, 5-minute TTL
-- `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` if the cache is stale. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
-- `scrapeJackpot(game)` — reads `_jackpotCache` first; returns null immediately if cache is cold (never launches Chrome directly). Cache is populated as a **free side effect** of `scrapeFlDraws` whenever any user looks up a draw date — the same page load that fetches draw numbers also extracts the jackpot amount via `extractAndCacheJackpot`. **This function MUST be defined** — it is called by the `/jackpot` route. If removed accidentally, all three jackpot banners show `—` and the route returns 500.
+### How the cache is populated — two-function architecture
+- `_jackpotCache` — server-side object: `game -> { amount, ts }`, persisted to `jackpot_cache.json`
+- `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` + `jackpot_cache.json`. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
+- `scrapeJackpot(game)` — **read-only, never launches Chrome**. Checks in-memory cache → file cache (`jackpot_cache.json`) → returns `null` if stale. Uses `isDataStaleForGame()` (30-minute rule after each draw) to decide freshness. Called only by the `/jackpot` route.
+- `forceRefreshJackpot(game)` — **always launches Puppeteer**, fetches the game page with `networkidle0`, calls `extractAndCacheJackpot`. Called only by `schedulePostDrawRefreshes()`, serialized through `_scrapeGlobalLock`. Never called from user-facing routes.
 - **`/jackpot` route returns `{ amount: null }` on error** (not 500) — frontend handles null gracefully by showing "See FL Lottery"
-- **Normal flow**: server starts → `_serverReady = true` → background startup chain runs `scrapeFlDraws` for each jackpot game sequentially (JTP → LX → F5) → `extractAndCacheJackpot` populates `_jackpotCache` as a side effect → subsequent `/jackpot` calls return instantly from cache. The scrapes run through `_scrapeGlobalLock` so only one Chrome instance at a time.
+- **Normal flow**: server starts → jackpot cache is cold → `/jackpot` returns `null` → banners show `—` → after first draw, `schedulePostDrawRefreshes` calls `forceRefreshJackpot` → cache populated → subsequent `/jackpot` calls return instantly from cache.
+- **Opportunistic warm**: `extractAndCacheJackpot` is called as a side effect of `scrapeFlDraws` and `getAvailableDates` — if a user triggers a draw lookup, the jackpot cache gets populated for free.
 
 ### Jackpot extraction patterns (in `extractAndCacheJackpot`)
 Patterns are tried in order of specificity against the full page HTML:
-1. `estimated jackpot[^<]{0,80}\$...` — most specific, matches FL Lottery's "Estimated Jackpot" label
-2. `current jackpot[^<]{0,80}\$...` — fallback label variant
-3. `jackpot[^<]{0,60}\$...` — broad fallback
+1. **`draw-game-jackpot` CSS class** — primary match: `html.match(/draw-game-jackpot[^>]*>([^<]+)</)` — FL Lottery renders the jackpot in a `<span class="draw-game-jackpot ...">$1 Million</span>`. This is the most reliable match and handles text like `"$1 Million"` correctly.
+2. `estimated jackpot[^<]{0,80}\$...` — labeled fallback
+3. `current jackpot[^<]{0,80}\$...` — labeled fallback
+
+**NEVER use a broad `/jackpot[^<]{0,60}\$/` fallback** — it matches "Jackpot Winners & Retailer Information" text on the page and then finds `$20` from the prize table, showing the wrong amount. The CSS class match is always tried first.
 
 If none match, the cache is not updated and the frontend shows `"See FL Lottery"` as a fallback.
+
+### Staleness rule (`isDataStaleForGame`)
+- Data is stale if: a draw has occurred **AND** it's been >30 minutes since that draw **AND** the cached timestamp predates the draw
+- `getLastDrawTime(game)` returns the most recent draw time in ET for the game's schedule
+- `scrapeJackpot` uses this to decide whether to return cached data or `null`
+- `forceRefreshJackpot` **bypasses this check entirely** — it always scrapes. It is the write path, not the read path.
+- The 30-minute grace period prevents false staleness immediately after a draw (PDF/scraper may not have updated yet)
 
 ### `/jackpot` endpoint
 - `GET /jackpot?game=jtp|lottox|fantasy5` → `{ game, amount }` where `amount` is a string like `"$1,500,000"` or `null`
@@ -431,6 +442,22 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 2. Add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col, between the label and the FL Lottery link
 3. Add the game to the frontend `games` array and `ids` map in the page-load jackpot fetch block
 4. `extractAndCacheJackpot` is already called inside `scrapeFlDraws` and `getAvailableDates` — no changes needed there as long as the game is in `JACKPOT_GAME_URLS`
+5. Add `forceRefreshJackpot` calls to `schedulePostDrawRefreshes()` for the new game's draw schedule — serialized through `_scrapeGlobalLock`. Pattern:
+   ```js
+   // Inside the scheduleDaily callback for the game's draw time + 5 min:
+   delete _jackpotCache['newgame'];
+   _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('newgame')).catch(() => {});
+   ```
+6. Add `getLastDrawTime` schedule entry for the new game so `isDataStaleForGame` knows when its draws occur
+
+### Jackpot function summary (for future games)
+| Function | Launches Chrome? | When called | Purpose |
+|---|---|---|---|
+| `extractAndCacheJackpot(game, html)` | No | Side effect of `scrapeFlDraws` / `getAvailableDates` | Parse HTML already in memory, write cache |
+| `scrapeJackpot(game)` | No | `/jackpot` route | Read cache only, return `null` if stale |
+| `forceRefreshJackpot(game)` | Yes | `schedulePostDrawRefreshes` only | Always scrape, always update cache |
+
+**OOM safety**: `forceRefreshJackpot` fires at most 2-3x per day per game, serialized through `_scrapeGlobalLock`. `scrapeJackpot` never launches Chrome. No concurrent Chrome instances possible.
 
 ### Games without a jackpot (Cash Pop, Pick 2-5)
 - Do NOT add a jackpot element to their banners
@@ -981,6 +1008,11 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-20z`
 
+What's in the latest backup:
+- `server.js` — jackpot two-function architecture (`scrapeJackpot` read-only + `forceRefreshJackpot` write), `draw-game-jackpot` CSS class extraction, Pick JSON caches, all delta updaters
+- `index.html` — all 8 games, jackpot banners, date chips, stale guards
+- `project.md` — this file
+
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
@@ -1239,7 +1271,7 @@ res.json({ dates: dates.slice(0, 5) });
 12. For games with secondary draw data (like Lotto X Double Play): use a **negative lookahead** in the PDF parse regex to skip secondary rows (e.g. `LOTTO(?!\s+DP)`); also strip the secondary section from the scraper chunk before extracting numbers
 13. For games with non-standard page structure (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`; skip article ID lookup with `if (idx === -1 && game !== '<game>') return null`
 14. For PDFs > 1 MB: add serialized `getXxxText()` cache function with `xxxParsePromise` variable
-15. If the game has a jackpot: add it to `JACKPOT_GAME_URLS` in server.js so `extractAndCacheJackpot` caches it automatically from `scrapeFlDraws` page loads
+15. If the game has a jackpot: add it to `JACKPOT_GAME_URLS` in server.js; add `forceRefreshJackpot` calls to `schedulePostDrawRefreshes()` for the game's draw schedule (serialized through `_scrapeGlobalLock`); add the game's draw schedule to `getLastDrawTime` so `isDataStaleForGame` works correctly
 
 ### Frontend (public/index.html)
 1. Add `var xLatestDate = null;` and `var xLastWin = null;` with other game state vars

@@ -1943,11 +1943,19 @@ function extractAndCacheJackpot(game, html) {
   if (!['jtp','lottox','fantasy5'].includes(game)) return;
   const now = Date.now();
   if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return; // still fresh
-  // Patterns ordered by specificity -- FL Lottery site uses various markup
+  // Primary: FL Lottery renders jackpot in a span with class="draw-game-jackpot"
+  const classM = html.match(/draw-game-jackpot[^>]*>([^<]+)</);
+  if (classM) {
+    const amount = classM[1].trim();
+    _jackpotCache[game] = { amount, ts: now };
+    console.log('Jackpot cached from scrape ' + game + ': ' + amount);
+    saveJackpotCacheToFile();
+    return;
+  }
+  // Fallback: labeled patterns (no broad /jackpot/ fallback -- it matches prize table entries)
   const patterns = [
     /estimated jackpot[^<]{0,80}\$(\d[\d,\.]+\s*(?:[Mm]illion|[Bb]illion)?)/i,
     /current jackpot[^<]{0,80}\$(\d[\d,\.]+\s*(?:[Mm]illion|[Bb]illion)?)/i,
-    /jackpot[^<]{0,60}\$(\d[\d,\.]+\s*(?:[Mm]illion|[Bb]illion)?)/i,
   ];
   for (const pat of patterns) {
     const m = html.match(pat);
@@ -2370,10 +2378,9 @@ function isDataStaleForGame(game, dataTs) {
 }
 
 async function scrapeJackpot(game) {
-  const now = Date.now();
   // 1. In-memory cache -- fresh if not stale since last draw
   if (_jackpotCache[game] && !isDataStaleForGame(game, _jackpotCache[game].ts)) return _jackpotCache[game].amount;
-  // 2. File cache -- populated by post-draw refresh via scrapeFlDraws side effect
+  // 2. File cache -- populated by post-draw refresh
   try {
     const fileCache = JSON.parse(fs.readFileSync(JACKPOT_CACHE_PATH, 'utf8'));
     if (fileCache[game] && !isDataStaleForGame(game, fileCache[game].ts)) {
@@ -2381,9 +2388,29 @@ async function scrapeJackpot(game) {
       return fileCache[game].amount;
     }
   } catch(e) {}
-  // 3. Data is stale or cache cold -- return null, frontend shows "See FL Lottery"
-  // scrapeFlDraws (called by schedulePostDrawRefreshes after each draw) will refresh this
+  // 3. Cache cold or stale -- return null, frontend shows "See FL Lottery"
+  // Post-draw schedule calls forceRefreshJackpot() which does the actual Puppeteer scrape
   return null;
+}
+
+async function forceRefreshJackpot(game) {
+  const url = JACKPOT_GAME_URLS[game];
+  if (!url) return;
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+      const html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot(game, html);
+      return;
+    } catch(e) {
+      console.warn('forceRefreshJackpot attempt ' + (_try+1) + ' failed for ' + game + ': ' + e.message);
+      if (_try === 0) { _browser = null; }
+    }
+  }
 }
 
 app.get('/jackpot', async (req, res) => {
@@ -2959,7 +2986,21 @@ function schedulePostDrawRefreshes() {
       enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
       console.log('Post-draw refresh queued: Lotto X');
     }
+    // Refresh jackpot cache for any game that drew tonight -- serialized through global lock
+    const jackpotGames = [];
+    if (jtpDays.includes(day)) jackpotGames.push('jtp');
+    if (lxDays.includes(day)) jackpotGames.push('lottox');
+    jackpotGames.forEach(g => {
+      delete _jackpotCache[g];
+      _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(g)).catch(() => {});
+    });
   });
+
+  // Fantasy 5 jackpot refreshes on same schedule as draw data -- serialized through global lock
+  f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
+    delete _jackpotCache['fantasy5'];
+    _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('fantasy5')).catch(() => {});
+  }));
 }
 
 schedulePostDrawRefreshes();
