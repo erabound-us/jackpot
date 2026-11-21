@@ -799,8 +799,8 @@
   <!-- Generate -->
   <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
     <label style="font-size:12px;color:var(--muted);">Lines:</label>
-    <input type="number" id="pickLineCount" value="6" min="1" max="50" style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;" oninput="pickUpdateCost()">
-    <span style="font-size:12px;color:var(--muted);">max 50</span>
+    <input type="number" id="pickLineCount" value="6" min="1" max="100" style="width:64px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:8px;font-size:14px;font-weight:700;" oninput="pickUpdateCost()">
+    <span style="font-size:12px;color:var(--muted);">max 100</span>
     <label style="font-size:12px;color:var(--muted);">Play:</label>
     <select id="pickPlayAmount" onchange="pickUpdateCost()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:8px;font-size:13px;font-weight:700;">
       <option value="1">$1.00</option>
@@ -2554,16 +2554,21 @@ function pickSetGame(g, skipTabSync) {
 }
 
 function pickUpdateCost() {
-  var count = Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),50);
-  var pa = parseFloat(document.getElementById('pickPlayAmount').value);
-  var pt = document.getElementById('pickPlayType').value;
-  var fb = document.getElementById('pickFireball').checked;
-  var cost = count * pa * (fb ? 2 : 1);
+  var count = Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),100);
   var breakdown, total;
   if (pt === 'combo') {
-    breakdown = count + ' line(s) x Combo (cost varies by digits)' + (fb ? ' x 2 (Fireball)' : '');
-    total = 'Est. $' + (cost*2).toFixed(2) + '-$' + (cost*24).toFixed(2);
+    // Combo: cost = $1 x number of combinations per line (Fireball not available with Combo)
+    // Typical cost uses minimum ways (most repeated digits); max is all-different digits
+    var comboTypical = { pick2:2, pick3:3, pick4:4, pick5:5 };
+    var comboMax     = { pick2:2, pick3:6, pick4:24, pick5:120 };
+    var typ = comboTypical[pickGame] || 2;
+    var max = comboMax[pickGame] || 2;
+    var typCost = count * typ;
+    var maxCost = count * max;
+    breakdown = count + ' line(s) x Combo -- $' + typ + '/line (min) to $' + max + '/line (max, all-diff digits)';
+    total = typ === max ? 'Total: $' + typCost.toFixed(2) : 'Est. $' + typCost.toFixed(2) + '-$' + maxCost.toFixed(2);
   } else {
+    var cost = count * pa * (fb ? 2 : 1);
     breakdown = count + ' line(s) x $' + pa.toFixed(2) + (fb ? ' x 2 (Fireball)' : '');
     total = 'Total: $' + cost.toFixed(2);
   }
@@ -2688,7 +2693,7 @@ function pickPickDate(d){var p=d.split('/');document.getElementById('pickDrawDat
 function pickGenerate() {
   var btn = document.getElementById('pickGenBtn');
   btn.disabled=true; btn.textContent='Generating...';
-  var count=Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),50);
+  var count=Math.min(Math.max(parseInt(document.getElementById('pickLineCount').value)||6,1),100);
   var _ac=new AbortController();setTimeout(function(){_ac.abort();},30000);
   fetch('/analyze/pick?game='+pickGame+'&count='+count+'&sid='+SID,{signal:_ac.signal})
     .then(function(res){return res.json().then(function(data){return{ok:res.ok,data:data};});})

@@ -127,6 +127,9 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - Fireball add-on: doubles ticket cost, replaces one drawn digit to create N new winning combinations
 - Play amounts: 50c or $1.00 per panel
 - Digits 0-9 (not 1-46 like lottery games) -- positional frequency scoring
+- **Max 100 lines per generate** (matches all other games) -- session dedup ensures no duplicates across multiple presses
+- **Pick Combo cost** = $1 × number of combinations per line (not per ticket): Pick 2 = always $2/line; Pick 3 = $3–$6/line; Pick 4 = $4–$24/line; Pick 5 = $5–$120/line. Fireball is NOT available with Combo.
+- **Session isolation**: each browser SID has its own `lines` Set. Pick keys are digit strings (`"37291"`), other game keys are comma-separated numbers (`"1,5,12,22,33,41"`). Structurally impossible to collide — no cross-game bleeding.
 
 ### Official PICK Prizes ($1.00 play, Straight)
 | Game | Straight | Box (varies) | Fireball Straight |
@@ -1006,11 +1009,11 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-20z`
+Latest stable: `backups/stable-2026-11-21`
 
 What's in the latest backup:
-- `server.js` — jackpot two-function architecture (`scrapeJackpot` read-only + `forceRefreshJackpot` write), `draw-game-jackpot` CSS class extraction, Pick JSON caches, all delta updaters
-- `index.html` — all 8 games, jackpot banners, date chips, stale guards
+- `server.js` — jackpot two-function architecture, Pick max 100 lines, Combo cost fix
+- `index.html` — Pick max 100, Combo cost estimator corrected, all 8 games
 - `project.md` — this file
 
 ## Fly.io Machine

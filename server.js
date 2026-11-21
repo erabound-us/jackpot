@@ -2878,7 +2878,7 @@ app.get('/analyze/pick', async (req, res) => {
     const numDigits = parseInt(game.replace('pick',''));
     const draws = getPickDraws(game);
     if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
-    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 50);
+    const count = Math.min(Math.max(parseInt(req.query.count) || 6, 1), 100);
     const sid = req.query.sid || null;
     const sess = sid ? getSession(sid) : { lines: new Set() };
     const lines = generatePickLines(draws, numDigits, count, sess.lines);
