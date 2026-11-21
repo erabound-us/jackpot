@@ -1,8 +1,8 @@
 # Jackpot Analyzer — Project Steering Rules
 
 ## Stack
-- **Backend**: Node.js + Express 5, single file `server.js` (~2,700 lines)
-- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~2,800 lines)
+- **Backend**: Node.js + Express 5, single file `server.js` (~3,100 lines)
+- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~3,500 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
 - **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~250MB heap
@@ -121,6 +121,61 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - Sales close ~5 minutes before each draw
 - No add-ons
 
+### Game 9: Powerball
+- 5 white balls from 1–69 + 1 Powerball from 1–26, 1 play per $2 ticket
+- Draws: **Monday, Wednesday & Saturday** at ~10:59 PM ET; sales close 10:00 PM ET on draw nights
+- Jackpot: pari-mutuel, starts ~$20M, paid as 30-year annuity or cash lump sum (~60%); elect lump sum within 60 days
+- Power Play add-on: +$1, multiplies non-jackpot prizes 2×–10× (10× only when jackpot ≤ $150M); 5-of-5 (no PB) always boosted to $2,000,000 with Power Play
+- Double Play add-on: +$1, same 6 numbers in separate drawing; top prize $10M fixed; cannot be multiplied by Power Play
+- Jackpot Combo ($9): bundle of FL Lotto ($2) + Powerball ($2) + Mega Millions ($5); no add-ons; no Advance Play
+- Advance Play: up to 39 consecutive drawings; not available with Jackpot Combo
+- Tickets cannot be canceled once printed
+- **Multi-state game** — jackpot is NOT scraped from FL Lottery; banner center col shows static "See FL Lottery" link
+- **PDF format**: `M/D/YY  N N N N N  PB N  [X#]  POWERBALL` — base game rows only; skip `POWERBALL DP` rows
+- **PDF size**: ~93 pages, 1,936 draws since 1992; capped at 500 newest draws in JSON cache
+- **JSON cache**: `powerball_draws.json` — committed to repo, included in Docker image
+- **Scoring**: white balls scored independently (pool top 40 of 69); Powerball picked from top-16 frequency pool (1–26)
+- **Session key format**: `"1,5,12,22,33,41|7"` (white balls comma-separated + `|` + Powerball) — distinct from other games
+- **`getLastDrawTime` schedule**: `powerball: [{ days: [1, 3, 6], h: 22, m: 59 }]` — Mon/Wed/Sat 10:59 PM ET
+- **`schedulePostDrawRefreshes`**: fires at 23:20 ET, gated on `pbDays = [1, 3, 6]`
+
+### Official Powerball Prizes & Odds
+| Match | Prize | Power Play | Odds |
+|-------|-------|-----------|------|
+| 5+PB | Jackpot | No | 1 in 292,201,338 |
+| 5+0 | $1,000,000 | $2,000,000 fixed | 1 in 11,688,054 |
+| 4+PB | $50,000 | ×mult | 1 in 913,129 |
+| 4+0 | $100 | ×mult | 1 in 36,525 |
+| 3+PB | $100 | ×mult | 1 in 14,494 |
+| 3+0 | $7 | ×mult | 1 in 580 |
+| 2+PB | $7 | ×mult | 1 in 701 |
+| 1+PB | $4 | ×mult | 1 in 92 |
+| 0+PB | $4 | ×mult | 1 in 38 |
+| Any prize | — | — | 1 in 24.87 |
+
+### Power Play Multiplier Odds
+| Multiplier | Jackpot ≤ $150M | Jackpot > $150M |
+|-----------|----------------|----------------|
+| 10× | 1 in 43 | N/A |
+| 5× | 1 in 21.5 | 1 in 21.5 |
+| 4× | 1 in 14.3 | 1 in 14.3 |
+| 3× | 1 in 3.3 | 1 in 3.3 |
+| 2× | 1 in 1.8 | 1 in 1.8 |
+
+### Powerball PDF Parser Notes
+- Regex: `/(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+PB\s+(\d{1,2})\s+(?:X\d+\s+)?POWERBALL(?!\s+DP)/g`
+- The negative lookahead `(?!\s+DP)` skips Double Play rows — same pattern as Lotto X `LOTTO(?!\s+DP)`
+- `X\d+` is the optional Power Play multiplier printed on the row — skip it
+- Date filter: `ts > 1992-01-01` and `ts <= Date.now()` to exclude future/corrupt rows
+- **2-digit years**: PDF uses `MM/DD/YY` format — `yy < 100 ? yy += 2000` applies
+- `generate_draw_cache.js` includes Powerball parser — must stay in sync with `parsePbHistoryPDF` in server.js
+
+### Powerball Jackpot Banner
+- Powerball is a **multi-state game** — NOT in `JACKPOT_GAME_URLS`, NOT scraped from FL Lottery
+- Banner center col element `pbJackpotAmount` shows static text `"See FL Lottery"` (not `&mdash;`)
+- Do NOT add Powerball to the frontend jackpot fetch block (`games = ['jtp','lottox','fantasy5']`)
+- Do NOT add `forceRefreshJackpot('powerball')` to `schedulePostDrawRefreshes`
+
 ### Game 5-8: PICK Daily Games (Pick 2, Pick 3, Pick 4, Pick 5)
 - Pick N: player picks N digits (0-9), draws every day Midday (1:05 PM ET) and Evening (11:15 PM ET)
 - Play types: Straight (exact order), Box (any order), Straight/Box (half each), Combo (all straight combos)
@@ -188,12 +243,13 @@ All costs are based on the known Florida Lottery price structure and are **subje
 | Fantasy 5 | $1 per ticket (1 line) | EZMatch +$1 |
 | Cash Pop | $1/$2/$5/$10 per number | None |
 | Pick 2-5 | 50c or $1.00 per panel | Fireball doubles cost |
+| Powerball | $2 per play (1 line) | Power Play +$1, Double Play +$1 |
 
 ### Cost Estimator Rules
 - **JTP**: tickets = `ceil(lines / 3)`; total = tickets × $1 (+ $1 per ticket if Combo)
 - **Lotto X**: tickets = lines; total = tickets × $2 (+ $1 per ticket per add-on selected)
 - **Fantasy 5**: tickets = lines; total = tickets × $1 (+ $1 per ticket if EZMatch)
-- **Cash Pop**: total = numbers × play amount ($1/$2/$5/$10)
+- **Powerball**: plays = lines; total = plays × $2 (+ $1 per play if Power Play, + $1 per play if Double Play)
 - Estimator shown in UI above the Generate button, updates live on input change
 - Disclaimer shown in UI and FAQ: *estimated, subject to change, confirm at retailer*
 - **Every game with a Generate button MUST have a `xUpdateCost()` function defined in JS** — the HTML wires `oninput="xUpdateCost()"` and `onchange="xUpdateCost()"` on the count input and add-on checkboxes. If the function is missing the cost bar silently stays blank (no JS error, easy to miss).
@@ -481,8 +537,8 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 - Pick center col: `Draw` label + `<div id="pickDrawName">` + `<a class="jackpot-link" id="pickLotteryLink">View on FL Lottery</a>`
 
 ## API Surface
-GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/jackpot?game=` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/refresh/status`
-POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/email` `/email/config` `/email/test`
+GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` `/nextdraw/pick` `/nextdraw/powerball` `/jackpot?game=` `/latestdraw/jtp` `/latestdraw/lottox` `/latestdraw/fantasy5` `/latestdraw/cashpop` `/latestdraw/pick?game=` `/latestdraw/powerball` `/draws/jtp` `/draws/lottox` `/draws/fantasy5` `/draws/cashpop` `/draws/pick?game=` `/draws/powerball` `/draws/jtp/available` `/draws/lottox/available` `/draws/fantasy5/available` `/draws/cashpop/available` `/draws/pick/available?game=` `/draws/powerball/available` `/mode` `/analyze?count&sid` `/analyze/lottox?count&sid` `/analyze/fantasy5?count&sid` `/analyze/cashpop?count&sid` `/analyze/pick?game=&count&sid` `/analyze/powerball?count&sid` `/refresh/status`
+POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/refresh/powerball` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/check/powerball` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/chat/powerball` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
 - Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
@@ -521,6 +577,23 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 ```
 - `drawn`: 5 numbers from 1–36
 - `line`: 5 numbers from 1–36
+
+### POST /check/powerball body
+```json
+{
+  "drawn": [5,12,23,31,44],
+  "powerballDrawn": 8,
+  "line": [5,12,19,31,44],
+  "powerballPlayed": 8,
+  "powerPlay": 3
+}
+```
+- `drawn`: 5 white ball numbers from 1-69
+- `powerballDrawn`: Powerball number 1-26
+- `line`: 5 white ball numbers from 1-69 (your ticket)
+- `powerballPlayed`: Powerball number 1-26 (your ticket)
+- `powerPlay`: 0 (none) or 2, 3, 4, 5, 10 -- applies multiplier to non-jackpot prizes; 5-of-5 (no PB) always becomes $2,000,000 with any Power Play
+- Response includes: `whiteCount`, `pbMatch`, `tier` (e.g. `"4+1"`), `prize`, `prizeDisplay`, `isJackpot`, `withholding`, `takeHome`
 
 ### POST /check/pick body
 ```json
