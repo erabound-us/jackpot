@@ -6,27 +6,22 @@ function get(url) {
     }).on('error', reject);
   });
 }
+const games = {
+  jtp:      'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+  lottox:   'https://floridalottery.com/games/draw-games/florida-lotto',
+  fantasy5: 'https://floridalottery.com/games/draw-games/fantasy5',
+  powerball: 'https://floridalottery.com/games/draw-games/powerball'
+};
 (async () => {
-  const html = await get('https://floridalottery.com/games/draw-games/jackpot-triple-play');
-  // Find the JS bundle URL
-  const jsMatch = html.match(/clientlib-site[^"]+\.js/);
-  if (!jsMatch) { console.log('No JS bundle found'); return; }
-  const jsUrl = 'https://floridalottery.com/etc.clientlibs/flalottery-web/clientlibs/' + jsMatch[0];
-  console.log('Fetching:', jsUrl);
-  const js = await get(jsUrl);
-  // Look for subscription key or API key patterns
-  const patterns = [
-    /Ocp-Apim-Subscription-Key[^"']{0,5}["']([^"']{20,50})/gi,
-    /subscription[_-]?key[^"']{0,5}["']([^"']{20,50})/gi,
-    /apiKey[^"']{0,5}["']([^"']{20,50})/gi,
-    /x-api-key[^"']{0,5}["']([^"']{20,50})/gi,
-    /apim[^"']{0,20}key[^"']{0,5}["']([^"']{20,50})/gi,
-    /jackpot[^"']{0,50}amount/gi,
-    /nextJackpot/gi,
-    /jackpotAmount/gi,
-  ];
-  patterns.forEach(p => {
-    const m = js.match(p);
-    if (m) console.log('\n[' + p.source.slice(0,30) + ']', m.slice(0,3));
-  });
+  for (const [game, url] of Object.entries(games)) {
+    const html = await get(url);
+    const cls = html.match(/draw-game-jackpot[^>]*>([^<]+)</);
+    const est = html.match(/estimated jackpot[^<]{0,80}\$(\d[\d,\.]+\s*(?:[Mm]illion|[Bb]illion)?)/i);
+    const cur = html.match(/current jackpot[^<]{0,80}\$(\d[\d,\.]+\s*(?:[Mm]illion|[Bb]illion)?)/i);
+    console.log(game + ':');
+    console.log('  draw-game-jackpot class: ' + (cls ? cls[1].trim() : 'NOT FOUND'));
+    console.log('  estimated jackpot:       ' + (est ? '$' + est[1].trim() : 'NOT FOUND'));
+    console.log('  current jackpot:         ' + (cur ? '$' + cur[1].trim() : 'NOT FOUND'));
+    console.log('---');
+  }
 })();
