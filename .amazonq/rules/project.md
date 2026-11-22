@@ -718,7 +718,7 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 - **JTP and Cash Pop now use JSON caches** (`jtp_draws.json`, `cashpop_draws.json`) -- same pattern as LX/F5. `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io shared CPU, so no PDF parsing happens on Fly for these games.
 - `getJtpDraws()` and `getCpDraws()` read from JSON files (instant, no parse)
 - `appendJtpDeltas()` and `appendCpDeltas()` run after each scheduled refresh to update the JSON with new draws
-- JTP frequency PDF (`PDF_PATHS.frequency`) is still parsed directly -- called only from `/analyze`, not from page-load routes, so concurrency risk is low
+- **JTP frequency PDF** (`PDF_PATHS.frequency`) uses `getFreqText()` -- an mtime cache with `_freqParsePromise` serialization, same pattern as `getPickText()`. Called only from `runAnalysis()` (`/analyze`). **Never call `extractPDFText(PDF_PATHS.frequency)` directly** -- concurrent `/analyze` requests caused SIGABRT (confirmed crash Nov 2026).
 - **When adding a new game with any PDF**: use JSON cache pattern regardless of PDF size -- `pdf2json` is not safe for concurrent use on Fly.io
 
 - JTP History PDF: `https://files.floridalottery.com/exptkt/jtp.pdf`
@@ -746,22 +746,23 @@ node -e "const {performance}=require('perf_hooks');const PDFParser=require('pdf2
 Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, the PDF needs a cache + startup warming.
 
 ### Current PDF parse times (measured locally, Nov 2026)
-| PDF | Local parse time | Est. Fly time | Needs cache | Needs startup warm |
-|-----|-----------------|---------------|-------------|-------------------|
-| jtp.pdf (~65KB text) | ~280ms | ~1s | Yes (JSON) | No |
-| jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | No | No |
-| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | Yes (JSON) | No |
-| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~25s on Fly | Yes (JSON) | No |
-| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
-| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
-| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~25s on Fly | Yes (JSON) | No |
-| lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | Yes | Yes |
-| fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | Yes | Yes |
+| PDF | Local parse time | Est. Fly time | Cache type | Needs startup warm |
+|-----|-----------------|---------------|------------|-------------------|
+| jtp.pdf (~65KB text) | ~280ms | ~1s | JSON delta | No |
+| jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | `getFreqText()` mtime+promise | No |
+| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | JSON delta | No |
+| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~25s on Fly | JSON delta | No |
+| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
+| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
+| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
+| lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | JSON delta | Yes |
+| fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | JSON delta | Yes |
 
 ### Decision rules
-- Local parse < 750ms (est. Fly < 3s): direct `extractPDFText(path)` on every request, no cache
-- Local parse 750ms-2s (est. Fly 3-8s): add mtime cache (`getXxxText()`) but startup warming optional
-- Local parse > 2s (est. Fly > 8s): **must** add mtime cache + startup warming or users get 502 on first request after deploy
+- **ALL PDFs regardless of parse time**: wrap in a cache function -- `pdf2json` SIGABRTs under concurrent load on Fly.io. Direct `extractPDFText()` calls in user-facing routes are never safe.
+- Local parse < 750ms (est. Fly < 3s): mtime cache (`getXxxText()`) with `xxxParsePromise` serialization -- no startup warming needed
+- Local parse 750ms-2s (est. Fly 3-8s): mtime cache + startup warming optional
+- Local parse > 2s (est. Fly > 8s): mtime cache + startup warming required
 
 ### Startup warming chain (server.js listen callback)
 ```
@@ -775,7 +776,7 @@ downloadPDFs()
 
 ### When adding a new game -- PDF checklist
 1. Benchmark the PDF parse time locally using the node command above
-2. **All games**: use JSON cache + delta pattern (`getXxxDraws()` / `appendXxxDeltas()`) -- `pdf2json` is not safe for concurrent use on Fly.io regardless of PDF size. Only exception: JTP frequency PDF (parsed directly in `/analyze` only).
+2. **All games**: use JSON cache + delta pattern (`getXxxDraws()` / `appendXxxDeltas()`) -- `pdf2json` is not safe for concurrent use on Fly.io regardless of PDF size. For small supplementary PDFs (like JTP frequency), use `getXxxText()` mtime cache with `xxxParsePromise` serialization instead of calling `extractPDFText()` directly.
 3. If est. Fly time > 3s: add `getXxxText()` cache function with `xxxParsePromise` serialization and `fs.statSync` try/catch guard
 4. If est. Fly time > 8s (or > 2s local): add `getXxxText()` to the startup warming chain in `server.listen()` callback
 5. Always add `PDF_URL_X` and `PDF_PATH_X` to the top constants block and `downloadPDFs()` Promise.all
@@ -968,8 +969,8 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - F5: `getFantasy5Draws()` reads `fantasy5_draws.json`; `appendFantasy5Deltas()` updates it
 - Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` serialization (PDFs are small enough, but serialized to prevent concurrent crashes)
 - **All 4 Pick PDFs are pre-warmed at startup** immediately after `_serverReady = true`, running sequentially and independently of the delta chain. This ensures caches are warm within ~16s of startup. Without this, switching Pick games triggers cold parses that stack up and timeout. Pattern: `['pick2','pick3','pick4','pick5'].reduce((p,g) => p.then(() => getPickText(g).catch(()=>{})), Promise.resolve());` — runs immediately after `_serverReady = true`, NOT chained into `downloadPDFs()` (which would delay it by the full delta chain duration).
-- **JTP frequency PDF** (`PDF_PATHS.frequency`) is still parsed directly in `/analyze` -- acceptable since it's called infrequently and not on page load
-- **Rule: never parse a PDF on Fly.io in a page-load route** -- use JSON cache + delta pattern for all games
+- **JTP frequency PDF** (`PDF_PATHS.frequency`) uses `getFreqText()` mtime cache with `_freqParsePromise` serialization -- concurrent `/analyze` calls caused SIGABRT (confirmed crash Nov 2026). Pattern: same as `getPickText()`.
+- **Rule: NEVER call `extractPDFText()` directly from any user-facing route** -- always wrap in a cache function (`getFreqText`, `getPickText`, or JSON delta pattern). `pdf2json` is not safe for concurrent use on Fly.io shared CPU.
 
 **Rate limiting** (global cap 120 req/min, per-route limits) bounds the maximum concurrent load. The serialized refresh queue ensures PDF downloads never run concurrently.
 
@@ -1095,15 +1096,15 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 **Rule for new games with session selectors**: always call `xLookupDraw()` from the page load fetch instead of manually rendering. Only skip the second fetch for single-draw-per-date games (no session selector).
 
 ## Backups
-Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-22`
+Stable snapshots -> `backups/stable-YYYY-MM-DD/`
+Latest stable: `backups/stable-2026-11-22b`
 
 What's in the latest backup:
-- `server.js` — startup jackpot warm removed (OOM fix), jackpot two-function architecture, Pick max 100 lines, all delta updaters
-- `index.html` — Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
-- `project.md` — this file
+- `server.js` -- startup jackpot warm removed (OOM fix); JTP frequency PDF wrapped in `getFreqText()` mtime cache (SIGABRT fix); all `extractPDFText()` calls now protected
+- `index.html` -- Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
+- `project.md` -- this file
 
-Previous stable: `backups/stable-2026-11-21b`
+Previous stable: `backups/stable-2026-11-22`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
