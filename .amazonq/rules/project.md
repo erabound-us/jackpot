@@ -518,6 +518,7 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
    delete _jackpotCache['newgame'];
    _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('newgame')).catch(() => {});
    ```
+   **NEVER call `forceRefreshJackpot` at startup** — OOMs the 256MB heap. See OOM safety note above.
 6. Add `getLastDrawTime` schedule entry for the new game so `isDataStaleForGame` knows when its draws occur
 
 ### Jackpot function summary (for future games)
@@ -528,6 +529,8 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 | `forceRefreshJackpot(game)` | Yes | `schedulePostDrawRefreshes` only | Always scrape, always update cache |
 
 **OOM safety**: `forceRefreshJackpot` fires at most 2-3x per day per game, serialized through `_scrapeGlobalLock`. `scrapeJackpot` never launches Chrome. No concurrent Chrome instances possible.
+
+**CRITICAL — No startup warm**: NEVER call `forceRefreshJackpot` at server startup. The FL Lottery jackpot page is JavaScript-rendered — static `https.get()` returns an empty shell with no jackpot data. Puppeteer is required, but launching Chrome at startup for multiple games simultaneously OOMs the 256MB heap (confirmed crash on Fly.io, exit_code=OOM). The startup warm block was removed in Nov 2026 after causing repeated deploy crashes. On cold start, banners show `—` until the next scheduled draw fires `forceRefreshJackpot` via `schedulePostDrawRefreshes`. This is acceptable — jackpot amounts are not critical path.
 
 ### Games without a jackpot (Cash Pop, Pick 2-5)
 - Do NOT add a jackpot element to their banners
@@ -1093,12 +1096,14 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots → `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-21b`
+Latest stable: `backups/stable-2026-11-22`
 
 What's in the latest backup:
-- `server.js` — jackpot two-function architecture, Pick max 100 lines, all delta updaters
+- `server.js` — startup jackpot warm removed (OOM fix), jackpot two-function architecture, Pick max 100 lines, all delta updaters
 - `index.html` — Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
 - `project.md` — this file
+
+Previous stable: `backups/stable-2026-11-21b`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
