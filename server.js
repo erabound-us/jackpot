@@ -2269,8 +2269,17 @@ app.get('/draws/fantasy5/available', async (req, res) => {
       dates.push(expandYear(d.date));
       if (dates.length >= 5) break;
     }
-    // Return the 5 most recent dates from the JSON.
-    // appendFantasy5Deltas() keeps JSON current after each draw -- no speculative gap-fill needed.
+    // Stale check: if today has had a draw (1:05 PM or 11:15 PM ET) and it's not in the list, prepend it
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const h = nowET.getHours(), m = nowET.getMinutes();
+    const passedMidday = h > 13 || (h === 13 && m >= 5);
+    const passedEvening = h > 23 || (h === 23 && m >= 15);
+    if (passedMidday || passedEvening) {
+      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+      const dy = String(nowET.getDate()).padStart(2, '0');
+      const todayFull = mo + '/' + dy + '/' + nowET.getFullYear();
+      if (!dates.includes(todayFull)) dates.unshift(todayFull);
+    }
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -3315,7 +3324,22 @@ app.get('/draws/powerball/available', (req, res) => {
     const draws = getPbDraws();
     const filtered = draws.filter(d => { const p = d.date.split('/'); const day = new Date(Date.UTC(parseInt(p[2].length===2?'20'+p[2]:p[2]), parseInt(p[0])-1, parseInt(p[1]))).getUTCDay(); return day===1||day===3||day===6; });
     const dates = filtered.slice(0, 5).map(d => expandYear(d.date));
-    res.json({ dates });
+    // Stale check: find most recent Mon(1)/Wed(3)/Sat(6) that has passed 10:59 PM ET
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const drawCutoff = new Date(nowET); drawCutoff.setHours(22, 59, 0, 0);
+    let check = new Date(nowET);
+    for (let i = 0; i < 7; i++) {
+      const d = check.getDay();
+      if ([1, 3, 6].includes(d) && (i > 0 || nowET >= drawCutoff)) {
+        const mo = String(check.getMonth() + 1).padStart(2, '0');
+        const dy = String(check.getDate()).padStart(2, '0');
+        const missingDate = mo + '/' + dy + '/' + check.getFullYear();
+        if (!dates.includes(missingDate)) dates.unshift(missingDate);
+        break;
+      }
+      check.setDate(check.getDate() - 1);
+    }
+    res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
 
