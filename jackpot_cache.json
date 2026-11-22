@@ -1,10 +1,1 @@
-{
-  "lottox": {
-    "amount": "$1 Million",
-    "ts": 1795228025198
-  },
-  "fantasy5": {
-    "amount": "$100,000",
-    "ts": 1795284602910
-  }
-}
+{"lottox":{"amount":"$1 Million","ts":1795228025198},"fantasy5":{"amount":"$100,000","ts":1795284602910},"jtp":{"amount":"$325,000","ts":1795306255908},"powerball":{"amount":"$114 Million","ts":1795306258205}}
