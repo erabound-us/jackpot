@@ -2727,8 +2727,8 @@ fetch('/latestdraw/cashpop').then(function(r){return r.json();}).then(function(d
 
 // Fetch live jackpot amounts for JTP, Lotto X, Fantasy 5
 (function() {
-  var games = ['jtp', 'lottox', 'fantasy5', 'powerball'];
-  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount', powerball: 'pbJackpotAmount' };
+  var games = ['jtp', 'lottox', 'fantasy5', 'powerball', 'megamillions'];
+  var ids = { jtp: 'jtpJackpotAmount', lottox: 'lxJackpotAmount', fantasy5: 'f5JackpotAmount', powerball: 'pbJackpotAmount', megamillions: 'mmJackpotAmount' };
   games.forEach(function(g) {
     fetch('/jackpot?game=' + g).then(function(r){return r.json();}).then(function(d){
       var el = document.getElementById(ids[g]);
@@ -3886,7 +3886,49 @@ function switchTab(id) {
         Overall Double Play odds: <strong>1 in 7.61</strong>. If you win both a base game prize and a Double Play prize, they are combined into one payment.</div>
     </div>
 
+        <div class="faq-item">
+      <div class="faq-q">How does Powerball work?</div>
+      <div class="faq-a">Powerball is a multi-state jackpot game. Pick <strong>5 numbers from 1&ndash;69</strong> plus <strong>1 Powerball from 1&ndash;26</strong> for <strong>$2 per play</strong>. Draws every <strong>Monday, Wednesday &amp; Saturday at ~10:59 PM ET</strong>; sales close 10:00 PM ET.<br><br>
+      Add-ons: <strong>Power Play (+$1)</strong> multiplies non-jackpot prizes 2&times;&ndash;10&times; (Match 5 no PB always becomes $2,000,000 with any Power Play). <strong>Double Play (+$1)</strong> enters your numbers in a separate drawing with a $10M top prize. Tickets cannot be canceled once printed.</div>
+    </div>
     <div class="faq-item">
+      <div class="faq-q">What are the Powerball prizes and odds?</div>
+      <div class="faq-a">
+        &bull; 5+PB: Jackpot (starts ~$20M) &mdash; 1 in 292,201,338<br>
+        &bull; 5+0: $1,000,000 ($2,000,000 with Power Play) &mdash; 1 in 11,688,054<br>
+        &bull; 4+PB: $50,000 &mdash; 1 in 913,129<br>
+        &bull; 4+0: $100 &mdash; 1 in 36,525<br>
+        &bull; 3+PB: $100 &mdash; 1 in 14,494<br>
+        &bull; 3+0: $7 &mdash; 1 in 580<br>
+        &bull; 2+PB: $7 &mdash; 1 in 701<br>
+        &bull; 1+PB: $4 &mdash; 1 in 92<br>
+        &bull; 0+PB: $4 &mdash; 1 in 38<br>
+        &bull; Any prize: 1 in 24.87<br><br>
+        Jackpot paid as 30-year annuity or cash lump sum (~60%). Prizes over $5,000: 24% federal withholding. Florida has no state income tax.
+      </div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How does Mega Millions work?</div>
+      <div class="faq-a">Mega Millions is a multi-state jackpot game. Pick <strong>5 numbers from 1&ndash;70</strong> plus <strong>1 Mega Ball from 1&ndash;25</strong> for <strong>$2 per play</strong>. Draws every <strong>Tuesday &amp; Friday at ~11:00 PM ET</strong>; sales close 10:45 PM ET.<br><br>
+      Add-on: <strong>Megaplier (+$1)</strong> multiplies non-jackpot prizes 2&times;&ndash;5&times; (10&times; when jackpot under $150M). Match 5 no Mega Ball always becomes $5,000,000 with any Megaplier. Tickets cannot be canceled once printed.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">What are the Mega Millions prizes and odds?</div>
+      <div class="faq-a">
+        &bull; 5+MB: Jackpot (starts ~$20M) &mdash; 1 in 302,575,350<br>
+        &bull; 5+0: $1,000,000 ($5,000,000 with Megaplier) &mdash; 1 in 12,607,306<br>
+        &bull; 4+MB: $10,000 &mdash; 1 in 931,001<br>
+        &bull; 4+0: $500 &mdash; 1 in 38,792<br>
+        &bull; 3+MB: $200 &mdash; 1 in 14,547<br>
+        &bull; 3+0: $10 &mdash; 1 in 606<br>
+        &bull; 2+MB: $10 &mdash; 1 in 693<br>
+        &bull; 1+MB: $4 &mdash; 1 in 89<br>
+        &bull; 0+MB: $2 &mdash; 1 in 37<br>
+        &bull; Any prize: 1 in 24<br><br>
+        Jackpot paid as 30-year annuity or cash lump sum (~60%). Prizes over $5,000: 24% federal withholding. Florida has no state income tax.
+      </div>
+    </div>
+<div class="faq-item">
       <div class="faq-q">How much does it cost to play? (Estimated)</div>
       <div class="faq-a">The cost estimator shown on each game panel is based on the known Florida Lottery price structure at the time this tool was built. <strong>These are estimates only &mdash; actual prices are set by the Florida Lottery and are subject to change without notice.</strong> Always confirm the current price at your retailer before purchasing.<br><br>
         <strong>Jackpot Triple Play</strong><br>
@@ -3905,6 +3947,15 @@ function switchTab(id) {
         <strong>Cash Pop</strong><br>
         &bull; Play amount: <strong>$1, $2, $5, or $10</strong> per number selected<br>
         &bull; Example: 5 numbers at $5 each = $25<br><br>
+        <strong>Powerball</strong><br>
+        &bull; Base play: <strong>$2</strong> per play<br>
+        &bull; Power Play add-on: <strong>+$1</strong> per play<br>
+        &bull; Double Play add-on: <strong>+$1</strong> per play<br>
+        &bull; Example: 6 plays = $12 base; with both add-ons = $24<br><br>
+        <strong>Mega Millions</strong><br>
+        &bull; Base play: <strong>$2</strong> per play<br>
+        &bull; Megaplier add-on: <strong>+$1</strong> per play<br>
+        &bull; Example: 6 plays = $12 base; with Megaplier = $18<br><br>
         <strong>PICK Daily Games (Pick 2, 3, 4, 5)</strong><br>
         &bull; Base play: <strong>50&cent; or $1.00</strong> per panel<br>
         &bull; Fireball add-on: <strong>doubles</strong> the base cost<br>

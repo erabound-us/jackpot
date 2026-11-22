@@ -1947,10 +1947,11 @@ async function closeBrowser() {
 }
 
 const JACKPOT_GAME_URLS = {
-  jtp:       'https://floridalottery.com/games/draw-games/jackpot-triple-play',
-  lottox:    'https://floridalottery.com/games/draw-games/florida-lotto',
-  fantasy5:  'https://floridalottery.com/games/draw-games/fantasy5',
-  powerball: 'https://floridalottery.com/games/draw-games/powerball'
+  jtp:          'https://floridalottery.com/games/draw-games/jackpot-triple-play',
+  lottox:       'https://floridalottery.com/games/draw-games/florida-lotto',
+  fantasy5:     'https://floridalottery.com/games/draw-games/fantasy5',
+  powerball:    'https://floridalottery.com/games/draw-games/powerball',
+  megamillions: 'https://floridalottery.com/games/draw-games/mega-millions'
 };
 const _jackpotCache = {}; // game -> { amount, ts }, 5-minute TTL
 
@@ -2453,7 +2454,7 @@ async function forceRefreshJackpot(game) {
 
 app.get('/jackpot', async (req, res) => {
   const game = (req.query.game || '').toLowerCase();
-  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'game must be jtp, lottox, fantasy5 or powerball' });
+  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'game must be jtp, lottox, fantasy5, powerball or megamillions' });
   try {
     const amount = await scrapeJackpot(game);
     res.json({ game, amount });
