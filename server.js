@@ -2430,14 +2430,9 @@ app.get('/jackpot', async (req, res) => {
   } catch(err) { res.json({ game, amount: null }); }
 });
 
-// Force jackpot refresh for any game — triggers Puppeteer scrape via _scrapeGlobalLock
-app.post('/jackpot/refresh', async (req, res) => {
-  const game = (req.query.game || req.body.game || '').toLowerCase();
-  if (!JACKPOT_GAME_URLS[game]) return res.status(400).json({ error: 'Invalid game' });
-  delete _jackpotCache[game];
-  _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(game)).catch(() => {});
-  res.json({ ok: true, game, queued: true });
-});
+// Force jackpot refresh is intentionally NOT exposed as a user-facing route.
+// forceRefreshJackpot() is only called from schedulePostDrawRefreshes() via _scrapeGlobalLock.
+// See steering rules: OOM safety section.
 
 app.post('/check/fantasy5', (req, res) => {
   const { drawn, line } = req.body;
