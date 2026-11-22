@@ -1097,14 +1097,14 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-22b`
+Latest stable: `backups/stable-2026-11-22c`
 
 What's in the latest backup:
-- `server.js` -- startup jackpot warm removed (OOM fix); JTP frequency PDF wrapped in `getFreqText()` mtime cache (SIGABRT fix); all `extractPDFText()` calls now protected
+- `server.js` -- startup jackpot warm removed (OOM fix); JTP frequency PDF wrapped in `getFreqText()` mtime cache (SIGABRT fix); stale-check added to Fantasy 5 and Powerball `/draws/*/available` endpoints
 - `index.html` -- Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
 - `project.md` -- this file
 
-Previous stable: `backups/stable-2026-11-22`
+Previous stable: `backups/stable-2026-11-22b`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
@@ -1196,6 +1196,42 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - `getAvailableDates(game)` still exists for puppeteer-based scraping (used by `schedulePostDrawRefreshes`) with 1-hour cache in `_availCache`
 - **Never cache empty results** from `getAvailableDates` — only cache when `converted.length > 0`
 - **Cache invalidation on 404**: when `/draws/<game>` returns 404, `delete _availCache[game]`
+
+### Stale-check — REQUIRED on every `/draws/<game>/available` endpoint
+FL Lottery PDFs update with a lag after each draw (minutes to hours). Without a stale-check, the most recent draw date is missing from the chip list until the PDF updates, leaving users with no chip to click for the latest draw.
+
+**Rule**: every `/draws/<game>/available` endpoint MUST prepend the most recent draw date that has passed, even if it is not yet in the JSON/PDF cache. If the date is not in the cache, clicking the chip returns 404 with a "View official results" link — that is acceptable. Missing the chip entirely is not.
+
+**Pattern for specific-day games (JTP Tue/Fri, LX Wed/Sat, PB Mon/Wed/Sat)**:
+```js
+// Walk back from today to find the most recent draw day that has passed its draw time
+const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+const drawCutoff = new Date(nowET); drawCutoff.setHours(DRAW_H, DRAW_M, 0, 0);
+let check = new Date(nowET);
+for (let i = 0; i < 7; i++) {
+  const d = check.getDay();
+  if (DRAW_DAYS.includes(d) && (i > 0 || nowET >= drawCutoff)) {
+    const mo = String(check.getMonth() + 1).padStart(2, '0');
+    const dy = String(check.getDate()).padStart(2, '0');
+    const missingDate = mo + '/' + dy + '/' + check.getFullYear();
+    if (!dates.includes(missingDate)) dates.unshift(missingDate);
+    break;
+  }
+  check.setDate(check.getDate() - 1);
+}
+res.json({ dates: dates.slice(0, 5) });
+```
+- `DRAW_DAYS`: JTP `[2,5]`, LX `[3,6]`, PB `[1,3,6]`
+- `DRAW_H/DRAW_M`: JTP/LX `23,15` (11:15 PM ET); PB `22,59` (10:59 PM ET)
+- `i > 0` skips today if the draw hasn't happened yet; `nowET >= drawCutoff` allows today if it has
+
+**Pattern for daily-draw games (Fantasy 5, Cash Pop, Pick 2-5)**:
+- See the existing "CRITICAL: Never speculatively prepend today's date" rules above — these games use the first-draw-cutoff pattern, not the walk-back pattern
+- Fantasy 5: prepend today if past 1:05 PM ET, else yesterday
+- Cash Pop: prepend today if past 7:29 AM ET, else yesterday
+- Pick 2-5: prepend today if past 1:05 PM ET, else yesterday
+
+**All 6 games with `/draws/<game>/available` endpoints have this stale-check** (as of Nov 2026): JTP, LX, F5, CP, PB, Pick. When adding a new game, add the appropriate stale-check immediately — do not leave it out and fix it later.
 
 ### Draw day validation
 - `isValidDrawDay(dateStr, days)` — checks if a date falls on a valid draw day before hitting PDF or scraper
@@ -1353,7 +1389,7 @@ res.json({ dates: dates.slice(0, 5) });
 3. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
 4. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
 5. Add game URL to `FL_RESULTS_URLS`
-4. Add `/draws/<game>/available` endpoint — **PDF-based** using `expandYear()`, filtered by draw days
+4. Add `/draws/<game>/available` endpoint — **PDF-based** using `expandYear()`, filtered by draw days, **with stale-check** (see "Stale-check — REQUIRED" section above)
 5. Add `/draws/<game>` route: **PDF first** using `stripLeadingZeros()` comparison, puppeteer fallback, `delete _availCache['<game>']` + official link on 404
 6. Add draw day validation: `if (!isValidDrawDay(date, [days])) return 404` before PDF/scraper
 7. Add `/latestdraw/<game>` endpoint: **PDF only**, filter sentinel dates (`ts > 2019-01-01`), return `{ date, numbers }`
