@@ -3434,6 +3434,27 @@ function schedulePostDrawRefreshes() {
 
 schedulePostDrawRefreshes();
 
+// Warm jackpot cache on startup for any game missing a valid entry.
+// Serialized through _scrapeGlobalLock -- same pattern as schedulePostDrawRefreshes.
+// This ensures jackpot amounts show immediately after deploy without waiting for next draw.
+setTimeout(() => {
+  const games = Object.keys(JACKPOT_GAME_URLS);
+  games.forEach(game => {
+    let needsWarm = true;
+    try {
+      const fileCache = JSON.parse(fs.readFileSync(JACKPOT_CACHE_PATH, 'utf8'));
+      if (fileCache[game] && !isDataStaleForGame(game, fileCache[game].ts)) needsWarm = false;
+    } catch(e) {}
+    if (needsWarm) {
+      console.log('Startup jackpot warm queued: ' + game);
+      delete _jackpotCache[game];
+      _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(game)).catch(() => {});
+    } else {
+      console.log('Startup jackpot warm skipped (cache fresh): ' + game);
+    }
+  });
+}, 15000); // wait 15s after startup so PDF downloads complete first
+
 // ── Log rotation (local only — trim PM2 log files > 1 MB every 24h) ────────────────
 function rotateLogs() {
   const logDir = path.join(__dirname, 'logs');
