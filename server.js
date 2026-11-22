@@ -3760,6 +3760,7 @@ function schedulePostDrawRefreshes() {
     if (jtpDays.includes(day)) jackpotGames.push('jtp');
     if (lxDays.includes(day)) jackpotGames.push('lottox');
     if (pbDays.includes(day)) jackpotGames.push('powerball');
+    if (mmDays.includes(day)) jackpotGames.push('megamillions');
     jackpotGames.forEach(g => {
       delete _jackpotCache[g];
       _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(g)).catch(() => {});
