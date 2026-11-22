@@ -340,6 +340,22 @@ function parseFrequencyPDF(text) {
   return freq;
 }
 
+let _freqCache = null;
+let _freqParsePromise = null;
+function getFreqText() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATHS.frequency).mtimeMs; } catch(e) { throw new Error('JTP frequency PDF not yet downloaded. Try again in a moment.'); }
+  if (_freqCache && _freqCache.mtime === mtime) return Promise.resolve(_freqCache.text);
+  if (!_freqParsePromise) {
+    _freqParsePromise = extractPDFText(PDF_PATHS.frequency).then(text => {
+      _freqCache = { text, mtime };
+      _freqParsePromise = null;
+      return text;
+    });
+  }
+  return _freqParsePromise;
+}
+
 // ── Analysis ──────────────────────────────────────────────────────────────────
 
 function scoreNumbers(nums, freq, draws, totalDraws) {
@@ -425,7 +441,7 @@ function generateLines(freq, draws, count = 6, seenLines = new Set()) {
 
 async function runAnalysis(count = 6, sid = null) {
   const draws = getJtpDraws();
-  const freqText = await extractPDFText(PDF_PATHS.frequency);
+  const freqText = await getFreqText();
   const freq  = parseFrequencyPDF(freqText);
   if (draws.length < 10) throw new Error(`Only ${draws.length} draws parsed from history PDF.`);
   if (Object.keys(freq).length < 20) throw new Error(`Only ${Object.keys(freq).length} numbers parsed from frequency PDF.`);
