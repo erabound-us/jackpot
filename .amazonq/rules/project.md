@@ -1172,6 +1172,31 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
 4. Add xQuickAsk(q) function
 5. For multi-draw games: use sequential fetch with fallback, not Promise.all
 
+### CRITICAL: Generate Lines fetch MUST use two-step .then() pattern
+Every `/analyze/*` fetch in a generate function MUST parse JSON in a separate first `.then()` before processing the data. Missing this causes `r.data` to be undefined (raw Response object), producing errors like `Cannot read properties of undefined (reading 'nextDraw')`.
+
+**Correct pattern** (copy exactly for every new game):
+```js
+fetch('/analyze/xxx?count=' + count + '&sid=' + SID, {signal:_ac.signal})
+  .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+  .then(function(r) {
+    if (!r.ok) throw new Error(r.data.error || 'Server error');
+    // r.data.nextDraw, r.data.lines, etc. are now available
+  })
+  .catch(function(err) { /* show error */ })
+  .finally(function() { btn.disabled = false; btn.textContent = '...'; });
+```
+
+**Why two steps**: the first `.then()` calls `res.json()` which returns a Promise. Skipping it means `r` is the raw `Response` object -- `r.ok` works but `r.data` is undefined.
+
+**Verification after writing any generate function**:
+```js
+const idx = s.indexOf("fetch('/analyze/xxx");
+console.log(s.slice(idx, idx+150).includes('res.json()') ? 'OK' : 'BROKEN');
+```
+
+**Never edit AbortController timeout lines with fsReplace** -- the timeout line is immediately followed by the fetch line, and fsReplace eats the fetch line. Always use a .js script file with String.replace matching both lines together.
+
 ## When Adding a New Game — Email Checklist
 1. Add `xEmailCard` div (hidden by default, shown after line generation)
 2. Add `xEmailIncLines` and `xEmailIncWinning` checkboxes (both checked by default)
@@ -1229,9 +1254,10 @@ Stable snapshots -> `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-25`
 
 What's in the latest backup:
-- `server.js` -- Five fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard on all 7 delta functions; (3) Cash Pop post-draw refresh calls `appendCpDeltas()`; (4) Generate Lines freshness: all `ensureDailyRefresh*` call `appendXxxDeltas()` after download; added `ensureDailyRefreshPick(game)`; (5) Concurrency: all 7 delta functions wrapped with in-flight promise guards.
-- `Dockerfile` -- heap raised from 256MB to 384MB (`--max-old-space-size=384`). Fantasy 5 parse needs ~252MB; 256MB had only 4MB margin causing OOM on every Generate. 384MB gives 130MB headroom within the 512MB machine RAM.
-- `index.html` -- Generate Lines timeouts raised: Fantasy 5 30s→120s, Lotto X/Powerball/Mega Millions 30s→60s. The first Generate of the day triggers a PDF download + parse which takes 10-20s on Fly; 30s was too tight.
+- `server.js` -- (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard on all 7 delta functions; (3) Cash Pop post-draw refresh calls `appendCpDeltas()`; (4) `ensureDailyRefreshPick(game)` added; (5) All 7 delta functions wrapped with in-flight promise guards; (6) Large-PDF `ensureDailyRefresh*` (LX, F5, PB, MM) are now download-only fire-and-forget -- parse handled exclusively by `schedulePostDrawRefreshes` background queue. Generate Lines returns instantly from JSON cache.
+- `Dockerfile` -- heap raised 256MB → 384MB. Fantasy 5 parse needs ~252MB; 256MB had 4MB margin causing OOM.
+- `index.html` -- All generate functions verified with correct two-step `.then()` pattern (`res.json()` first, then data). All analyze timeouts 30s (server returns from JSON cache instantly). Fixed broken LX and F5 generate functions where fsReplace edits had eaten the `fetch()` and `res.json()` lines.
+- All JSON caches regenerated locally: Fantasy 5 → 11/22 Evening, Pick 2-5 → 11/22 Evening.
 
 Previous stable: `backups/stable-2026-11-24`
 
