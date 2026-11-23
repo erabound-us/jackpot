@@ -1410,11 +1410,7 @@ async function start() {
     // Pick games now use JSON caches (getPickDraws) -- no PDF warming needed
     downloadPDFs()
       .then(() => appendJtpDeltas()).catch(() => {})
-      .then(() => appendCpDeltas()).catch(() => {})
-      .then(() => appendLottoXDeltas())
-      .then(() => appendFantasy5Deltas()).catch(() => {})
-      .then(() => appendPbDeltas()).catch(() => {})
-      .then(() => appendMmDeltas()).catch(() => {});
+      .then(() => appendCpDeltas()).catch(() => {});
     // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
   });
 }
