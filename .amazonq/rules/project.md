@@ -1118,6 +1118,11 @@ Every user-triggered fetch() in index.html MUST have an AbortController with an 
 | Endpoint type | Timeout | Rationale |
 |---|---|---|
 | /analyze/* | 30s | PDF parse + line generation can take 10-15s |
+
+Exceptions for large-PDF games (first Generate of the day triggers download + parse):
+- Fantasy 5: **120s** -- 2.7MB PDF parse takes ~15-20s on Fly
+- Lotto X, Powerball, Mega Millions: **60s** -- ~1MB PDFs take ~5-10s on Fly
+- All other games: 30s
 | /email | 30s | Resend API call + server processing |
 | /refresh/* | 10s | Just enqueues a job, returns immediately |
 | /check/* | 15s | Pure math, should be fast |
@@ -1132,6 +1137,25 @@ Every user-triggered fetch() in index.html MUST have an AbortController with an 
 - /draws/*/available -- page-load chips; errors swallowed with .catch(function(){})
 - /reset -- fire-and-forget; .catch(function(){}) already present
 - /mode -- startup only, tiny
+
+### CRITICAL: Never edit AbortController timeout lines with fsReplace
+fsReplace matches `oldStr` exactly including the next line. When the timeout line is immediately followed by the `fetch(...)` call, replacing just the timeout line eats the fetch line too, breaking the entire function silently (no JS error until runtime).
+
+**Safe pattern for changing timeouts in index.html**: always use a `.js` script file with `fs.readFileSync` + `String.replace` + `fs.writeFileSync`, matching the timeout AND the fetch line together:
+```js
+s = s.replace(
+  "setTimeout(function(){_ac.abort();}, 30000);\n  fetch('/analyze/lottox",
+  "setTimeout(function(){_ac.abort();}, 60000);\n  fetch('/analyze/lottox"
+);
+```
+This ensures the fetch line is preserved. Always verify with a check script after editing.
+
+**After any index.html timeout edit, run this verification**:
+```js
+const idx = s.indexOf("fetch('/analyze/lottox");
+const hasThen = s.slice(idx, idx+150).includes('.then(');
+console.log(hasThen ? 'OK' : 'BROKEN');
+```
 
 ### AbortController pattern
 Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid closure collisions inside loops. For loops (e.g. allLines.forEach), declare the AbortController inside the loop body so each request gets its own controller.
@@ -1206,7 +1230,9 @@ Stable snapshots -> `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-25`
 
 What's in the latest backup:
-- `server.js` -- Four fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard added to all 7 `appendXxxDeltas()` functions; (3) Cash Pop post-draw refresh now calls `appendCpDeltas()`; (4) Generate Lines freshness fix: all `ensureDailyRefresh*` functions now call `appendXxxDeltas()` after downloading; added `ensureDailyRefreshPick(game)`; (5) **Concurrency fix**: all 7 `appendXxxDeltas()` functions wrapped with in-flight promise guards (`_xxxDeltaPromise`) so concurrent calls (e.g. scheduled refresh + user Generate at same time) share one parse instead of launching two simultaneous `extractPDFText()` calls.
+- `server.js` -- Five fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard on all 7 delta functions; (3) Cash Pop post-draw refresh calls `appendCpDeltas()`; (4) Generate Lines freshness: all `ensureDailyRefresh*` call `appendXxxDeltas()` after download; added `ensureDailyRefreshPick(game)`; (5) Concurrency: all 7 delta functions wrapped with in-flight promise guards.
+- `Dockerfile` -- heap raised from 256MB to 384MB (`--max-old-space-size=384`). Fantasy 5 parse needs ~252MB; 256MB had only 4MB margin causing OOM on every Generate. 384MB gives 130MB headroom within the 512MB machine RAM.
+- `index.html` -- Generate Lines timeouts raised: Fantasy 5 30s→120s, Lotto X/Powerball/Mega Millions 30s→60s. The first Generate of the day triggers a PDF download + parse which takes 10-20s on Fly; 30s was too tight.
 
 Previous stable: `backups/stable-2026-11-24`
 

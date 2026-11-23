@@ -1722,6 +1722,10 @@ function lxGenerate() {
   var count = Math.min(Math.max(parseInt(document.getElementById('lxLineCount').value) || 6, 1), 100);
   var _acLX = new AbortController(); setTimeout(function(){_acLX.abort();}, 60000);
   fetch('/analyze/lottox?count=' + count + '&sid=' + SID, {signal:_acLX.signal})
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+    .then(function(r) {
+      if (!r.ok) throw new Error(r.data.error || 'Server error');
+      lxPressCount++;
       document.getElementById('lxPressNum').textContent = lxPressCount;
       document.getElementById('lxPressHint').style.display = 'block';
       document.getElementById('lxEmailBlurb').style.display = 'block';
