@@ -1720,7 +1720,7 @@ function lxGenerate() {
   btn.textContent = 'Generating...';
   lxClearStatus();
   var count = Math.min(Math.max(parseInt(document.getElementById('lxLineCount').value) || 6, 1), 100);
-  var _acLX = new AbortController(); setTimeout(function(){_acLX.abort();}, 60000);
+  var _acLX = new AbortController(); setTimeout(function(){_acLX.abort();}, 30000);
   fetch('/analyze/lottox?count=' + count + '&sid=' + SID, {signal:_acLX.signal})
     .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
@@ -2464,7 +2464,7 @@ function f5Generate() {
   el.textContent = 'Analyzing complete draw history -- Fantasy 5 has 2 draws per day so this can take a minute or two. Hang tight!';
   el.style.display = 'block';
   var count = Math.min(Math.max(parseInt(document.getElementById('f5LineCount').value) || 6, 1), 100);
-  var _acF5 = new AbortController(); setTimeout(function(){_acF5.abort();}, 120000);
+  var _acF5 = new AbortController(); setTimeout(function(){_acF5.abort();}, 30000);
   fetch('/analyze/fantasy5?count=' + count + '&sid=' + SID, {signal:_acF5.signal})
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
@@ -3234,7 +3234,7 @@ function pbGenerate() {
   var el = document.getElementById('pbStatusMsg');
   el.className = 'status-msg'; el.style.display = 'none';
   var count = Math.min(Math.max(parseInt(document.getElementById('pbLineCount').value) || 6, 1), 100);
-  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
   fetch('/analyze/powerball?count=' + count + '&sid=' + SID, {signal:_ac.signal})
     .then(function(res){return res.json().then(function(data){return{ok:res.ok,data:data};});})
     .then(function(r) {
@@ -3511,7 +3511,7 @@ function mmGenerate() {
   var el = document.getElementById('mmStatusMsg');
   el.className = 'status-msg'; el.style.display = 'none';
   var count = Math.min(Math.max(parseInt(document.getElementById('mmLineCount').value) || 6, 1), 100);
-  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 60000);
+  var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
   fetch('/analyze/megamillions?count=' + count + '&sid=' + SID, {signal:_ac.signal})
     .then(function(res){return res.json().then(function(data){return{ok:res.ok,data:data};});})
     .then(function(r) {

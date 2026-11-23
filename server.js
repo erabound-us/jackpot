@@ -1299,17 +1299,16 @@ let autoRefreshLottoXPromise = null;
 async function ensureDailyRefreshLottoX() {
   const today = todayET();
   if (lastAutoRefreshLottoX === today) return;
-  if (autoRefreshLottoXPromise) return autoRefreshLottoXPromise;
+  if (autoRefreshLottoXPromise) return;
   autoRefreshLottoXPromise = downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => {
     lastAutoRefreshLottoX = today;
     autoRefreshLottoXPromise = null;
     console.log('Auto-refreshed Lotto X PDF for ' + today);
-    return appendLottoXDeltas();
   }).catch(err => {
     autoRefreshLottoXPromise = null;
-    console.warn('Lotto X auto-refresh failed: ' + err.message + ' (using cached PDF)');
+    console.warn('Lotto X auto-refresh failed: ' + err.message);
   });
-  return autoRefreshLottoXPromise;
+  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
 }
 
 app.get('/analyze/lottox', async (req, res) => {
@@ -1927,17 +1926,16 @@ let autoRefreshF5Promise = null;
 async function ensureDailyRefreshF5() {
   const today = todayET();
   if (lastAutoRefreshF5 === today) return;
-  if (autoRefreshF5Promise) return autoRefreshF5Promise;
+  if (autoRefreshF5Promise) return;
   autoRefreshF5Promise = downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => {
     lastAutoRefreshF5 = today;
     autoRefreshF5Promise = null;
     console.log('Auto-refreshed Fantasy 5 PDF for ' + today);
-    return appendFantasy5Deltas();
   }).catch(err => {
     autoRefreshF5Promise = null;
-    console.warn('Fantasy 5 auto-refresh failed: ' + err.message + ' (using cached PDF)');
+    console.warn('Fantasy 5 auto-refresh failed: ' + err.message);
   });
-  return autoRefreshF5Promise;
+  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
 }
 
 app.get('/nextdraw/fantasy5', (req, res) => res.json(getNextDrawFantasy5()));
@@ -3240,17 +3238,16 @@ let autoRefreshPBPromise = null;
 async function ensureDailyRefreshPB() {
   const today = todayET();
   if (lastAutoRefreshPB === today) return;
-  if (autoRefreshPBPromise) return autoRefreshPBPromise;
+  if (autoRefreshPBPromise) return;
   autoRefreshPBPromise = downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => {
     lastAutoRefreshPB = today;
     autoRefreshPBPromise = null;
     console.log('Auto-refreshed Powerball PDF for ' + today);
-    return appendPbDeltas();
   }).catch(err => {
     autoRefreshPBPromise = null;
-    console.warn('Powerball auto-refresh failed: ' + err.message + ' (using cached PDF)');
+    console.warn('Powerball auto-refresh failed: ' + err.message);
   });
-  return autoRefreshPBPromise;
+  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
 }
 
 async function runAnalysisPowerball(count, sid) {
@@ -3607,17 +3604,16 @@ let autoRefreshMMPromise = null;
 async function ensureDailyRefreshMM() {
   const today = todayET();
   if (lastAutoRefreshMM === today) return;
-  if (autoRefreshMMPromise) return autoRefreshMMPromise;
+  if (autoRefreshMMPromise) return;
   autoRefreshMMPromise = downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => {
     lastAutoRefreshMM = today;
     autoRefreshMMPromise = null;
     console.log('Auto-refreshed Mega Millions PDF for ' + today);
-    return appendMmDeltas();
   }).catch(err => {
     autoRefreshMMPromise = null;
-    console.warn('Mega Millions auto-refresh failed: ' + err.message + ' (using cached PDF)');
+    console.warn('Mega Millions auto-refresh failed: ' + err.message);
   });
-  return autoRefreshMMPromise;
+  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
 }
 
 async function runAnalysisMegaMillions(count, sid) {

@@ -865,15 +865,19 @@ downloadPDFs()
 - `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
 - When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
 
-### ensureDailyRefresh* — MUST call appendXxxDeltas()
-Every `ensureDailyRefreshXxx()` function MUST call `appendXxxDeltas()` after the PDF download completes. Without this, Generate Lines reads the stale JSON cache — the PDF is downloaded but the JSON is never updated from this path.
+### ensureDailyRefresh* — download only for large PDFs
+`ensureDailyRefreshXxx()` for large-PDF games (LX, F5, PB, MM) **only downloads the PDF** — they never call `appendXxxDeltas()`. The parse is handled exclusively by `schedulePostDrawRefreshes()` which runs in the background queue 5 minutes after each draw.
 
-- The `appendXxxDeltas()` call is inside `.then()` so it only runs after a successful download
-- The mtime guard inside `appendXxxDeltas()` makes it a no-op if the PDF hasn't changed — safe to call every time
-- **Pick games**: use `ensureDailyRefreshPick(game)` — one shared function for all 4 games, keyed by game name
-- **When adding a new game**: create `ensureDailyRefreshXxx()`, call it at the top of `/analyze/xxx`, and make sure it calls `appendXxxDeltas()` in `.then()`
+**Why**: `appendFantasy5Deltas()` takes ~2.5 minutes on Fly.io and blocks the entire Node.js event loop (single-threaded). Calling it inline on a user `/analyze` request makes the server unresponsive for 2.5 minutes — health checks fail, all other requests time out.
 
-**OOM history**: Fantasy 5 parse was OOMing at 256MB heap (252MB used). Fixed Nov 2026 by raising heap to 384MB in Dockerfile. The parse is serialized (one at a time via `_f5DeltaPromise` guard) so 384MB is sufficient even with Node overhead.
+**The correct flow**:
+- `schedulePostDrawRefreshes()` fires 5 min after each draw → `enqueueRefresh()` → downloads PDF → `appendXxxDeltas()` → JSON cache updated
+- `/analyze/xxx` → `ensureDailyRefreshXxx()` (download only, fire-and-forget) → `runAnalysisXxx()` reads JSON cache → returns lines instantly
+- Generate Lines is always fast because it reads the JSON cache, never the PDF
+
+**Small PDFs (JTP, CP, Pick)**: these are safe to parse inline — JTP/CP parse in <1s, Pick in ~4s. Their `ensureDailyRefresh*` functions do call `appendXxxDeltas()` and await it.
+
+**When adding a new game**: if PDF parse time on Fly > 5s, `ensureDailyRefreshXxx()` must be download-only. Only add `appendXxxDeltas()` to `schedulePostDrawRefreshes()`.
 
 ### appendXxxDeltas() — in-flight promise guard (REQUIRED)
 Every `appendXxxDeltas()` function is wrapped with an in-flight promise guard to prevent concurrent PDF parses. The pattern splits the function into a public wrapper and a private `_impl`:
@@ -1117,12 +1121,7 @@ Every user-triggered fetch() in index.html MUST have an AbortController with an 
 ### Timeout values by endpoint type
 | Endpoint type | Timeout | Rationale |
 |---|---|---|
-| /analyze/* | 30s | PDF parse + line generation can take 10-15s |
-
-Exceptions for large-PDF games (first Generate of the day triggers download + parse):
-- Fantasy 5: **120s** -- 2.7MB PDF parse takes ~15-20s on Fly
-- Lotto X, Powerball, Mega Millions: **60s** -- ~1MB PDFs take ~5-10s on Fly
-- All other games: 30s
+| /analyze/* | 30s | Returns immediately from JSON cache; PDF parse runs in background |
 | /email | 30s | Resend API call + server processing |
 | /refresh/* | 10s | Just enqueues a job, returns immediately |
 | /check/* | 15s | Pure math, should be fast |
