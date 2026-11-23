@@ -550,6 +550,8 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 
 **OOM safety**: `forceRefreshJackpot` fires at most 2-3x per day per game, serialized through `_scrapeGlobalLock`. `scrapeJackpot` never launches Chrome. No concurrent Chrome instances possible.
 
+**CRITICAL — No midnight retry**: NEVER add a `scheduleDaily(0, 5, ...)` midnight retry that fires Fantasy 5 + all 4 Pick PDFs simultaneously. This was the root cause of a confirmed OOM crash (Nov 2026): the midnight retry queued Fantasy 5 (~2.7MB parse) + Pick 2/3/4/5 (4 × ~1MB parse) into the refresh queue. Even though the queue serializes them one at a time, the Fantasy 5 parse alone pushes the heap to 252MB against the 256MB limit → SIGABRT. The server restarts, all `scheduleDaily` timers reset, and no further refreshes run until the next scheduled time. The 23:20 + 23:35 ET retries are sufficient for evening draws; 13:10 + 13:25 ET retries are sufficient for midday draws. The midnight retry block was removed Nov 2026 and must not be re-added.
+
 **CRITICAL — No startup warm**: NEVER call `forceRefreshJackpot` at server startup. The FL Lottery jackpot page is JavaScript-rendered — static `https.get()` returns an empty shell with no jackpot data. Puppeteer is required, but launching Chrome at startup for multiple games simultaneously OOMs the 256MB heap (confirmed crash on Fly.io, exit_code=OOM). The startup warm block was removed in Nov 2026 after causing repeated deploy crashes. On cold start, banners show `—` until the next scheduled draw fires `forceRefreshJackpot` via `schedulePostDrawRefreshes`. This is acceptable — jackpot amounts are not critical path.
 
 ### Games without a jackpot (Cash Pop, Pick 2-5)
@@ -750,7 +752,27 @@ downloadPDFs()
 
 **Why JTP and CP still run at startup**: their PDFs are small (<200KB) and parse quickly. The mtime guard makes it a no-op if the PDF hasn't changed.
 
-**mtime guard in appendXxxDeltas()**: stores `lxLastPdfMtime` / `f5LastPdfMtime`. If the PDF mtime hasn't changed since the last delta check, the parse is skipped entirely. This prevents redundant parses when refresh is called multiple times without a new draw.
+**mtime guard in appendXxxDeltas()**: every `appendXxxDeltas()` function has TWO guards before calling `extractPDFText()`:
+1. **In-memory mtime check** — `if (mtime === xxxLastPdfMtime)` skips parse if the PDF hasn't changed since the last run in this process lifetime
+2. **JSON-vs-PDF mtime check** — `if (mtime <= jsonMtime && existing.length > 0)` skips parse if the PDF file is older than or equal to the JSON cache file. This is the critical OOM-prevention guard: on server restart `xxxLastPdfMtime` resets to `null`, but if the PDF hasn't been updated since the last delta run the JSON is already current. Without this guard, every restart triggers a full parse of all PDFs simultaneously.
+
+**Both guards must be present in every `appendXxxDeltas()` function.** Pattern:
+```js
+async function appendXxxDeltas() {
+  let mtime;
+  try { mtime = fs.statSync(PDF_PATH_X).mtimeMs; } catch(e) { return; }
+  if (mtime === xxxLastPdfMtime) { console.log('X: PDF unchanged, skipping parse.'); return; }
+  const existing = getXxxDraws();
+  const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(JSON_PATH_X).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { xxxLastPdfMtime = mtime; console.log('X: PDF older than JSON cache, skipping parse.'); return; }
+  let text;
+  try { text = await extractPDFText(PDF_PATH_X); } catch(e) { return; }
+  xxxLastPdfMtime = mtime;
+  // ... parse and merge
+}
+```
+**When adding a new game**: copy this exact pattern. Never omit the JSON mtime guard — it prevents OOM on restart.
 
 **Why deltas also run at startup**: every deploy resets the container with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after `downloadPDFs()` ensures the JSON is current without any manual intervention. The mtime guard makes this a no-op if the PDF hasn't changed since the last delta run.
 
@@ -1153,7 +1175,12 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-24`
+Latest stable: `backups/stable-2026-11-25`
+
+What's in the latest backup:
+- `server.js` -- OOM/auto-refresh fix: (1) removed midnight retry at 00:05 ET that was OOMing the server by firing Fantasy 5 + 4x Pick PDF parses simultaneously after restarts; (2) added PDF-older-than-JSON mtime guard to ALL 7 `appendXxxDeltas()` functions (JTP, CP, LX, F5, Pick, PB, MM) -- skips full parse when PDF mtime <= JSON mtime, preventing unnecessary parses on restart; (3) fixed Cash Pop post-draw refresh to call `appendCpDeltas()` after download (was downloading PDF but never updating JSON cache).
+
+Previous stable: `backups/stable-2026-11-24`
 
 What's in the latest backup:
 - `server.js` -- Cash Pop chatbot rewritten with natural conversational phrasing throughout (`chatReplyCashPop`). Added `hitM` pattern to detect "played $X and hit/won/matched" without a multiplier and respond with prize range. All response branches rewritten from rule-dump bullet lists to natural sentences.

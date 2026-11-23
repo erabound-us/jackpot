@@ -1142,6 +1142,8 @@ async function appendLottoXDeltas() {
   if (mtime === lxLastPdfMtime) { console.log('Lotto X: PDF unchanged, skipping parse.'); return; }
   const existing = getLottoXDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(JSON_PATH_LX).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { lxLastPdfMtime = mtime; console.log('Lotto X: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATH_LX); } catch(e) { return; }
   lxLastPdfMtime = mtime;
@@ -2611,6 +2613,8 @@ async function appendJtpDeltas() {
   if (mtime === jtpLastPdfMtime) { console.log('JTP: PDF unchanged, skipping delta.'); return; }
   const existing = getJtpDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(JTP_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { jtpLastPdfMtime = mtime; console.log('JTP: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATHS.history); } catch(e) { return; }
   jtpLastPdfMtime = mtime;
@@ -2630,6 +2634,8 @@ async function appendCpDeltas() {
   if (mtime === cpLastPdfMtime) { console.log('CP: PDF unchanged, skipping delta.'); return; }
   const existing = getCpDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(CP_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { cpLastPdfMtime = mtime; console.log('CP: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATH_CP); } catch(e) { return; }
   cpLastPdfMtime = mtime;
@@ -3051,6 +3057,8 @@ async function appendPbDeltas() {
   if (mtime === pbLastPdfMtime) { console.log('PB: PDF unchanged, skipping delta.'); return; }
   const existing = getPbDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(PB_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { pbLastPdfMtime = mtime; console.log('PB: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATH_PB); } catch(e) { return; }
   pbLastPdfMtime = mtime;
@@ -3410,6 +3418,8 @@ async function appendMmDeltas() {
   if (mtime === mmLastPdfMtime) { console.log('MM: PDF unchanged, skipping delta.'); return; }
   const existing = getMmDraws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  const jsonMtime = (() => { try { return fs.statSync(MM_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { mmLastPdfMtime = mtime; console.log('MM: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATH_MM); } catch(e) { return; }
   mmLastPdfMtime = mtime;
