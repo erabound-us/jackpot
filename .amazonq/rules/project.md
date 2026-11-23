@@ -627,13 +627,38 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 
 ## Email
 - Single `POST /email` endpoint shared by all games
-- `game` field in body: `"jtp"` (default) | `"lottox"` | `"fantasy5"` | `"cashpop"` — controls subject, header emoji, game label
+- `game` field in body: `"jtp"` | `"lottox"` | `"fantasy5"` | `"cashpop"` | `"powerball"` | `"megamillions"` | `"pick"` — controls subject, header emoji, draw time, sales close time
 - Subject format: `{Game Name} — {Day} {Date} Best Odds Lines`
 - Email card shown after line generation in all game panels
 - Local mode: Email Settings card visible for API key config; hidden in public mode
 - **`getEmailConfig()` reads `email.config.json` first, then falls back to `process.env.EMAIL_API_KEY` + `EMAIL_FROM`**
 - **`/email/config` GET route MUST call `getEmailConfig()` — never check `fs.existsSync` directly**, otherwise the env var fallback is bypassed and the route incorrectly returns `configured: false` in production
 - Production email secret: `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg` (no redeploy needed — Fly restarts the machine automatically)
+
+### CRITICAL: /email route MUST use GAME_META lookup — never a ternary chain
+The `/email` route derives game label, icon, draw time, and sales close time from a `GAME_META` object keyed by `game`. **Never use a ternary chain** like `game === 'lottox' ? ... : game === 'fantasy5' ? ... : 'Jackpot Triple Play'` — any game not explicitly listed falls through to the JTP default, causing emails to show the wrong game name, icon, and draw times.
+
+**Root cause of Nov 2026 bug**: Mega Millions email showed "🎱 Jackpot Triple Play" with JTP draw times because `megamillions` fell through a ternary chain. The lines themselves were correct (sent from frontend), but the email header was completely wrong — users saw JTP branding on MM lines.
+
+**Correct pattern** (current implementation in server.js):
+```js
+const GAME_META = {
+  jtp:          { label: 'Jackpot Triple Play',     icon: '&#127921;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+  lottox:       { label: 'Florida Lotto (Lotto X)', icon: '&#127808;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+  fantasy5:     { label: 'Fantasy 5',               icon: '&#127775;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+  powerball:    { label: 'Powerball',               icon: '&#9889;',   drawTime: '10:59 PM ET', closeTime: '10:00 PM ET' },
+  megamillions: { label: 'Mega Millions',           icon: '&#128171;', drawTime: '11:00 PM ET', closeTime: '10:45 PM ET' },
+  cashpop:      { label: 'Cash Pop',                icon: '&#128176;', drawTime: '',            closeTime: '' },
+  pick:         { label: req.body.gameLabel || 'Pick', icon: '&#127922;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+};
+const meta = GAME_META[game] || GAME_META.jtp;  // safe fallback for unknown games
+const gameLabel = meta.label;
+```
+- `meta.icon` used in HTML email header `<h1>`
+- `meta.drawTime` / `meta.closeTime` used in both plain-text and HTML email body
+- Cash Pop has no fixed draw time (5 draws/day) — `drawTime: ''` causes the time line to be omitted gracefully
+- Pick passes `gameLabel` from the frontend (e.g. `"Pick 5"`) via `req.body.gameLabel`
+- **When adding a new game**: add it to `GAME_META` with correct label, icon (HTML entity), draw time, and sales close time. The fallback `|| GAME_META.jtp` prevents a crash but will show wrong branding — always add the entry explicitly.
 
 ### Email Card — Content Checkboxes (all games)
 - Two checkboxes: **My Lines** (checked by default) and **Winning Numbers** (checked by default)
@@ -1070,10 +1095,12 @@ Use a unique variable name per call site (_ac0, _acLX, _acF5E, etc.) to avoid cl
 4. Implement `xSendEmail()` following this pattern:
    - Block only if `!incLines` (lines not generated) — never block solely on `!incWinning`
    - Pass `winningNumbers: incWinning ? xDrawn : null` in POST body
+   - Pass `game: 'newgame'` in POST body — this is what `GAME_META` uses to look up label/icon/times
    - Use `btn.innerHTML` (not `btn.textContent`) in `.finally()` reset
-5. Set `xLastWin` from Check My Numbers result; clear on form reset
-6. Pass `context: { spend, lines, game, won: xLastWin }` in `xSendChat()` POST body
-7. Add `<div id="xEmailBlurb">` after the press-hint div; show/hide it alongside the press-hint in generate and reset functions
+5. **Add the new game to `GAME_META` in the `/email` route in server.js** — label, icon (HTML entity), drawTime, closeTime. This is the single source of truth for email branding. Missing this entry causes the email to show JTP branding (the fallback) regardless of which game was generated.
+6. Set `xLastWin` from Check My Numbers result; clear on form reset
+7. Pass `context: { spend, lines, game, won: xLastWin }` in `xSendChat()` POST body
+8. Add `<div id="xEmailBlurb">` after the press-hint div; show/hide it alongside the press-hint in generate and reset functions
 
 ## Timezones
 - All draw times are displayed in the **local timezone of the state where the game is operated**
@@ -1115,9 +1142,21 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-23b`
+Latest stable: `backups/stable-2026-11-23d`
 
 What's in the latest backup:
+- `server.js` -- Email cross-contamination fix: `/email` route now uses `GAME_META` lookup table (keyed by `game`) for label, icon, draw time, and sales close time. Previously a ternary chain caused `megamillions`, `powerball`, `cashpop`, and `pick` to fall through to JTP defaults, sending emails with wrong game name/icon/times. `GAME_META` covers all 7 game keys; unknown games fall back to JTP safely.
+- `index.html` -- unchanged from stable-2026-11-23b
+
+Previous stable: `backups/stable-2026-11-23c`
+
+What was in stable-2026-11-23c:
+- `server.js` -- Email cross-contamination fix (initial, same as 2026-11-23d)
+- `index.html` -- same as stable-2026-11-23b
+
+Previous stable: `backups/stable-2026-11-23b`
+
+What was in stable-2026-11-23b:
 - `server.js` -- Two jackpot cache fixes: (1) `extractAndCacheJackpot` guard changed from hardcoded array to `JACKPOT_GAME_URLS[game]` check so megamillions (and all future games) are automatically included; (2) `scrapeJackpot` now always returns last known cached amount even when stale -- only returns null on true cold start with no cache at all
 - `index.html` -- same as stable-2026-11-23
 - `jackpot_cache.json` -- lottox ts bumped to current; all 5 games cached

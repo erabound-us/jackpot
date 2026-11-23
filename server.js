@@ -895,8 +895,18 @@ app.post('/email', async (req, res) => {
 
   const drawLabel = nextDraw ? nextDraw.dayName + ' ' + nextDraw.date : 'Next Drawing';
   const { game } = req.body;
-  const gameLabel = game === 'lottox' ? 'Florida Lotto (Lotto X)' : game === 'fantasy5' ? 'Fantasy 5' : 'Jackpot Triple Play';
-  const subject = gameLabel + ' — ' + drawLabel + ' Best Odds Lines';
+  const GAME_META = {
+    jtp:          { label: 'Jackpot Triple Play',      icon: '&#127921;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+    lottox:       { label: 'Florida Lotto (Lotto X)',  icon: '&#127808;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+    fantasy5:     { label: 'Fantasy 5',                icon: '&#127775;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+    powerball:    { label: 'Powerball',                icon: '&#9889;',   drawTime: '10:59 PM ET', closeTime: '10:00 PM ET' },
+    megamillions: { label: 'Mega Millions',            icon: '&#128171;', drawTime: '11:00 PM ET', closeTime: '10:45 PM ET' },
+    cashpop:      { label: 'Cash Pop',                 icon: '&#128176;', drawTime: '',            closeTime: '' },
+    pick:         { label: req.body.gameLabel || 'Pick', icon: '&#127922;', drawTime: '11:15 PM ET', closeTime: '10:55 PM ET' },
+  };
+  const meta = GAME_META[game] || GAME_META.jtp;
+  const gameLabel = meta.label;
+  const subject = gameLabel + ' \u2014 ' + drawLabel + ' Best Odds Lines';
 
   const lineText = lines.length ? lines.map((l, i) =>
     (i === 0 ? 'BEST LINE: ' : 'Line ' + l.line + ':    ') + l.numbers.join('  -  ') + '   (score: ' + l.score + ')'
@@ -910,11 +920,11 @@ app.post('/email', async (req, res) => {
   const winText = winningNumbers && winningNumbers.length ? 'Winning Numbers: ' + winningNumbers.join('  -  ') + (winMeta.length ? '  (' + winMeta.join(' - ') + ')' : '') : '';
 
   const year = new Date().getFullYear();
-  const textParts = [
-    'Florida Jackpot Analyzer',
-    'Drawing: ' + drawLabel + ' at 11:15 PM ET',
-    'Sales close: 10:55 PM ET', ''
-  ];
+  const drawTimeLine = meta.drawTime ? 'Drawing: ' + drawLabel + ' at ' + meta.drawTime : 'Drawing: ' + drawLabel;
+  const closeTimeLine = meta.closeTime ? 'Sales close: ' + meta.closeTime : '';
+  const textParts = ['Florida Jackpot Analyzer', drawTimeLine];
+  if (closeTimeLine) textParts.push(closeTimeLine);
+  textParts.push('');
   if (lineText) { textParts.push('Your Best Odds Lines', '='.repeat(40), lineText, '', '='.repeat(40)); }
   if (winText)  { textParts.push(winText, ''); }
   const text = [
@@ -948,10 +958,13 @@ app.post('/email', async (req, res) => {
       '</td><td style="padding:10px 12px;">' + balls + '</td></tr>';
   }).join('');
 
+  const drawSubline = meta.drawTime
+    ? drawLabel + ' at ' + meta.drawTime + (meta.closeTime ? ' &nbsp;&middot;&nbsp; Sales close ' + meta.closeTime : '')
+    : drawLabel;
   const html = '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;max-width:540px;margin:0 auto;background:#0f1117;color:#e2e8f0;border-radius:12px;overflow:hidden;border:1px solid #2a2d3a;">' +
     '<div style="background:#1a1d27;padding:20px 24px;border-bottom:1px solid #2a2d3a;">' +
-    '<h1 style="margin:0;font-size:22px;font-weight:700;">' + (game === 'lottox' ? '&#127808;' : game === 'fantasy5' ? '&#127775;' : '&#127921;') + ' ' + gameLabel + '</h1>' +
-    '<p style="margin:6px 0 0;color:#64748b;font-size:13px;">Next Drawing: <strong style="color:#e2e8f0;">' + drawLabel + ' at 11:15 PM ET</strong> &nbsp;&middot;&nbsp; Sales close 10:55 PM ET</p>' +
+    '<h1 style="margin:0;font-size:22px;font-weight:700;">' + meta.icon + ' ' + gameLabel + '</h1>' +
+    '<p style="margin:6px 0 0;color:#64748b;font-size:13px;">Next Drawing: <strong style="color:#e2e8f0;">' + drawSubline + '</strong></p>' +
     '</div>' +
     '<div style="padding:20px 24px;">' +
     '<p style="margin:0 0 14px;font-size:13px;color:#64748b;">Your statistically optimized lines based on complete official Florida Lottery draw history:</p>' +
