@@ -1128,6 +1128,7 @@ function generateLottoXLines(freq, draws, count = 6, seenLines = new Set()) {
 const JSON_PATH_LX = path.join(__dirname, 'lottox_draws.json');
 let lxDrawsCache = null;
 let lxLastPdfMtime = null;
+let _lxDeltaPromise = null;
 
 function getLottoXDraws() {
   if (lxDrawsCache) return lxDrawsCache;
@@ -1138,6 +1139,11 @@ function getLottoXDraws() {
 }
 
 async function appendLottoXDeltas() {
+  if (_lxDeltaPromise) return _lxDeltaPromise;
+  _lxDeltaPromise = _appendLottoXDeltasImpl().finally(() => { _lxDeltaPromise = null; });
+  return _lxDeltaPromise;
+}
+async function _appendLottoXDeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATH_LX).mtimeMs; } catch(e) { return; }
   if (mtime === lxLastPdfMtime) { console.log('Lotto X: PDF unchanged, skipping parse.'); return; }
@@ -1793,6 +1799,7 @@ function generateFantasy5Lines(freq, draws, count = 6, seenLines = new Set()) {
 const JSON_PATH_F5 = path.join(__dirname, 'fantasy5_draws.json');
 let f5DrawsCache = null;
 let f5LastPdfMtime = null;
+let _f5DeltaPromise = null;
 
 function getFantasy5Draws() {
   if (f5DrawsCache) return f5DrawsCache;
@@ -1803,6 +1810,11 @@ function getFantasy5Draws() {
 }
 
 async function appendFantasy5Deltas() {
+  if (_f5DeltaPromise) return _f5DeltaPromise;
+  _f5DeltaPromise = _appendFantasy5DeltasImpl().finally(() => { _f5DeltaPromise = null; });
+  return _f5DeltaPromise;
+}
+async function _appendFantasy5DeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATH_F5).mtimeMs; } catch(e) { return; }
   if (mtime === f5LastPdfMtime) { console.log('Fantasy 5: PDF unchanged, skipping parse.'); return; }
@@ -2612,7 +2624,13 @@ function getCpDraws() {
 
 // Delta updaters for JTP and Cash Pop JSON caches
 let jtpLastPdfMtime = null;
+let _jtpDeltaPromise = null;
 async function appendJtpDeltas() {
+  if (_jtpDeltaPromise) return _jtpDeltaPromise;
+  _jtpDeltaPromise = _appendJtpDeltasImpl().finally(() => { _jtpDeltaPromise = null; });
+  return _jtpDeltaPromise;
+}
+async function _appendJtpDeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATHS.history).mtimeMs; } catch(e) { return; }
   if (mtime === jtpLastPdfMtime) { console.log('JTP: PDF unchanged, skipping delta.'); return; }
@@ -2633,7 +2651,13 @@ async function appendJtpDeltas() {
 }
 
 let cpLastPdfMtime = null;
+let _cpDeltaPromise = null;
 async function appendCpDeltas() {
+  if (_cpDeltaPromise) return _cpDeltaPromise;
+  _cpDeltaPromise = _appendCpDeltasImpl().finally(() => { _cpDeltaPromise = null; });
+  return _cpDeltaPromise;
+}
+async function _appendCpDeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATH_CP).mtimeMs; } catch(e) { return; }
   if (mtime === cpLastPdfMtime) { console.log('CP: PDF unchanged, skipping delta.'); return; }
@@ -3024,8 +3048,14 @@ app.post('/chat/pick', (req, res) => {
 
 // Delta updaters for Pick JSON caches
 const pickLastPdfMtime = { pick2: null, pick3: null, pick4: null, pick5: null };
+const _pickDeltaPromise = { pick2: null, pick3: null, pick4: null, pick5: null };
 
 async function appendPickDeltas(game) {
+  if (_pickDeltaPromise[game]) return _pickDeltaPromise[game];
+  _pickDeltaPromise[game] = _appendPickDeltasImpl(game).finally(() => { _pickDeltaPromise[game] = null; });
+  return _pickDeltaPromise[game];
+}
+async function _appendPickDeltasImpl(game) {
   const pdfPath = PDF_PATHS_PICK[game];
   let mtime;
   try { mtime = fs.statSync(pdfPath).mtimeMs; } catch(e) { return; }
@@ -3079,7 +3109,13 @@ function getPbDraws() {
 }
 
 let pbLastPdfMtime = null;
+let _pbDeltaPromise = null;
 async function appendPbDeltas() {
+  if (_pbDeltaPromise) return _pbDeltaPromise;
+  _pbDeltaPromise = _appendPbDeltasImpl().finally(() => { _pbDeltaPromise = null; });
+  return _pbDeltaPromise;
+}
+async function _appendPbDeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATH_PB).mtimeMs; } catch(e) { return; }
   if (mtime === pbLastPdfMtime) { console.log('PB: PDF unchanged, skipping delta.'); return; }
@@ -3441,7 +3477,13 @@ function getMmDraws() {
 }
 
 let mmLastPdfMtime = null;
+let _mmDeltaPromise = null;
 async function appendMmDeltas() {
+  if (_mmDeltaPromise) return _mmDeltaPromise;
+  _mmDeltaPromise = _appendMmDeltasImpl().finally(() => { _mmDeltaPromise = null; });
+  return _mmDeltaPromise;
+}
+async function _appendMmDeltasImpl() {
   let mtime;
   try { mtime = fs.statSync(PDF_PATH_MM).mtimeMs; } catch(e) { return; }
   if (mtime === mmLastPdfMtime) { console.log('MM: PDF unchanged, skipping delta.'); return; }

@@ -865,6 +865,31 @@ downloadPDFs()
 - `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
 - When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
 
+### ensureDailyRefresh* — MUST call appendXxxDeltas()
+Every `ensureDailyRefreshXxx()` function MUST call `appendXxxDeltas()` after the PDF download completes. Without this, Generate Lines reads the stale JSON cache — the PDF is downloaded but the JSON is never updated from this path.
+
+**Correct pattern**:
+```js
+async function ensureDailyRefreshXxx() {
+  const today = todayET();
+  if (lastAutoRefreshXxx === today) return;
+  if (autoRefreshXxxPromise) return autoRefreshXxxPromise;
+  autoRefreshXxxPromise = downloadFile(PDF_URL_X, PDF_PATH_X).then(() => {
+    lastAutoRefreshXxx = today;
+    autoRefreshXxxPromise = null;
+    return appendXxxDeltas(); // REQUIRED -- updates JSON cache
+  }).catch(err => {
+    autoRefreshXxxPromise = null;
+    console.warn('X auto-refresh failed: ' + err.message + ' (using cached PDF)');
+  });
+  return autoRefreshXxxPromise;
+}
+```
+- The `appendXxxDeltas()` call is inside `.then()` so it only runs after a successful download
+- The mtime guard inside `appendXxxDeltas()` makes it a no-op if the PDF hasn't changed — safe to call every time
+- **Pick games**: use `ensureDailyRefreshPick(game)` — one shared function for all 4 games, keyed by game name. State: `lastAutoRefreshPick[game]` and `autoRefreshPickPromise[game]` objects.
+- **When adding a new game**: create `ensureDailyRefreshXxx()`, call it at the top of `/analyze/xxx`, and make sure it calls `appendXxxDeltas()` in `.then()`
+
 ## Post-Generate Email Blurb
 After lines are generated, a small blurb appears below the Generation counter nudging users toward the Email My Lines card.
 
@@ -1178,7 +1203,7 @@ Stable snapshots -> `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-25`
 
 What's in the latest backup:
-- `server.js` -- OOM/auto-refresh fix: (1) removed midnight retry at 00:05 ET that was OOMing the server by firing Fantasy 5 + 4x Pick PDF parses simultaneously after restarts; (2) added PDF-older-than-JSON mtime guard to ALL 7 `appendXxxDeltas()` functions (JTP, CP, LX, F5, Pick, PB, MM) -- skips full parse when PDF mtime <= JSON mtime, preventing unnecessary parses on restart; (3) fixed Cash Pop post-draw refresh to call `appendCpDeltas()` after download (was downloading PDF but never updating JSON cache).
+- `server.js` -- Three fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard added to all 7 `appendXxxDeltas()` functions; (3) Cash Pop post-draw refresh now calls `appendCpDeltas()`; (4) **Generate Lines freshness fix**: all `ensureDailyRefresh*` functions now call `appendXxxDeltas()` after downloading the PDF so the JSON cache is always current when a user hits Generate. Added `ensureDailyRefreshPick(game)` for Pick games which had no daily refresh at all.
 
 Previous stable: `backups/stable-2026-11-24`
 
