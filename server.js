@@ -1802,6 +1802,9 @@ async function appendFantasy5Deltas() {
   if (mtime === f5LastPdfMtime) { console.log('Fantasy 5: PDF unchanged, skipping parse.'); return; }
   const existing = getFantasy5Draws();
   const newestTs = existing.length ? existing[0].ts : 0;
+  // Skip full parse if PDF is older than our newest cached draw -- nothing new to find
+  const jsonMtime = (() => { try { return fs.statSync(JSON_PATH_F5).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { f5LastPdfMtime = mtime; console.log('Fantasy 5: PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await extractPDFText(PDF_PATH_F5); } catch(e) { return; }
   f5LastPdfMtime = mtime;
@@ -2995,6 +2998,9 @@ async function appendPickDeltas(game) {
   if (mtime === pickLastPdfMtime[game]) { console.log(game + ': PDF unchanged, skipping delta.'); return; }
   const existing = getPickDraws(game);
   const newestTs = existing.length ? existing[0].ts : 0;
+  // Skip full parse if PDF is older than our newest cached draw -- nothing new to find
+  const jsonMtime = (() => { try { return fs.statSync(PICK_DRAWS_PATHS[game]).mtimeMs; } catch(e) { return 0; } })();
+  if (mtime <= jsonMtime && existing.length > 0) { pickLastPdfMtime[game] = mtime; console.log(game + ': PDF older than JSON cache, skipping parse.'); return; }
   let text;
   try { text = await getPickText(game); } catch(e) { return; }
   pickLastPdfMtime[game] = mtime;
