@@ -690,11 +690,20 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 
 ### Startup sequence
 1. `server.listen()` -- health check passes immediately
-2. `getLottoXDraws()` + `getFantasy5Draws()` -- read JSON files into memory (instant, <1ms)
-3. `_serverReady = true` -- gate opens immediately, users can access all routes
-4. `downloadPDFs()` -- downloads all PDFs in background, then runs `appendLottoXDeltas()` + `appendFantasy5Deltas()` sequentially to catch any draws missed since the last deploy
+2. `getLottoXDraws()` + `getFantasy5Draws()` + `getPbDraws()` + `getMmDraws()` -- read JSON files into memory (instant, <1ms)
+3. `getJtpDraws()` + `getCpDraws()` -- read JTP and Cash Pop JSON caches
+4. `_serverReady = true` -- gate opens immediately, users can access all routes
+5. `downloadPDFs()` -- downloads all PDFs in background, then runs **only** `appendJtpDeltas()` + `appendCpDeltas()` sequentially
 
-**Why deltas run at startup**: every deploy resets the server with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after ensures the JSON is current without any manual intervention. The mtime guard in each function makes this a no-op if the PDF hasn't changed since the last delta run -- so it's safe and cheap on normal restarts.
+**CRITICAL — OOM safety for startup delta chain**: ONLY JTP and Cash Pop run `appendXxxDeltas()` at startup. Lotto X, Fantasy 5, Powerball, and Mega Millions do NOT run their delta functions at startup. Running 4+ large PDF parses back-to-back at startup OOMs the 256MB heap (confirmed crash on Fly.io, Nov 2026). These games have committed JSON caches and `schedulePostDrawRefreshes()` keeps them current after each draw. The startup chain MUST remain:
+```js
+downloadPDFs()
+  .then(() => appendJtpDeltas()).catch(() => {})
+  .then(() => appendCpDeltas()).catch(() => {});
+```
+**NEVER add `appendLottoXDeltas()`, `appendFantasy5Deltas()`, `appendPbDeltas()`, or `appendMmDeltas()` to this startup chain.** When adding a new game with a JSON cache, do NOT add its delta function here either — rely on `schedulePostDrawRefreshes()` instead.
+
+**Why JTP and CP still run at startup**: their PDFs are small (<200KB) and parse quickly. The mtime guard makes it a no-op if the PDF hasn't changed.
 
 **mtime guard in appendXxxDeltas()**: stores `lxLastPdfMtime` / `f5LastPdfMtime`. If the PDF mtime hasn't changed since the last delta check, the parse is skipped entirely. This prevents redundant parses when refresh is called multiple times without a new draw.
 
@@ -710,7 +719,7 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 ### When adding a new game with PDF > 1 MB
 1. Run `generate_draw_cache.js` locally to build initial JSON (add the game's parser to the script)
 2. Add `getXxxDraws()` and `appendXxxDeltas()` functions following the LX/F5 pattern
-3. Add `appendXxxDeltas()` to the startup chain before `_serverReady = true`
+3. **Do NOT add `appendXxxDeltas()` to the startup chain** -- add it only to `schedulePostDrawRefreshes()`. Adding large PDF parses to the startup chain OOMs the 256MB heap (confirmed crash Nov 2026). The startup chain must only contain `appendJtpDeltas()` and `appendCpDeltas()`.
 4. Commit the JSON file -- it will be included in the Docker image
 5. No `getXxxText()` cache function needed -- JSON replaces it entirely
 
@@ -1097,15 +1106,15 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-22e`
+Latest stable: `backups/stable-2026-11-23`
 
 What's in the latest backup:
-- `server.js` -- Mega Millions fully integrated (parser, cache, scoring, all routes, schedulePostDrawRefreshes, jackpotGames includes megamillions)
-- `index.html` -- Mega Millions full panel (replacing Coming Soon), FAQ entries for PB + MM, jackpot fetch includes megamillions
-- `megamillions_draws.json` -- 500 draws from PDF (newest 11/17/26, oldest 02/04/22)
+- `server.js` -- OOM fix: removed LX/F5/PB/MM from startup delta chain; only JTP+CP run appendXxxDeltas() at startup
+- `index.html` -- Mega Millions full panel, FAQ entries for PB + MM, jackpot fetch includes megamillions
+- `megamillions_draws.json` -- 500 draws
 - `jackpot_cache.json` -- includes megamillions: $645 Million
 
-Previous stable: `backups/stable-2026-11-22c`
+Previous stable: `backups/stable-2026-11-22e`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
