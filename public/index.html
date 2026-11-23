@@ -2466,6 +2466,7 @@ function f5Generate() {
   var count = Math.min(Math.max(parseInt(document.getElementById('f5LineCount').value) || 6, 1), 100);
   var _acF5 = new AbortController(); setTimeout(function(){_acF5.abort();}, 30000);
   fetch('/analyze/fantasy5?count=' + count + '&sid=' + SID, {signal:_acF5.signal})
+    .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
     .then(function(r) {
       if (!r.ok) throw new Error(r.data.error || 'Server error');
       f5PressCount++;
