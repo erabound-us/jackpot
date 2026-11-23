@@ -3744,7 +3744,7 @@ function schedulePostDrawRefreshes() {
   }));
 
   cpTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
-    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; }));
+    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; cpDrawsCache = null; return appendCpDeltas(); }).catch(() => {}));
     console.log('Post-draw refresh queued: Cash Pop');
   }));
 
@@ -3818,40 +3818,14 @@ function schedulePostDrawRefreshes() {
 
   // Cash Pop retries 15 min after each session
   [[7, 49], [11, 49], [14, 49], [18, 49], [22, 49]].forEach(([h, m]) => scheduleDaily(h, m, () => {
-    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; }));
+    enqueueRefresh('cashpop', () => downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => { lastAutoRefreshCP = null; cpDrawsCache = null; return appendCpDeltas(); }).catch(() => {}));
     console.log('Post-draw Cash Pop retry queued');
   }));
 
-  // Midnight retry at 00:05 ET for all evening games — catches very slow PDF updates
-  scheduleDaily(0, 5, () => {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
-    const yDay = yesterday.getDay();
-    // Fantasy 5 + Pick draw every day
-    enqueueRefresh('fantasy5', () => downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => { lastAutoRefreshF5 = null; return appendFantasy5Deltas(); }));
-    console.log('Midnight retry queued: Fantasy 5');
-    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
-    });
-    console.log('Midnight retry queued: Pick 2-5');
-    // JTP + LX + PB only if yesterday was their draw day
-    if (jtpDays.includes(yDay)) {
-      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
-      console.log('Midnight retry queued: JTP');
-    }
-    if (lxDays.includes(yDay)) {
-      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
-      console.log('Midnight retry queued: Lotto X');
-    }
-    if (pbDays.includes(yDay)) {
-      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
-      console.log('Midnight retry queued: Powerball');
-    }
-    if (mmDays.includes(yDay)) {
-      enqueueRefresh('megamillions', () => downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => { lastAutoRefreshMM = null; mmDrawsCache = null; }).then(() => appendMmDeltas()).catch(() => {}));
-      console.log('Midnight retry queued: Mega Millions');
-    }
-  });
+  // REMOVED: midnight retry at 00:05 ET caused OOM crashes on Fly.io (256MB heap).
+  // Fantasy 5 PDF parse (~2.7MB) + 4x Pick PDFs queued simultaneously exceeded heap limit.
+  // The 23:20 + 23:35 ET retries are sufficient for evening draws.
+  // The 13:10 + 13:25 ET retries are sufficient for midday draws.
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     delete _jackpotCache['fantasy5'];

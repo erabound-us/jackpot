@@ -1,8 +1,8 @@
 # Jackpot Analyzer — Project Steering Rules
 
 ## Stack
-- **Backend**: Node.js + Express 5, single file `server.js` (~3,100 lines)
-- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~3,500 lines)
+- **Backend**: Node.js + Express 5, single file `server.js` (~3,200 lines)
+- **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
 - **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~250MB heap
@@ -340,6 +340,17 @@ Florida has no state income tax.
 **When adding a new game/chatbot**: call `tryWinLoss(q) || tryReturnPct(q) || tryContextualSpend(q, context)` as the **first** check inside the new `chatReplyXxx(question, context)` function. Pass `context` from the route handler. Compute spend in the frontend `sendChat` function and include `won: xLastWin` in the POST body. Store the check result win in `xLastWin` and clear it on form reset.
 
 **Pick games share one chatbot** (`/chat/pick`) -- `chatReplyPick` handles all four games. It detects which game is being asked about via `q.match(/pick\s*([2-5])/)` and returns per-game answers. When adding a new digit game, extend this pattern rather than creating a separate chatbot.
+
+## Chatbot Natural Language Standards
+All chatbot responses MUST be conversational, not rule-dump bullet lists. The Cash Pop chatbot (`chatReplyCashPop`) is the reference implementation for natural phrasing.
+
+### Key principles
+- **Answer the actual question first** — detect intent (e.g. "played $10 and hit" = win scenario) and respond directly, not with a generic prize table
+- **No bullet-list rule dumps** — convert prize tables and rule lists into natural sentences with examples woven in
+- **Offer to go deeper** — end responses with an invitation: "Tell me your play amount and multiplier and I can give you the exact figure"
+- **Conversational openers** — use "Nice!", "Congrats!", "Good news" where appropriate; never start with the game name or a header
+- **Specific play amount + win without multiplier** — detect via `hitM` pattern and respond with the prize range (min at 5x, max at 250x for Cash Pop), then prompt for the multiplier
+- **When adding a new chatbot**: write all responses as if explaining to a friend, not reading from a rulebook. Test each branch with natural phrasings before deploying.
 
 ## Game Panel UI Standard (JTP is the reference implementation)
 
@@ -1142,7 +1153,13 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-23d`
+Latest stable: `backups/stable-2026-11-24`
+
+What's in the latest backup:
+- `server.js` -- Cash Pop chatbot rewritten with natural conversational phrasing throughout (`chatReplyCashPop`). Added `hitM` pattern to detect "played $X and hit/won/matched" without a multiplier and respond with prize range. All response branches rewritten from rule-dump bullet lists to natural sentences.
+- `index.html` -- UI copy updates: Cash Pop top description now lists all 5 draw times with hours. FAQ updated: "What is Jackpot Analyzer?" lists all 10 games + explains scoring engine + teases OCR scanning; "How does Cash Pop work?" FAQ entry added with full draw schedule; "What is the Prize Multiplier?" FAQ entry added; "What other states?" FAQ updated with OCR/trend/history roadmap items. Donate footer updated: all games listed as live, OCR + multi-state teased as coming soon, donation text changed to appreciative low-pressure tone. Stale roadmap text removed throughout.
+
+Previous stable: `backups/stable-2026-11-23d`
 
 What's in the latest backup:
 - `server.js` -- Email cross-contamination fix: `/email` route now uses `GAME_META` lookup table (keyed by `game`) for label, icon, draw time, and sales close time. Previously a ternary chain caused `megamillions`, `powerball`, `cashpop`, and `pick` to fall through to JTP defaults, sending emails with wrong game name/icon/times. `GAME_META` covers all 7 game keys; unknown games fall back to JTP safely.
@@ -1499,7 +1516,27 @@ res.json({ dates: dates.slice(0, 5) });
 - `xLookupDraw()` always sends 4-digit year (`parts[0]` not `parts[0].slice(2)`)
 - Error handler always checks `data.resultsUrl` and renders as clickable link
 
-## UI Color Standards
+## UI Copy Standards
+
+### Donate / Footer Block
+- **Never imply the site is paywalled or held hostage** — donations are appreciated, not required
+- Tone: appreciative, low-pressure, benefit-focused
+- Current text pattern: "If you find it useful, a small donation goes a long way toward keeping the lights on, improving performance, and building what comes next."
+- Donate button label: "Donate & Support Development" (not "Unlock" or "Fund the next game")
+- Always list all live games by name so users know the full scope
+- Always tease upcoming features (OCR scanning, multi-state, trend detection) to give donors a sense of what they're supporting
+
+### FAQ "What is Jackpot Analyzer?"
+- Must list ALL live games by name
+- Must explain the scoring engine in plain terms (frequency, recency, pair co-occurrence, balance/spread, 5000+ candidates)
+- Must mention upcoming features (OCR ticket scanning, multi-state expansion)
+- Keep it factual and non-promotional
+
+### Roadmap / Coming Soon language
+- **Never use "coming soon" panels for games that are already live** — remove or update stale roadmap text immediately when a game ships
+- Upcoming features to mention: OCR ticket scanning, smarter trend detection, personalized number history, multi-state expansion
+- When a feature ships, remove it from the roadmap teaser and add it to the "What is Jackpot Analyzer?" description
+
 These are the only intentional non-blue color usages. Everything else must use `var(--accent)` (blue `#4f8ef7`).
 
 | Usage | Color | Reason |
