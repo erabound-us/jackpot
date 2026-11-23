@@ -748,9 +748,9 @@ app.post('/check', (req, res) => {
   const { drawn, lines } = req.body;
   // drawn: array of 6 numbers, lines: array of 3 arrays of 6 numbers each
   if (!Array.isArray(drawn) || drawn.length !== 6 ||
-      !Array.isArray(lines) || lines.length !== 3 ||
+      !Array.isArray(lines) || lines.length < 1 || lines.length > 3 ||
       !lines.every(l => Array.isArray(l) && l.length === 6)) {
-    return res.status(400).json({ error: 'Provide drawn (6 numbers) and lines (3 x 6 numbers).' });
+    return res.status(400).json({ error: 'Provide drawn (6 numbers) and 1-3 lines of 6 numbers each.' });
   }
 
   const drawnSet = new Set(drawn.map(Number));

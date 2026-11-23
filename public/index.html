@@ -1400,9 +1400,11 @@ function checkNumbers() {
   var lineCount = document.querySelectorAll('#myLinesInputs .line-input-row').length;
   for (var r = 0; r < lineCount; r++) {
     var row = document.querySelectorAll('#lineRow' + r + ' .num-input');
+    var vals = Array.prototype.map.call(row, function(inp) { return inp.value.trim(); });
+    if (vals.every(function(v) { return v === ''; })) continue;
     var line = [];
     for (var j = 0; j < row.length; j++) {
-      var lv = parseInt(row[j].value.trim());
+      var lv = parseInt(vals[j]);
       if (isNaN(lv) || lv < 1 || lv > 46) {
         document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Please enter all 6 numbers for Line ' + (r+1) + ' (1-46).</div>';
         return;
@@ -1410,6 +1412,10 @@ function checkNumbers() {
       line.push(lv);
     }
     lines.push(line);
+  }
+  if (lines.length === 0) {
+    document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);font-size:13px;">Enter at least one complete line.</div>';
+    return;
   }
   var hasCombo = document.getElementById('comboCheck').checked;
   var drawnSet = {};
@@ -1449,7 +1455,7 @@ function checkNumbers() {
       if (hasCombo) {
         var comboLabel = data.comboPrize === 'FREE' ? 'Free $2 Combo Quick Pick' : (data.comboPrize > 0 ? '$' + data.comboPrize.toLocaleString() : 'No prize');
         var comboWinner = data.comboPrize > 0 || data.comboPrize === 'FREE';
-        html += '<div class="check-line-result' + (comboWinner ? ' winner' : '') + '" style="margin-top:8px;border-color:var(--accent);"><span style="font-weight:700;">Combo</span> &mdash; ' + data.comboTotal + ' total matches across all 3 lines &mdash; <span style="color:' + (comboWinner ? 'var(--accent)' : 'var(--muted)') + ';font-weight:700;">' + comboLabel + '</span></div>';
+        html += '<div class="check-line-result' + (comboWinner ? ' winner' : '') + '" style="margin-top:8px;border-color:var(--accent);"><span style="font-weight:700;">Combo</span> &mdash; ' + data.comboTotal + ' total matches across all ' + lines.length + ' line' + (lines.length !== 1 ? 's' : '') + ' &mdash; <span style="color:' + (comboWinner ? 'var(--accent)' : 'var(--muted)') + ';font-weight:700;">' + comboLabel + '</span></div>';
       }
       var totalWin = data.basePrizeTotal + (hasCombo && typeof data.comboPrize === 'number' ? data.comboPrize : 0);
       jtpLastWin = totalWin;
