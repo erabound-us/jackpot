@@ -2496,9 +2496,10 @@ app.get('/jackpot', async (req, res) => {
 // See steering rules: OOM safety section.
 
 app.post('/check/fantasy5', (req, res) => {
-  const { drawn, line } = req.body;
+  const { drawn, line, ezMatch: ezMatchRaw } = req.body;
   if (!Array.isArray(drawn) || drawn.length !== 5 || !Array.isArray(line) || line.length !== 5)
     return res.status(400).json({ error: 'Provide drawn (5 numbers) and line (5 numbers).' });
+  const ezMatchWin = Math.min(Math.max(parseInt(ezMatchRaw) || 0, 0), 500);
   const drawnSet = new Set(drawn.map(Number));
   const nums = line.map(Number);
   const matched = nums.filter(n => drawnSet.has(n));
@@ -2510,7 +2511,8 @@ app.post('/check/fantasy5', (req, res) => {
   else if (raw === 'FREE') { prizeDisplay = 'Free Quick Pick'; }
   else if (raw > 0)        { prize = raw; prizeDisplay = 'approx $' + prize.toLocaleString(); }
   else                     { prizeDisplay = 'No prize'; }
-  res.json({ drawn: drawn.map(Number), line: nums, matched, count, prize, prizeDisplay, isJackpot: raw === 'JACKPOT', isFree: raw === 'FREE' });
+  const totalWin = prize + ezMatchWin;
+  res.json({ drawn: drawn.map(Number), line: nums, matched, count, prize, prizeDisplay, isJackpot: raw === 'JACKPOT', isFree: raw === 'FREE', ezMatch: ezMatchWin, totalWin });
 });
 
 app.post('/chat/fantasy5', (req, res) => {

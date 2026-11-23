@@ -597,11 +597,13 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 ```json
 {
   "drawn": [3,12,19,27,34],
-  "line": [3,12,19,22,34]
+  "line": [3,12,19,22,34],
+  "ezMatch": 20
 }
 ```
 - `drawn`: 5 numbers from 1–36
 - `line`: 5 numbers from 1–36
+- `ezMatch`: 0–500, or omit — instant-win amount from EZMatch add-on (first line only)
 
 ### POST /check/powerball body
 ```json

@@ -957,6 +957,12 @@
       <input type="number" id="f5CheckLineCount" value="1" min="1" max="30" oninput="f5RebuildCheckLines()" style="width:52px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:8px;font-size:13px;font-weight:700;">
     </div>
     <div id="f5LinesInputs"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">EZMatch won <span style="color:var(--accent);">($)</span></div>
+        <input type="number" id="f5EZMatch" value="0" min="0" max="500" style="width:80px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:14px;font-weight:700;">
+      </div>
+    </div>
     <button class="action-btn primary" onclick="f5CheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="f5ClearCheck()">&#10005; Reset</button>
     <div id="f5CheckResult" style="margin-top:12px;"></div>
@@ -2595,12 +2601,13 @@ function f5CheckNumbers() {
   var f5Pending = f5AllLines.length;
   f5AllLines.forEach(function(lineNums, lineIdx) {
     var _acF5C = new AbortController(); setTimeout(function(){_acF5C.abort();}, 15000);
-    fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums }), signal: _acF5C.signal })
+    fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, ezMatch: lineIdx === 0 ? (parseInt(document.getElementById('f5EZMatch').value) || 0) : 0 }), signal: _acF5C.signal })
       .then(function(res) { return res.json(); })
       .then(function(data) {
         if (data.error) { f5ResultEl.innerHTML = '<div style="color:var(--red);">' + data.error + '</div>'; return; }
         f5AllResults[lineIdx] = data;
         f5TotalWinAcc += data.isFree ? 0 : (data.prize || 0);
+        f5TotalWinAcc += data.ezMatch || 0;
         f5Pending--;
         if (f5Pending > 0) return;
         var html = '';
@@ -2612,6 +2619,7 @@ function f5CheckNumbers() {
           html += '<div class="check-line-result' + (isWinner ? ' winner' : '') + '">';
           html += '<span style="font-weight:700;">' + label + '</span> &mdash; ' + d.count + ' match' + (d.count !== 1 ? 'es' : '') + ' (' + matchedNums + ')';
           html += ' &mdash; <span style="color:' + prizeColor + ';font-weight:700;">' + d.prizeDisplay + '</span></div>';
+          if (idx === 0 && d.ezMatch > 0) html += '<div class="check-line-result winner" style="border-color:var(--green);"><span style="font-weight:700;">EZMatch</span> &mdash; <span style="color:var(--green);font-weight:700;">$' + d.ezMatch.toLocaleString() + '</span></div>';
         });
         var anyJackpot = f5AllResults.some(function(d) { return d.isJackpot; });
         var anyFree = f5AllResults.some(function(d) { return d.isFree; }) && f5TotalWinAcc === 0;
@@ -2626,6 +2634,18 @@ function f5CheckNumbers() {
       })
       .catch(function(err) { f5ResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
   });
+}
+
+function f5ClearCheck() {
+  document.getElementById('f5EZMatch').value = '0';
+  document.querySelectorAll('#f5LinesInputs .num-input').forEach(function(inp) { inp.value = ''; inp.className = 'num-input'; });
+  document.getElementById('f5CheckLineCount').value = '1';
+  f5RebuildCheckLines();
+  document.getElementById('f5CheckResult').innerHTML = '';
+  document.getElementById('f5DrawDate').value = '';
+  document.getElementById('f5DrawnDisplay').style.display = 'none';
+  f5Drawn = [];
+  f5LastWin = null;
 }
 
 function f5AppendMsg(role, text) {
