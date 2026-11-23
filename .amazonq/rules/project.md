@@ -1097,14 +1097,15 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-22c`
+Latest stable: `backups/stable-2026-11-22e`
 
 What's in the latest backup:
-- `server.js` -- startup jackpot warm removed (OOM fix); JTP frequency PDF wrapped in `getFreqText()` mtime cache (SIGABRT fix); stale-check added to Fantasy 5 and Powerball `/draws/*/available` endpoints
-- `index.html` -- Pick max 100, Combo cost estimator corrected, `pickUpdateCost` fix, all 8 games
-- `project.md` -- this file
+- `server.js` -- Mega Millions fully integrated (parser, cache, scoring, all routes, schedulePostDrawRefreshes, jackpotGames includes megamillions)
+- `index.html` -- Mega Millions full panel (replacing Coming Soon), FAQ entries for PB + MM, jackpot fetch includes megamillions
+- `megamillions_draws.json` -- 500 draws from PDF (newest 11/17/26, oldest 02/04/22)
+- `jackpot_cache.json` -- includes megamillions: $645 Million
 
-Previous stable: `backups/stable-2026-11-22b`
+Previous stable: `backups/stable-2026-11-22c`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
