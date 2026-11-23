@@ -452,10 +452,11 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 ### How the cache is populated — two-function architecture
 - `_jackpotCache` — server-side object: `game -> { amount, ts }`, persisted to `jackpot_cache.json`
 - `extractAndCacheJackpot(game, html)` — pure function that runs regex patterns against already-loaded page HTML and writes to `_jackpotCache` + `jackpot_cache.json`. Called as a **side effect** inside both `scrapeFlDraws` and `getAvailableDates` — the page is already loaded for draw lookup, so jackpot extraction is free.
-- `scrapeJackpot(game)` — **read-only, never launches Chrome**. Checks in-memory cache → file cache (`jackpot_cache.json`) → returns `null` if stale. Uses `isDataStaleForGame()` (30-minute rule after each draw) to decide freshness. Called only by the `/jackpot` route.
+- `scrapeJackpot(game)` — **read-only, never launches Chrome**. Checks in-memory cache (fresh check via `isDataStaleForGame`) → file cache (`jackpot_cache.json`) → **always returns the last known amount even if stale** → returns `null` only if no cached amount exists at all. Called only by the `/jackpot` route.
 - `forceRefreshJackpot(game)` — **always launches Puppeteer**, fetches the game page with `networkidle0`, calls `extractAndCacheJackpot`. Called only by `schedulePostDrawRefreshes()`, serialized through `_scrapeGlobalLock`. Never called from user-facing routes.
-- **`/jackpot` route returns `{ amount: null }` on error** (not 500) — frontend handles null gracefully by showing "See FL Lottery"
-- **Normal flow**: server starts → jackpot cache is cold → `/jackpot` returns `null` → banners show `—` → after first draw, `schedulePostDrawRefreshes` calls `forceRefreshJackpot` → cache populated → subsequent `/jackpot` calls return instantly from cache.
+- **`/jackpot` route returns `{ amount: null }` only when no cached amount exists** (never on staleness alone) — frontend handles null gracefully by showing "See FL Lottery"
+- **Normal flow**: server starts → jackpot cache loaded from file → `/jackpot` returns last known amount immediately → after each draw, `schedulePostDrawRefreshes` calls `forceRefreshJackpot` → cache updated with fresh amount.
+- **Stale cache is always shown** — a slightly outdated jackpot amount is far better than "See FL Lottery". The amount only changes after a draw anyway, and `forceRefreshJackpot` fires 5 minutes after each draw to update it.
 - **Opportunistic warm**: `extractAndCacheJackpot` is called as a side effect of `scrapeFlDraws` and `getAvailableDates` — if a user triggers a draw lookup, the jackpot cache gets populated for free.
 
 ### Jackpot extraction patterns (in `extractAndCacheJackpot`)
@@ -508,7 +509,7 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 - Runs once on page load; no polling (jackpot changes only after a draw, which also triggers a draw lookup that refreshes the cache)
 
 ### When adding a new game with a jackpot
-1. Add the game to `JACKPOT_GAME_URLS` in server.js
+1. Add the game to `JACKPOT_GAME_URLS` in server.js — `extractAndCacheJackpot` uses `if (!JACKPOT_GAME_URLS[game]) return;` as its guard, so adding the game here is all that's needed to enable caching for it
 2. Add `<div id="xJackpotAmount" class="draw-when" style="font-size:15px;color:var(--yellow);">&mdash;</div>` in the banner center col, between the label and the FL Lottery link
 3. Add the game to the frontend `games` array and `ids` map in the page-load jackpot fetch block
 4. `extractAndCacheJackpot` is already called inside `scrapeFlDraws` and `getAvailableDates` — no changes needed there as long as the game is in `JACKPOT_GAME_URLS`
@@ -525,8 +526,16 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 | Function | Launches Chrome? | When called | Purpose |
 |---|---|---|---|
 | `extractAndCacheJackpot(game, html)` | No | Side effect of `scrapeFlDraws` / `getAvailableDates` | Parse HTML already in memory, write cache |
-| `scrapeJackpot(game)` | No | `/jackpot` route | Read cache only, return `null` if stale |
+| `scrapeJackpot(game)` | No | `/jackpot` route | Read cache, always return last known amount even if stale |
 | `forceRefreshJackpot(game)` | Yes | `schedulePostDrawRefreshes` only | Always scrape, always update cache |
+
+### CRITICAL: extractAndCacheJackpot game guard
+`extractAndCacheJackpot` uses `if (!JACKPOT_GAME_URLS[game]) return;` as its guard — **NOT a hardcoded array**. This ensures every game in `JACKPOT_GAME_URLS` is automatically supported. **Never replace this with a hardcoded allowlist** like `['jtp','lottox','fantasy5','powerball']` — doing so silently excludes any game not in the list (e.g. `megamillions` was excluded this way, causing its jackpot to never be cached regardless of how many times `forceRefreshJackpot` ran).
+
+### CRITICAL: scrapeJackpot always returns last known amount
+`scrapeJackpot` **always returns the last cached amount even when stale**. It only returns `null` if no cached amount exists at all (true cold start). The old behavior of returning `null` when stale caused banners to show "See FL Lottery" after every server restart that missed the post-draw scheduled refresh. The fix (Nov 2026): removed the `isDataStaleForGame` check from the file cache read path — stale data is always better than no data. `forceRefreshJackpot` still updates the cache after each draw as before.
+
+**If a jackpot banner shows "See FL Lottery" unexpectedly**: check `jackpot_cache.json` — if the game's `ts` predates the last draw AND `scrapeJackpot` is returning `null`, the cache file has no entry for that game. Fix: bump the `ts` to `Date.now()` in `jackpot_cache.json` locally, or wait for the next scheduled draw to fire `forceRefreshJackpot`. Deploy will carry the updated cache file to Fly.io.
 
 **OOM safety**: `forceRefreshJackpot` fires at most 2-3x per day per game, serialized through `_scrapeGlobalLock`. `scrapeJackpot` never launches Chrome. No concurrent Chrome instances possible.
 
@@ -1106,15 +1115,20 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-23`
+Latest stable: `backups/stable-2026-11-23b`
 
 What's in the latest backup:
+- `server.js` -- Two jackpot cache fixes: (1) `extractAndCacheJackpot` guard changed from hardcoded array to `JACKPOT_GAME_URLS[game]` check so megamillions (and all future games) are automatically included; (2) `scrapeJackpot` now always returns last known cached amount even when stale -- only returns null on true cold start with no cache at all
+- `index.html` -- same as stable-2026-11-23
+- `jackpot_cache.json` -- lottox ts bumped to current; all 5 games cached
+
+Previous stable: `backups/stable-2026-11-23`
+
+What was in stable-2026-11-23:
 - `server.js` -- OOM fix: removed LX/F5/PB/MM from startup delta chain; only JTP+CP run appendXxxDeltas() at startup
 - `index.html` -- Mega Millions full panel, FAQ entries for PB + MM, jackpot fetch includes megamillions
 - `megamillions_draws.json` -- 500 draws
 - `jackpot_cache.json` -- includes megamillions: $645 Million
-
-Previous stable: `backups/stable-2026-11-22e`
 
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)

@@ -1962,7 +1962,7 @@ function saveJackpotCacheToFile() {
 }
 
 function extractAndCacheJackpot(game, html) {
-  if (!['jtp','lottox','fantasy5','powerball'].includes(game)) return;
+  if (!JACKPOT_GAME_URLS[game]) return;
   const now = Date.now();
   if (_jackpotCache[game] && now - _jackpotCache[game].ts < 5 * 60 * 1000) return; // still fresh
   // Primary: FL Lottery renders jackpot in a span with class="draw-game-jackpot"
@@ -2413,18 +2413,17 @@ function isDataStaleForGame(game, dataTs) {
 }
 
 async function scrapeJackpot(game) {
-  // 1. In-memory cache -- fresh if not stale since last draw
+  // 1. In-memory cache -- return immediately if fresh
   if (_jackpotCache[game] && !isDataStaleForGame(game, _jackpotCache[game].ts)) return _jackpotCache[game].amount;
-  // 2. File cache -- populated by post-draw refresh
+  // 2. File cache -- always return last known amount even if stale; forceRefreshJackpot updates it post-draw
   try {
     const fileCache = JSON.parse(fs.readFileSync(JACKPOT_CACHE_PATH, 'utf8'));
-    if (fileCache[game] && !isDataStaleForGame(game, fileCache[game].ts)) {
+    if (fileCache[game] && fileCache[game].amount) {
       _jackpotCache[game] = fileCache[game];
       return fileCache[game].amount;
     }
   } catch(e) {}
-  // 3. Cache cold or stale -- return null, frontend shows "See FL Lottery"
-  // Post-draw schedule calls forceRefreshJackpot() which does the actual Puppeteer scrape
+  // 3. No cached amount at all -- return null, frontend shows "See FL Lottery"
   return null;
 }
 
