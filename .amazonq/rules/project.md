@@ -5,7 +5,7 @@
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=256` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~250MB heap
+- **Node heap**: `--max-old-space-size=384` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~252MB heap; 384MB gives sufficient headroom within the 512MB machine RAM
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -868,27 +868,30 @@ downloadPDFs()
 ### ensureDailyRefresh* — MUST call appendXxxDeltas()
 Every `ensureDailyRefreshXxx()` function MUST call `appendXxxDeltas()` after the PDF download completes. Without this, Generate Lines reads the stale JSON cache — the PDF is downloaded but the JSON is never updated from this path.
 
-**Correct pattern**:
-```js
-async function ensureDailyRefreshXxx() {
-  const today = todayET();
-  if (lastAutoRefreshXxx === today) return;
-  if (autoRefreshXxxPromise) return autoRefreshXxxPromise;
-  autoRefreshXxxPromise = downloadFile(PDF_URL_X, PDF_PATH_X).then(() => {
-    lastAutoRefreshXxx = today;
-    autoRefreshXxxPromise = null;
-    return appendXxxDeltas(); // REQUIRED -- updates JSON cache
-  }).catch(err => {
-    autoRefreshXxxPromise = null;
-    console.warn('X auto-refresh failed: ' + err.message + ' (using cached PDF)');
-  });
-  return autoRefreshXxxPromise;
-}
-```
 - The `appendXxxDeltas()` call is inside `.then()` so it only runs after a successful download
 - The mtime guard inside `appendXxxDeltas()` makes it a no-op if the PDF hasn't changed — safe to call every time
-- **Pick games**: use `ensureDailyRefreshPick(game)` — one shared function for all 4 games, keyed by game name. State: `lastAutoRefreshPick[game]` and `autoRefreshPickPromise[game]` objects.
+- **Pick games**: use `ensureDailyRefreshPick(game)` — one shared function for all 4 games, keyed by game name
 - **When adding a new game**: create `ensureDailyRefreshXxx()`, call it at the top of `/analyze/xxx`, and make sure it calls `appendXxxDeltas()` in `.then()`
+
+**OOM history**: Fantasy 5 parse was OOMing at 256MB heap (252MB used). Fixed Nov 2026 by raising heap to 384MB in Dockerfile. The parse is serialized (one at a time via `_f5DeltaPromise` guard) so 384MB is sufficient even with Node overhead.
+
+### appendXxxDeltas() — in-flight promise guard (REQUIRED)
+Every `appendXxxDeltas()` function is wrapped with an in-flight promise guard to prevent concurrent PDF parses. The pattern splits the function into a public wrapper and a private `_impl`:
+
+```js
+let _xxxDeltaPromise = null;
+async function appendXxxDeltas() {
+  if (_xxxDeltaPromise) return _xxxDeltaPromise;
+  _xxxDeltaPromise = _appendXxxDeltasImpl().finally(() => { _xxxDeltaPromise = null; });
+  return _xxxDeltaPromise;
+}
+async function _appendXxxDeltasImpl() {
+  // ... actual parse logic
+}
+```
+- Prevents the scheduled refresh and a concurrent user `/analyze` call from both calling `extractPDFText()` on the same large PDF simultaneously
+- For Pick: uses `_pickDeltaPromise[game]` object keyed by game name
+- **When adding a new game**: always use this wrapper pattern for `appendXxxDeltas()`
 
 ## Post-Generate Email Blurb
 After lines are generated, a small blurb appears below the Generation counter nudging users toward the Email My Lines card.
@@ -1203,7 +1206,7 @@ Stable snapshots -> `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-25`
 
 What's in the latest backup:
-- `server.js` -- Three fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard added to all 7 `appendXxxDeltas()` functions; (3) Cash Pop post-draw refresh now calls `appendCpDeltas()`; (4) **Generate Lines freshness fix**: all `ensureDailyRefresh*` functions now call `appendXxxDeltas()` after downloading the PDF so the JSON cache is always current when a user hits Generate. Added `ensureDailyRefreshPick(game)` for Pick games which had no daily refresh at all.
+- `server.js` -- Four fixes: (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard added to all 7 `appendXxxDeltas()` functions; (3) Cash Pop post-draw refresh now calls `appendCpDeltas()`; (4) Generate Lines freshness fix: all `ensureDailyRefresh*` functions now call `appendXxxDeltas()` after downloading; added `ensureDailyRefreshPick(game)`; (5) **Concurrency fix**: all 7 `appendXxxDeltas()` functions wrapped with in-flight promise guards (`_xxxDeltaPromise`) so concurrent calls (e.g. scheduled refresh + user Generate at same time) share one parse instead of launching two simultaneous `extractPDFText()` calls.
 
 Previous stable: `backups/stable-2026-11-24`
 
@@ -1243,7 +1246,7 @@ What was in stable-2026-11-23:
 - Machine ID: `857444c4722408`, region `iad`
 - Memory: `512mb` -- stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
 - Node RSS at idle: ~117MB (heap limit 256MB); ~343MB available. Peak with Chrome ~267MB, leaving ~245MB headroom.
-- Node heap: `--max-old-space-size=256` in Dockerfile CMD -- Fantasy 5 PDF parse (~2.7MB) requires ~250MB heap; 256MB is the minimum safe value
+- Node heap: `--max-old-space-size=384` in Dockerfile CMD -- Fantasy 5 PDF parse (~2.7MB) requires ~252MB heap; 384MB gives 130MB headroom within the 512MB machine RAM
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
 - If machine gets stuck in crash loop: `flyctl machine restart 857444c4722408 -a jackpot-ixupbg`
