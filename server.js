@@ -882,7 +882,7 @@ app.post('/email/test', async (req, res) => {
 });
 
 app.post('/email', async (req, res) => {
-  const { to, lines, nextDraw, winningNumbers, winDrawDate, winDrawType, winPrize } = req.body;
+  const { to, lines, nextDraw, winningNumbers, winBonusBall, winDrawDate, winDrawType, winPrize } = req.body;
   if (!to || !lines || !Array.isArray(lines)) return res.status(400).json({ error: 'Missing required fields.' });
   if (!lines.length && !winningNumbers) return res.status(400).json({ error: 'Select at least one option to include.' });
 
@@ -941,17 +941,19 @@ app.post('/email', async (req, res) => {
   ].join('\n');
 
   const winMetaHtml = winMeta.length ? '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">' + winMeta.join(' &middot; ') + '</div>' : '';
+  const _bs = bg => 'display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:50%;background:' + bg + ';color:#fff;font-weight:700;font-size:14px;margin:3px;';
   const winRow = winningNumbers && winningNumbers.length
     ? '<tr style="border-bottom:1px solid #2a2d3a;"><td style="padding:10px 12px;font-size:12px;color:#22c55e;font-weight:700;white-space:nowrap;min-width:60px;">&#127942; Winning</td><td style="padding:10px 12px;">' +
-      winningNumbers.map(n => '<span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:50%;background:#22c55e;color:#fff;font-weight:700;font-size:14px;margin:3px;">' + n + '</span>').join('&nbsp;') +
+      winningNumbers.map(n => '<span style="' + _bs('#22c55e') + '">' + n + '</span>').join('&nbsp;') +
+      (winBonusBall != null ? '&nbsp;<span style="' + _bs('#e53e3e') + '">' + winBonusBall + '</span>' : '') +
       winMetaHtml + '</td></tr>'
     : '';
 
   const lineRows = lines.map((l, i) => {
-    const balls = l.numbers.map(n =>
-      '<span style="display:inline-block;width:38px;height:38px;line-height:38px;text-align:center;border-radius:50%;background:' +
-      (i === 0 ? '#f59e0b' : '#4f8ef7') + ';color:#fff;font-weight:700;font-size:14px;margin:3px;">' + n + '</span>'
-    ).join('&nbsp;');
+    const mainColor = i === 0 ? '#f59e0b' : '#4f8ef7';
+    const bonusBall = l.powerball != null ? l.powerball : (l.megaball != null ? l.megaball : null);
+    const balls = l.numbers.map(n => '<span style="' + _bs(mainColor) + '">' + n + '</span>').join('&nbsp;') +
+      (bonusBall != null ? '&nbsp;<span style="' + _bs('#e53e3e') + '">' + bonusBall + '</span>' : '');
     return '<tr style="border-bottom:1px solid #2a2d3a;"><td style="padding:10px 12px;font-size:12px;color:' +
       (i === 0 ? '#f59e0b' : '#64748b') + ';font-weight:700;white-space:nowrap;min-width:60px;">' +
       (i === 0 ? '&#11088; Best' : 'Line ' + l.line) +

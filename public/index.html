@@ -3397,11 +3397,12 @@ function pbSendEmail() {
   if (!incLines) { document.getElementById('pbEmailStatus').style.color='var(--red)'; document.getElementById('pbEmailStatus').textContent='Generate lines first before sending.'; return; }
   var btn = document.getElementById('pbEmailSendBtn'); btn.disabled = true; btn.textContent = 'Sending...';
   document.getElementById('pbEmailStatus').textContent = '';
-  var lines = pbLastLines.map(function(l,i){return{line:i+1,numbers:l.numbers.concat([l.powerball]),score:l.score};});
-  var winNums = incWinning ? pbDrawn.concat([pbPowerballDrawn]) : null;
+  var lines = pbLastLines.map(function(l,i){return{line:i+1,numbers:l.numbers,powerball:l.powerball,score:l.score};});
+  var winNums = incWinning ? pbDrawn : null;
+  var winBonus = incWinning ? pbPowerballDrawn : null;
   var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
   fetch('/email', {method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({to:to,lines:lines,nextDraw:pbLastNextDraw,game:'powerball',winningNumbers:winNums,winDrawDate:incWinning?document.getElementById('pbDrawDate').value:null,winPrize:(incWinning&&pbLastWin!=null)?pbLastWin:null}),signal:_ac.signal})
+    body:JSON.stringify({to:to,lines:lines,nextDraw:pbLastNextDraw,game:'powerball',winningNumbers:winNums,winBonusBall:winBonus,winDrawDate:incWinning?document.getElementById('pbDrawDate').value:null,winPrize:(incWinning&&pbLastWin!=null)?pbLastWin:null}),signal:_ac.signal})
     .then(function(r){return r.json();})
     .then(function(data){
       if(data.error){document.getElementById('pbEmailStatus').style.color='var(--red)';document.getElementById('pbEmailStatus').textContent=data.error;}
@@ -3683,11 +3684,13 @@ function mmSendEmail() {
   if (!incLines) { document.getElementById('mmEmailStatus').style.color='var(--red)'; document.getElementById('mmEmailStatus').textContent='Generate lines first before sending.'; return; }
   var btn = document.getElementById('mmEmailSendBtn'); btn.disabled = true; btn.textContent = 'Sending...';
   document.getElementById('mmEmailStatus').textContent = '';
-  var lines = incLines ? mmLastLines.map(function(l,i){return{line:i+1,numbers:l.numbers.concat([l.megaball]),score:l.score};}) : [];
+  var lines = incLines ? mmLastLines.map(function(l,i){return{line:i+1,numbers:l.numbers,megaball:l.megaball,score:l.score};}) : [];
+  var winBonus = incWinning ? mmMegaballDrawn : null;
   var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 30000);
   fetch('/email', { method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ to: to, lines: lines, nextDraw: mmLastNextDraw, game: 'megamillions',
-      winningNumbers: incWinning ? mmDrawn.concat([mmMegaballDrawn]) : null,
+      winningNumbers: incWinning ? mmDrawn : null,
+      winBonusBall: winBonus,
       winDrawDate: incWinning ? document.getElementById('mmDrawDate').value : null, winPrize: (incWinning && mmLastWin != null) ? mmLastWin : null }), signal: _ac.signal })
     .then(function(r){return r.json();})
     .then(function(data){
