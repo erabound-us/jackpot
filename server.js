@@ -491,12 +491,13 @@ function todayET() {
 
 async function ensureDailyRefresh() {
   const today = todayET();
-  if (lastAutoRefreshDate === today) return;   // already refreshed today
-  if (autoRefreshPromise) return autoRefreshPromise; // refresh in progress — wait for it
+  if (lastAutoRefreshDate === today) return;
+  if (autoRefreshPromise) return autoRefreshPromise;
   autoRefreshPromise = downloadPDFs().then(() => {
     lastAutoRefreshDate = today;
-    autoRefreshPromise  = null;
+    autoRefreshPromise = null;
     console.log('Auto-refreshed PDFs for ' + today);
+    return appendJtpDeltas();
   }).catch(err => {
     autoRefreshPromise = null;
     console.warn('Auto-refresh failed: ' + err.message + ' (using cached PDFs)');
@@ -1297,6 +1298,7 @@ async function ensureDailyRefreshLottoX() {
     lastAutoRefreshLottoX = today;
     autoRefreshLottoXPromise = null;
     console.log('Auto-refreshed Lotto X PDF for ' + today);
+    return appendLottoXDeltas();
   }).catch(err => {
     autoRefreshLottoXPromise = null;
     console.warn('Lotto X auto-refresh failed: ' + err.message + ' (using cached PDF)');
@@ -1533,6 +1535,8 @@ async function ensureDailyRefreshCP() {
     lastAutoRefreshCP = today;
     autoRefreshCPPromise = null;
     console.log('Auto-refreshed Cash Pop PDF for ' + today);
+    cpDrawsCache = null;
+    return appendCpDeltas();
   }).catch(err => {
     autoRefreshCPPromise = null;
     console.warn('Cash Pop auto-refresh failed: ' + err.message + ' (using cached PDF)');
@@ -1916,6 +1920,7 @@ async function ensureDailyRefreshF5() {
     lastAutoRefreshF5 = today;
     autoRefreshF5Promise = null;
     console.log('Auto-refreshed Fantasy 5 PDF for ' + today);
+    return appendFantasy5Deltas();
   }).catch(err => {
     autoRefreshF5Promise = null;
     console.warn('Fantasy 5 auto-refresh failed: ' + err.message + ' (using cached PDF)');
@@ -2889,6 +2894,28 @@ function chatReplyPick(question, context) {
 
 
 // PICK routes
+const lastAutoRefreshPick = {};
+const autoRefreshPickPromise = {};
+
+async function ensureDailyRefreshPick(game) {
+  const today = todayET();
+  if (lastAutoRefreshPick[game] === today) return;
+  if (autoRefreshPickPromise[game]) return autoRefreshPickPromise[game];
+  const url = PDF_URLS_PICK[game], path = PDF_PATHS_PICK[game];
+  autoRefreshPickPromise[game] = downloadFile(url, path).then(() => {
+    lastAutoRefreshPick[game] = today;
+    autoRefreshPickPromise[game] = null;
+    pickCache[game] = null;
+    pickDrawsCache[game] = null;
+    console.log('Auto-refreshed ' + game + ' PDF for ' + today);
+    return appendPickDeltas(game);
+  }).catch(err => {
+    autoRefreshPickPromise[game] = null;
+    console.warn(game + ' auto-refresh failed: ' + err.message + ' (using cached PDF)');
+  });
+  return autoRefreshPickPromise[game];
+}
+
 app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
 
 app.get('/latestdraw/pick', async (req, res) => {
@@ -2941,6 +2968,7 @@ app.get('/analyze/pick', async (req, res) => {
   const game = (req.query.game || 'pick5').toLowerCase();
   if (!PDF_PATHS_PICK[game]) return res.status(400).json({ error: 'Invalid game.' });
   try {
+    await ensureDailyRefreshPick(game);
     const numDigits = parseInt(game.replace('pick',''));
     const draws = getPickDraws(game);
     if (draws.length < 10) throw new Error('Only ' + draws.length + ' draws parsed.');
@@ -3181,6 +3209,7 @@ async function ensureDailyRefreshPB() {
     lastAutoRefreshPB = today;
     autoRefreshPBPromise = null;
     console.log('Auto-refreshed Powerball PDF for ' + today);
+    return appendPbDeltas();
   }).catch(err => {
     autoRefreshPBPromise = null;
     console.warn('Powerball auto-refresh failed: ' + err.message + ' (using cached PDF)');
@@ -3541,6 +3570,7 @@ async function ensureDailyRefreshMM() {
     lastAutoRefreshMM = today;
     autoRefreshMMPromise = null;
     console.log('Auto-refreshed Mega Millions PDF for ' + today);
+    return appendMmDeltas();
   }).catch(err => {
     autoRefreshMMPromise = null;
     console.warn('Mega Millions auto-refresh failed: ' + err.message + ' (using cached PDF)');
