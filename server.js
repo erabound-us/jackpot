@@ -322,14 +322,14 @@ function parseHistoryPDF(text) {
       const numbers = nums.slice(0, 6).map(Number).filter(n => n >= 1 && n <= 46);
       if (numbers.length === 6) {
         const parts = date.split('/');
-        let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+        let yy = parseInt(parts[2]); if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
         const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
         draws.push({ date, numbers, ts });
       }
     }
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws.slice(0, 500);
+  return draws.filter(d => d.ts <= Date.now()).slice(0, 500);
 }
 
 function parseFrequencyPDF(text) {
@@ -1044,14 +1044,14 @@ function parseLottoXHistoryPDF(text) {
       const numbers = nums.slice(0, 6).map(Number).filter(n => n >= 1 && n <= 53);
       if (numbers.length === 6) {
         const parts = date.split('/');
-        let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+        let yy = parseInt(parts[2]); if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
         const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
         draws.push({ date, numbers, ts });
       }
     }
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws.slice(0, 500);
+  return draws.filter(d => d.ts <= Date.now()).slice(0, 500);
 }
 
 function scoreLottoX(nums, freq, draws, totalDraws) {
@@ -1717,13 +1717,14 @@ function parseFantasy5HistoryPDF(text) {
     const numbers = [3,4,5,6,7].map(i => parseInt(m[i])).filter(n => n >= 1 && n <= 36);
     if (numbers.length === 5) {
       const parts = date.split('/');
-      let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+      let yy = parseInt(parts[2]);
+      if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
       const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
       draws.push({ date, drawType, numbers, ts });
     }
   }
   draws.sort((a, b) => b.ts - a.ts || (a.drawType === 'EVENING' ? -1 : 1));
-  return draws.slice(0, 500);
+  return draws.filter(d => d.ts <= Date.now()).slice(0, 500);
 }
 
 function scoreFantasy5(nums, freq, draws, totalDraws) {
@@ -1825,7 +1826,7 @@ async function _appendFantasy5DeltasImpl() {
   let text;
   try { text = await extractPDFText(PDF_PATH_F5); } catch(e) { return; }
   f5LastPdfMtime = mtime;
-  const all = parseFantasy5HistoryPDF(text).filter(d => d.ts <= Date.now() && d.ts > new Date('2000-01-01').getTime());
+  const all = parseFantasy5HistoryPDF(text);
   const newDraws = all.filter(d => d.ts > newestTs);
   if (!newDraws.length) { console.log('Fantasy 5: no new draws in PDF.'); return; }
   const merged = newDraws.concat(existing).slice(0, 500);

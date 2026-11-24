@@ -29,14 +29,14 @@ function parseJtp(text) {
       const numbers = nums.slice(0, 6).map(Number).filter(n => n >= 1 && n <= 46);
       if (numbers.length === 6) {
         const parts = date.split('/');
-        let yy = parseInt(parts[2]); if (yy < 100) yy += 2000;
+        let yy = parseInt(parts[2]); if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
         const ts = new Date(yy, parseInt(parts[0]) - 1, parseInt(parts[1])).getTime();
         draws.push({ date, numbers, ts });
       }
     }
   }
   draws.sort((a, b) => b.ts - a.ts);
-  return draws;
+  return draws.filter(d => d.ts <= Date.now());
 }
 
 // Must match parseCashPopHistoryPDF in server.js
@@ -65,14 +65,7 @@ function parseLottoX(text) {
       const numbers = nums.slice(0, 6).map(Number).filter(n => n >= 1 && n <= 53);
       if (numbers.length === 6) {
         const p = date.split('/');
-        let yy = parseInt(p[2]); if (yy < 100) yy += 2000;
-        const ts = new Date(yy, parseInt(p[0]) - 1, parseInt(p[1])).getTime();
-        draws.push({ date, numbers, ts });
-      }
-    }
-  }
-  draws.sort((a, b) => b.ts - a.ts);
-  return draws; // NO cap -- full history for initial generation
+        let yy = parseInt(p[2]); if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
 }
 
 function parseFantasy5(text) {
@@ -85,14 +78,13 @@ function parseFantasy5(text) {
     const numbers = [3,4,5,6,7].map(i => parseInt(m[i])).filter(n => n >= 1 && n <= 36);
     if (numbers.length === 5) {
       const p = date.split('/');
-      let yy = parseInt(p[2]); if (yy < 100) yy += 2000;
+      let yy = parseInt(p[2]); if (yy < 100) yy += (yy > 50 ? 1900 : 2000);
       const ts = new Date(yy, parseInt(p[0]) - 1, parseInt(p[1])).getTime();
       draws.push({ date, drawType, numbers, ts });
     }
   }
   draws.sort((a, b) => b.ts - a.ts || (a.drawType === 'EVENING' ? -1 : 1));
-  // Filter out sentinel/corrupt entries (future dates are invalid)
-  return draws.filter(d => d.ts <= Date.now() && d.ts > new Date('2000-01-01').getTime());
+  return draws.filter(d => d.ts <= Date.now());
 }
 
 // Must match parsePickHistoryPDF in server.js exactly

@@ -170,6 +170,8 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - **2-digit years**: PDF uses `MM/DD/YY` format — `yy < 100 ? yy += 2000` applies
 - `generate_draw_cache.js` includes Powerball parser — must stay in sync with `parsePbHistoryPDF` in server.js
 
+> **CRITICAL — 2-digit year rule for ALL parsers**: Use `yy > 50 ? yy += 1900 : yy += 2000` — NOT a flat `yy += 2000`. Fantasy 5 and Lotto X PDFs contain draws from the 1990s (e.g. `12/31/99` = 1999, not 2099). A flat `+= 2000` turns these into future dates, which sort to the top of the 500-draw cap and push all real draws out, causing Generate Lines to score against phantom 2099 data. The `> 50` threshold is safe for all current FL Lottery games (none started before 1950). Powerball and Mega Millions parsers use a hard `ts < new Date('1992-01-01')` / `ts < new Date('2013-01-01')` guard as a secondary safety net, but the year rule must still be correct. **This rule applies to every parser in both `server.js` and `generate_draw_cache.js`.**
+
 ### Powerball Jackpot Banner
 - Powerball is a **multi-state game** — NOT in `JACKPOT_GAME_URLS`, NOT scraped from FL Lottery
 - Banner center col element `pbJackpotAmount` shows static text `"See FL Lottery"` (not `&mdash;`)
@@ -1256,6 +1258,14 @@ Stable snapshots -> `backups/stable-YYYY-MM-DD/`
 Latest stable: `backups/stable-2026-11-25`
 
 What's in the latest backup:
+- `server.js` -- (1) 2-digit year parser fix: all parsers now use `yy > 50 ? yy += 1900 : yy += 2000` instead of flat `yy += 2000`. Fantasy 5 and Lotto X PDFs contain 1990s draws (e.g. `12/31/99` = 1999) that were being parsed as 2099, filling the 500-draw cap with phantom future dates and pushing all real draws out. (2) Fantasy 5 `_appendFantasy5DeltasImpl` redundant `> 2000-01-01` filter removed (parser now handles it). (3) PM2 startup fix: `start_jackpot.ps1` no longer calls `pm2 kill` (which caused EPERM on dead daemon); instead directly wipes socket files and kills node processes.
+- `generate_draw_cache.js` -- same 2-digit year fix applied to all parsers (JTP, Lotto X, Fantasy 5). Redundant `> 2000-01-01` filter removed from Fantasy 5 parser.
+- `fantasy5_draws.json` -- regenerated with fixed parser: 500 draws, latest 11/23/26 Evening (correct).
+- Dated file backups: `server.js.bak-20261124`, `generate_draw_cache.js.bak-20261124`
+
+Previous stable: `backups/stable-2026-11-25` (pre-fix)
+
+What's in the previous backup:
 - `server.js` -- (1) OOM/midnight retry removed; (2) PDF-older-than-JSON mtime guard on all 7 delta functions; (3) Cash Pop post-draw refresh calls `appendCpDeltas()`; (4) `ensureDailyRefreshPick(game)` added; (5) All 7 delta functions wrapped with in-flight promise guards; (6) Large-PDF `ensureDailyRefresh*` (LX, F5, PB, MM) are now download-only fire-and-forget -- parse handled exclusively by `schedulePostDrawRefreshes` background queue. Generate Lines returns instantly from JSON cache.
 - `Dockerfile` -- heap raised 256MB → 384MB. Fantasy 5 parse needs ~252MB; 256MB had 4MB margin causing OOM.
 - `index.html` -- All generate functions verified with correct two-step `.then()` pattern (`res.json()` first, then data). All analyze timeouts 30s (server returns from JSON cache instantly). Fixed broken LX and F5 generate functions where fsReplace edits had eaten the `fetch()` and `res.json()` lines.
