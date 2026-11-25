@@ -583,7 +583,7 @@ app.get('/test/f5scrape', async (req, res) => {
       }
     }
     // Extract article date IDs
-    const re = /(d{4}-d{2}-d{2})-fantasy5/g;
+    const re = /(\d{4}-\d{2}-\d{2})-fantasy5/g;
     const dates = []; let m;
     while ((m = re.exec(html)) !== null) {
       const [y, mo, day] = m[1].split('-');
