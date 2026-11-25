@@ -567,7 +567,7 @@ GET `/` `/nextdraw` `/nextdraw/lottox` `/nextdraw/fantasy5` `/nextdraw/cashpop` 
 POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refresh/pick` `/refresh/powerball` `/reset` `/check` `/check/lottox` `/check/fantasy5` `/check/cashpop` `/check/pick` `/check/powerball` `/chat` `/chat/lottox` `/chat/fantasy5` `/chat/cashpop` `/chat/pick` `/chat/powerball` `/email` `/email/config` `/email/test`
 
 ### /latestdraw/* endpoints
-- Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
+- Return the most recent draw **from JSON cache**, always fast
 - PDF/JSON is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
 - `/latestdraw/jtp` → `{ date, numbers }` — JSON cache only
 - `/latestdraw/lottox` → `{ date, numbers }` — JSON cache only
@@ -839,7 +839,7 @@ All games use JSON draw caches — **no PDFs are parsed on Fly.io**. Puppeteer s
 - When adding a new game (initial JSON build via `generate_draw_cache.js`)
 - After a long outage where many draws were missed
 - Never needs to run on Fly — Puppeteer keeps caches current
-- **`generate_draw_cache.js` covers**: JTP, Cash Pop, Lotto X, Fantasy 5, Pick 2-5 (PDF-based, local only)
+- **`generate_draw_cache.js` covers**: JTP, Cash Pop, Lotto X, Fantasy 5, Pick 2-5 (uses PDF parsers locally to build initial JSON caches — never runs on Fly.io)
 
 ### When adding a new game with a JSON cache
 1. Run `generate_draw_cache.js` locally to build initial JSON
@@ -1335,9 +1335,23 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 
 ## Draw Date Lookup (/draws/* routes)
 
-### Lookup strategy — 2 steps in this order
-1. **JSON cache first** — checks the in-memory draw cache using `stripLeadingZeros(date)`. Instant, no Chrome. Handles the vast majority of lookups.
-2. **Official site link** — if not found in cache, return `{ error, resultsUrl }`. Frontend renders as a clickable "View official results" link. The Puppeteer background refresh (`schedulePostDrawRefreshes`) will add the draw to the cache within minutes of the draw completing.
+### Lookup strategy — 3 steps in this order
+1. **JSON cache first** — checks the in-memory draw cache using `stripLeadingZeros(date)`. Instant, no Chrome.
+2. **Puppeteer fallback** — if not in cache, calls `appendXxxDeltas()` which scrapes the FL Lottery website live, updates the JSON cache, then re-checks. Takes ~20s on first call; subsequent calls for the same date are instant from cache. This handles the gap between a draw completing and the scheduled refresh firing.
+3. **Official site link** — if scrape also fails, return `{ error, resultsUrl }`. Frontend renders as "View official results".
+
+**Pattern used in all five draw routes (JTP, LX, F5, PB, MM)**:
+```js
+// 1. JSON cache
+const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
+if (match) return res.json({ date: match.date, numbers: match.numbers });
+// 2. Puppeteer fallback
+try { await appendXxxDeltas(); const d2 = getXxxDraws(); const m2 = d2.find(...); if (m2) return res.json(...); } catch(e) {}
+// 3. Official link
+res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.xxx });
+```
+
+**Why `appendXxxDeltas()` as fallback**: it scrapes the live FL Lottery website AND updates the JSON cache permanently. Future requests for the same date are instant. This is better than a one-off scrape that doesn't persist.
 
 **Chrome/Puppeteer in `/draws/*` routes**: `scrapeFlDraws` is NOT called from any `/draws/*` route. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON cache. The frontend renders this as a "View official results" link. Puppeteer is only used by `_appendXxxDeltasImpl()` functions (scheduled background refresh) and `getAvailableDates()` / `forceRefreshJackpot()` (also background only).
 
@@ -1384,11 +1398,11 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 - **Cash Pop**: does NOT use date-based article IDs like other games. The page shows all sessions for a date in one block. Skip the article ID lookup entirely — search the whole page HTML. Use `shortDate` (e.g. `"Nov 18"`) to find the right date's section. Regex: `/<li[^>]*>.*?<div[^>]*>([^<]+)<\/div>.*?game-numbers__number[^>]*>(\d+)/gs` extracts session name + number. Numbers are in `<span class="game-numbers__number mt-2 text-black">3</span>` (no inner `<span>`).
 - **Cash Pop article ID**: `if (idx === -1 && game !== 'cashpop') return null` — Cash Pop bypasses the article ID check and uses the full page HTML.
 
-### Available dates — PDF-based (no puppeteer on page load)
-- `/draws/<game>/available` endpoints return the last 5 dates from the PDF — **no puppeteer call**
-- Uses `expandYear(date)` helper to normalize 2-digit years (`MM/DD/YY` → `MM/DD/YYYY`) and 4-digit years (Cash Pop PDF already uses 4-digit)
-- JTP dates filtered to Tue/Fri only (days 2,5); LottoX filtered to Wed/Sat only (days 3,6); Fantasy5/CashPop draw every day
-- `getAvailableDates(game)` still exists for puppeteer-based scraping (used by `schedulePostDrawRefreshes`) with 1-hour cache in `_availCache`
+### Available dates — JSON-based (no puppeteer on page load)
+- `/draws/<game>/available` endpoints return the last 5 dates from the JSON cache — **no puppeteer call**
+- Uses `expandYear(date)` helper to normalize any remaining 2-digit years; all caches now use 4-digit years
+- JTP dates filtered to Tue/Fri only (days 2,5); LottoX filtered to Wed/Sat only (days 3,6); Fantasy5/CashPop/Pick draw every day
+- `getAvailableDates(game)` still exists for puppeteer-based scraping (used by `schedulePostDrawRefreshes`) with 5-min cache in `_availCache`
 - **Never cache empty results** from `getAvailableDates` — only cache when `converted.length > 0`
 - **Cache invalidation on 404**: when `/draws/<game>` returns 404, `delete _availCache[game]`
 
@@ -1456,10 +1470,8 @@ res.json({ dates: dates.slice(0, 5) });
 ### When adding a new game
 1. Add to `GAME_URLS` and `GAME_IDS` in both `scrapeFlDraws` and `getAvailableDates`
 2. Add to `FL_RESULTS_URLS`
-3. Add `/draws/<game>/available` endpoint — **PDF-based using `expandYear()`**, filtered by draw days
-4. Add `/draws/<game>` route: **PDF first**, puppeteer fallback, official link last
-5. Add draw day validation using `isValidDrawDay(date, days)` for games that don't draw every day
-6. Add `/latestdraw/<game>` — **PDF only**, no scraper calls
+3. Add `/draws/<game>/available` endpoint — **JSON-based using `expandYear()`**, filtered by draw days, with stale-check
+4. Add `/draws/<game>` route: **JSON cache first**, `appendXxxDeltas()` Puppeteer fallback, official link last
 7. Frontend: add `<div id="xDateChips">`, `xPickDate()`, and page-load fetch for available dates
 8. Frontend date conversion: `parts[0]` not `parts[0].slice(2)`
 
@@ -1517,9 +1529,9 @@ if (vals.every(function(v) { return v === ''; })) continue;  // skip blank rows
 5. On page load: fetch `/latestdraw/<game>` → store `xLatestDate = mmddyyToInputDate(d.date)`, populate `xDrawn`, date input, drawn balls in **gold** (hardcoded)
 6. `xLookupDraw()` — converts date picker value to `MM/DD/YYYY` using `parts[0]` (4-digit year, never `.slice(2)`), fetches `/draws/<game>?date=...`, compares selected date to `xLatestDate` to pick **gold** (latest) or **green** (other)
 7. Error handler checks `data.resultsUrl` and renders as `<a>` link when present
-8. Server `/draws/<game>` route: **PDF first**, puppeteer fallback, official link last
-9. Server `/draws/<game>/available`: **PDF-based** using `expandYear()`, filtered by draw days — no puppeteer
-10. Server `/latestdraw/<game>`: **PDF only** — never call `getAvailableDates()` or `scrapeFlDraws()` here
+8. Server `/draws/<game>` route: **JSON cache first**, `appendXxxDeltas()` Puppeteer fallback, official link last
+9. Server `/draws/<game>/available`: **JSON-based** using `expandYear()`, filtered by draw days
+10. Server `/latestdraw/<game>`: **JSON cache only** — never call `getAvailableDates()` or `scrapeFlDraws()` here
 11. Add draw day validation with `isValidDrawDay()` for games that don't draw every day
 12. Add game to `scrapeFlDraws` `GAME_URLS` and `GAME_IDS`; add to `FL_RESULTS_URLS`
 13. For multi-draw-per-day games (like Fantasy 5): use chunk size 4000; slice between draw type labels to isolate numbers; strip secondary draw data (like Lotto X Double Play) before extracting numbers
@@ -1533,21 +1545,15 @@ if (vals.every(function(v) { return v === ''; })) continue;  // skip blank rows
 
 ## Cash Pop Check My Numbers
 - Cash Pop has 5 draws per day — Check My Numbers uses a date picker + session selector (Morning/Matinee/Afternoon/Evening/Late Night)
-- `/draws/cashpop?date=MM/DD/YYYY&session=Morning` — checks PDF first, falls back to puppeteer scraper
-- **PDF fallback**: `parseCashPopHistoryPDF` returns 5 numbers per date (one per session in order: Morning/Matinee/Afternoon/Evening/Late Night). PDF uses 4-digit years (`MM/DD/YYYY`). Session names are assigned by position.
-- **Puppeteer fallback**: only runs if date not in PDF. Cash Pop page shows ALL sessions for a date in one block — no per-session article IDs. The scraper skips the article ID lookup (`if (idx === -1 && game !== 'cashpop') return null`) and searches the full page HTML. Converts date to short form (e.g. `"Nov 18"`) to find the right date's section. Regex: `/<li[^>]*>.*?<div[^>]*>([^<]+)<\/div>.*?game-numbers__number[^>]*>(\d+)/gs`
-- **CRITICAL**: Do NOT use `--single-process` or `--no-zygote` Chrome flags — they prevent JS execution and the Cash Pop numbers never render. Do NOT use `setRequestInterception` — same problem.
-- The cashpop block in `scrapeFlDraws` must come **before** the `if (!nums.length) return null` check
-- When a session hasn't drawn yet, the route returns `{ error, allSessions, resultsUrl }` — frontend shows available sessions
-- **Frontend always fetches without session param first** to get `allSessions`, then picks the requested session or falls back to latest
-- `/draws/cashpop/available` — returns last 5 dates from PDF (no puppeteer)
-- `/latestdraw/cashpop` — PDF only, returns `{ date, numbers }` (5 numbers)
+- `/draws/cashpop?date=MM/DD/YYYY&session=Morning` — checks JSON cache first, falls back to `appendCpDeltas()` Puppeteer scrape
+- **JSON cache**: `cashpop_draws.json` stores 5 numbers per date (one per session in order: Morning/Matinee/Afternoon/Evening/Late Night). All dates 4-digit year (`MM/DD/YYYY`).
+- **Puppeteer fallback**: `appendCpDeltas()` scrapes the Cash Pop page. All sessions for a date appear inline in the article. Session name in `<div class="text-xs...">Morning</div>` immediately before `<span class="game-numbers__number mt-2 text-black">5</span>`.
 - Frontend on page load: sets date input + session dropdown to latest draw, shows winning number in **gold**
 - Reset button restores to latest draw (not blank) — `cpLatestDate` and `cpLatestSession` store the latest values
 - **`cpLookupDraw(forceLatest)`** accepts an optional boolean — pass `true` from the `/latestdraw/cashpop` page-load callback and from `cpClearCheck()` to guarantee gold color regardless of `cpLatestDate` timing. Normal user-triggered calls pass no argument (defaults to falsy).
 - **General rule**: ALL `/draws/<game>/available` endpoints MUST include stale-detection. Daily-draw games (F5, CP, Pick) prepend today/yesterday based on first draw cutoff. Specific-day games (JTP Tue/Fri, LX Wed/Sat) walk back to find the most recent draw day that has passed its 11:15 PM ET cutoff and prepend it if missing.
 - **Gap-fill, not single-date prepend**: if the JSON/PDF is multiple days stale (e.g. after a long outage or missed delta), a single-date prepend only fixes the most recent gap. Use a loop that walks back from the most recent draw day until it hits a date already in the list, prepending all missing dates. Cap at 7 iterations to prevent infinite loops.
-- **CRITICAL: Never speculatively prepend today's date for PDF-backed games (CP, F5, Pick)** -- the PDF only updates once per day (end of day). If today's data isn't in the JSON yet, it means the PDF hasn't updated. Prepending today would trigger the scraper which is unstable. Instead, just return what's in the JSON -- `appendXxxDeltas()` will add today's data automatically once the PDF updates tonight.
+- **CRITICAL: Never speculatively prepend today's date for Puppeteer-backed games (CP, F5, Pick)** -- the Puppeteer scraper only runs post-draw via `schedulePostDrawRefreshes`. If today's data isn't in the JSON yet, it means the scheduled refresh hasn't fired. Prepending today before the draw has occurred causes "No draw found" errors.
 - **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
   - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
   - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.
