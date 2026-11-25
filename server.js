@@ -1910,10 +1910,12 @@ async function _appendFantasy5DeltasImpl() {
       const page = await browser.newPage();
       await page.goto(F5_URL, { waitUntil: 'networkidle0', timeout: 30000 });
       // Wait for draw results to render (Vue SPA may need extra time)
-      try { await page.waitForSelector('.draw-results-item', { timeout: 10000 }); } catch(_) {}
+      let selectorFound = false;
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); selectorFound = true; } catch(_) {}
       html = await page.content();
       await page.close();
       await closeBrowser();
+      console.log('Fantasy 5: HTML length=' + html.length + ' selectorFound=' + selectorFound + ' hasArticleId=' + /\d{4}-\d{2}-\d{2}-fantasy5/.test(html));
       extractAndCacheJackpot('fantasy5', html);
       break;
     } catch(e) {
