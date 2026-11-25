@@ -3,9 +3,9 @@
 ## Stack
 - **Backend**: Node.js + Express 5, single file `server.js` (~3,200 lines)
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
-- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 1024MB (~$6.70/mo)
+- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB (~$3.69/mo)
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- all games now use Puppeteer scraping (~60-108MB RSS per scrape) instead of PDF parsing. No PDF is parsed on Fly.io at runtime. 768MB heap gives comfortable headroom within the 1024MB machine RAM.
+- **Node heap**: `--max-old-space-size=384` set in Dockerfile CMD -- all games now use Puppeteer scraping (~60-108MB RSS per scrape) instead of PDF parsing. No PDF is parsed on Fly.io at runtime. 384MB heap gives comfortable headroom within the 512MB machine RAM.
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -1350,10 +1350,10 @@ What was in stable-2026-11-23:
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
-- Memory: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills. Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
-- Node RSS at idle: ~117MB; peak with any single Puppeteer scrape ~60-108MB on top of idle; all games fit within 1024MB with comfortable headroom.
-- Node heap: `--max-old-space-size=768` in Dockerfile CMD -- Lotto X PDF parse peaks at ~239MB RSS; Fantasy 5 now uses Puppeteer (~108MB). 768MB heap gives comfortable headroom within 1024MB machine RAM.
-- Cost: ~$6.70/mo (shared-cpu-1x + 1024MB RAM in iad region)
+- Memory: `512mb` -- downsized Nov 2026 from 1024MB after all games migrated to Puppeteer scraping. Peak usage during a Puppeteer scrape is ~175MB total (Node 108MB + Chrome ~70MB), leaving ~315MB free on 512MB. Previous 1024MB was needed for PDF parsing (Fantasy 5 peaked at 535MB RSS).
+- Node RSS at idle: ~108MB; peak with any single Puppeteer scrape ~175MB total. All fit within 512MB with comfortable headroom.
+- Node heap: `--max-old-space-size=384` in Dockerfile CMD -- no PDF parsing at runtime; 384MB heap gives comfortable headroom within 512MB machine RAM.
+- Cost: ~$3.69/mo (shared-cpu-1x + 512MB RAM in iad region)
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
 - If machine gets stuck in crash loop: `flyctl machine restart 857444c4722408 -a jackpot-ixupbg`
