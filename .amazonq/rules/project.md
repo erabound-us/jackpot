@@ -5,7 +5,7 @@
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 1024MB (~$6.70/mo)
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- Lotto X PDF parse (~239MB RSS) is the largest remaining PDF parse; 768MB heap gives comfortable headroom within the 1024MB machine RAM. Fantasy 5 now uses Puppeteer (~108MB RSS) instead of PDF parse.
+- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- all games now use Puppeteer scraping (~60-108MB RSS per scrape) instead of PDF parsing. No PDF is parsed on Fly.io at runtime. 768MB heap gives comfortable headroom within the 1024MB machine RAM.
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -13,7 +13,7 @@
 ```
 Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 ```
-- PDFs are downloaded at runtime by the server; **all games now refresh via `schedulePostDrawRefreshes()` — 5 minutes after each draw on the game's schedule**. The `ensureDailyRefresh` guards on `/analyze` routes remain as a safety fallback only.
+- **All games now refresh via Puppeteer scraping** — `schedulePostDrawRefreshes()` fires after each draw and calls `appendXxxDeltas()` which scrapes the FL Lottery website directly. No PDFs are downloaded or parsed at runtime on Fly.io. The `ensureDailyRefresh` guards on `/analyze` routes are no-ops (kept as stubs only).
 - No cloudflared tunnel in production — that was a previous architecture, now obsolete
 - `jackpot-tunnel-config.yml` and `start_jackpot.ps1` are local-only dev tools
 
@@ -88,7 +88,7 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - Multiplier: random **2×, 3×, 4×, 5×, or 10×** printed on every ticket at purchase
   - Applies to 2nd, 3rd, 4th prizes only (5-of-6, 4-of-6, 3-of-6)
   - Does NOT apply to jackpot or free ticket
-- Frequency computed from history PDF (no separate freq PDF); pool top 35 of 53
+- Frequency computed from draw history (same as all other games); pool top 35 of 53
 
 ### Official Lotto X Prizes & Odds
 | Match | Starting Prize | Multiplied | Odds |
@@ -162,15 +162,16 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 | 3× | 1 in 3.3 | 1 in 3.3 |
 | 2× | 1 in 1.8 | 1 in 1.8 |
 
-### Powerball PDF Parser Notes
-- Regex: `/(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d\s]+?)\s+PB\s+(\d{1,2})\s+(?:X\d+\s+)?POWERBALL(?!\s+DP)/g`
-- The negative lookahead `(?!\s+DP)` skips Double Play rows — same pattern as Lotto X `LOTTO(?!\s+DP)`
-- `X\d+` is the optional Power Play multiplier printed on the row — skip it
-- Date filter: `ts > 1992-01-01` and `ts <= Date.now()` to exclude future/corrupt rows
-- **2-digit years**: PDF uses `MM/DD/YY` format — `yy < 100 ? yy += 2000` applies
-- `generate_draw_cache.js` includes Powerball parser — must stay in sync with `parsePbHistoryPDF` in server.js
-
-> **CRITICAL — 2-digit year rule for ALL parsers**: Use `yy > 50 ? yy += 1900 : yy += 2000` — NOT a flat `yy += 2000`. Fantasy 5 and Lotto X PDFs contain draws from the 1990s (e.g. `12/31/99` = 1999, not 2099). A flat `+= 2000` turns these into future dates, which sort to the top of the 500-draw cap and push all real draws out, causing Generate Lines to score against phantom 2099 data. The `> 50` threshold is safe for all current FL Lottery games (none started before 1950). Powerball and Mega Millions parsers use a hard `ts < new Date('1992-01-01')` / `ts < new Date('2013-01-01')` guard as a secondary safety net, but the year rule must still be correct. **This rule applies to every parser in both `server.js` and `generate_draw_cache.js`.**
+### Powerball Scraper Notes
+- Article ID pattern: `YYYY-MM-DD-powerball-item` in page HTML
+- White balls: `game-numbers__number` class, first 5 values (1-69)
+- Powerball: `game-numbers__bonus-text` class (1-26)
+- Strip Double Play section before extracting: slice chunk to before `'Double Play'`
+- **JSON cache**: `powerball_draws.json` — committed to repo, included in Docker image, all dates in 4-digit year format (`MM/DD/YYYY`)
+- **Scoring**: white balls scored independently (pool top 40 of 69); Powerball picked from top-16 frequency pool (1-26)
+- **Session key format**: `"1,5,12,22,33,41|7"` (white balls comma-separated + `|` + Powerball) — distinct from other games
+- **`getLastDrawTime` schedule**: `powerball: [{ days: [1, 3, 6], h: 22, m: 59 }]` — Mon/Wed/Sat 10:59 PM ET
+- **`schedulePostDrawRefreshes`**: fires at 23:35, 23:50, 00:10 ET gated on `pbDays = [1, 3, 6]` (23:20 fires before the draw)
 
 ### Powerball Jackpot Banner
 - Powerball is a **multi-state game** — NOT in `JACKPOT_GAME_URLS`, NOT scraped from FL Lottery
@@ -207,16 +208,14 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 | Pick 4 | $5,000 | $200-$1,200 | $1,500 |
 | Pick 5 | $50,000 | $500-$12,000 | $12,000 |
 
-### PICK PDF format
-Each row: `MM/DD/YYYY  D[-D...] FB N  D[-D...] FB N` (Midday then Evening, 4-digit year)
-- Digits 0-9 separated by ` - `; `FB N` = Fireball digit
-- Parse regex: `/(date)\s+(digits) FB (n)\s+(digits) FB (n)/g`
-- Parse time: ~1s locally, ~4s on Fly -- use mtime cache, no JSON cache needed
-- PDF URLs: `https://files.floridalottery.com/exptkt/pick{2,3,4,5}_winning-numbers-history.pdf`
-- **Pick PDFs use 4-digit years** (`MM/DD/YYYY`) unlike JTP/LX/F5 which use 2-digit years (`MM/DD/YY`)
-- **Date comparison in `/draws/pick` MUST use `stripLeadingZeros()`** -- date picker sends zero-padded `11/01/2026` but PDF stores `11/1/2026`. Direct string comparison will miss dates with single-digit days/months.
-- `getPickText(game)` uses top-level `fs` (not inline `require('fs')`) -- always use the module-level import
-- **`parsePickHistoryPDF` regex uses `new RegExp(string)` -- backslashes in the string need single-escaping** (`'(\\d)'` not `'(\d)'`). In a JS source file, `'(\\d)'` is two backslashes which at runtime becomes the string `(\d)`, which `new RegExp()` interprets as a digit class. Writing `'(\d)'` in source produces the string `(d)` at runtime (backslash is silently dropped as an unrecognized escape), causing all rows to silently not match. Always test with a known PDF line before deploying.
+### PICK Scraper Notes
+- Article ID pattern: `YYYY-MM-DD-pick{2,3,4,5}-item` in page HTML
+- Each date article contains both Midday and Evening draws
+- Digits: `game-numbers__number` class; Fireball: `game-numbers__bonus-text` class
+- Slice between `Midday`/`Evening` labels to isolate each draw's block
+- **JSON caches**: `pick2_draws.json` through `pick5_draws.json` — committed to repo, all dates 4-digit year (`MM/DD/YYYY`)
+- **Pick game URLs**: `https://floridalottery.com/games/draw-games/pick-{2,3,4,5}`
+- **`schedulePostDrawRefreshes`**: fires at 13:10, 13:25, 23:20, 23:35, 23:50, 00:10 ET every day
 
 ### PICK Scoring
 - Positional frequency: how often each digit 0-9 appears at each position (primary signal)
@@ -570,11 +569,11 @@ POST `/refresh` `/refresh/lottox` `/refresh/fantasy5` `/refresh/cashpop` `/refre
 ### /latestdraw/* endpoints
 - Return the most recent draw **from PDF/JSON first**, with scraper fallback when the source is stale
 - PDF/JSON is always up to date within 5 minutes of a draw (via `schedulePostDrawRefreshes`)
-- `/latestdraw/jtp` → `{ date, numbers }` — JSON cache only, no scraper
-- `/latestdraw/lottox` → `{ date, numbers }` — JSON cache only, no scraper
-- `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache only, no scraper
-- `/latestdraw/cashpop` → `{ date, numbers }` — JSON cache only, no scraper
-- `/latestdraw/pick` → `{ evening, midday }` — PDF via `getPickText()` (serialized), no scraper
+- `/latestdraw/jtp` → `{ date, numbers }` — JSON cache only
+- `/latestdraw/lottox` → `{ date, numbers }` — JSON cache only
+- `/latestdraw/fantasy5` → `{ evening, midday }` — JSON cache only
+- `/latestdraw/cashpop` → `{ date, numbers }` — JSON cache only
+- `/latestdraw/pick` → `{ evening, midday }` — JSON cache only
 - **ALL latestdraw routes follow the JTP gold standard: JSON/cache only, never call scrapeFlDraws()** — scraper calls from latestdraw crash the server under concurrent load (exit_code=134). Data freshness is maintained by `appendXxxDeltas()` running 5 minutes after each draw via `schedulePostDrawRefreshes()`.
 - On page load the frontend fetches all and auto-populates `xDrawn`, the date input, and the drawn balls display in **gold**
 - `/latestdraw/*` excluded from rate limiting
@@ -701,224 +700,189 @@ const gameLabel = meta.label;
 - Browser `sid` in `sessionStorage`; server `Map` TTL 2 h; purged every 30 min
 
 ## Serialized Refresh Queue
-- All PDF downloads (scheduled and manual) go through a single global queue -- **one job at a time, never concurrent**
-- Prevents OOM from concurrent large PDF operations (Lotto X = 1MB is now the largest; Fantasy 5 uses Puppeteer instead of PDF parse)
-- `enqueueRefresh(game, downloadFn)` -- adds a job; `processRefreshQueue()` runs them serially
-- Each job: **download PDF + invalidate cache only** -- parse happens lazily on next `/analyze` or `/latestdraw` call
+- All Puppeteer scrapes (scheduled and manual) go through a single global queue -- **one job at a time, never concurrent**
+- Prevents OOM from concurrent Chrome instances
+- `enqueueRefresh(game, fn)` -- adds a job; `processRefreshQueue()` runs them serially
+- Each job calls `appendXxxDeltas()` directly -- no PDF download step
 - **Single 30s retry**: on failure waits 30s then tries once more; if retry fails marks `error` and moves on
 - Status values: `queued` | `running` | `retrying` | `done` | `error`
 - `GET /refresh/status` -- returns current status of all games; excluded from rate limiting
-- `/refresh/*` routes return `{ queued: true, game }` immediately -- never block waiting for download
-- **When adding a new game**: call `enqueueRefresh(game, downloadFn)` in the `/refresh/<game>` route AND in `schedulePostDrawRefreshes()`
-- **Never call `downloadFile()` directly from a refresh route** -- always go through `enqueueRefresh`
+- `/refresh/*` routes return `{ queued: true, game }` immediately -- never block waiting for scrape
+- **When adding a new game**: call `enqueueRefresh(game, () => appendXxxDeltas().catch(() => {}))` in the `/refresh/<game>` route AND in `schedulePostDrawRefreshes()`
+- **Never call `appendXxxDeltas()` directly from a refresh route** -- always go through `enqueueRefresh`
 
-## PDF Parsing -- Memory Rules
-- `extractPDFText(pathOrBuffer)` accepts a **file path string** (preferred) or a Buffer
-- **Always pass the file path directly**: `extractPDFText(PDF_PATH_X)` -- never `extractPDFText(fs.readFileSync(PDF_PATH_X))`
-- Passing a path uses `loadPDF()` internally, avoiding a full Buffer copy of the file in memory before parsing
-- `p.destroy()` is called after every parse to free PDFParser internal state immediately
-- Large PDFs (>1MB) use mtime-based parse cache with serialized `parsePromise` -- see PDF Parse Cache section
-- Node heap: `--max-old-space-size=768` in Dockerfile
-- Fly.io machine: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills (exit_code=137, oom_killed=true). Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
-- **Previous 512MB machine OOM-killed nightly** -- Fantasy 5 PDF parse (~535MB RSS peak) exceeded 512MB limit
-- **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
-- **Never use inline `require('fs')`** inside functions -- always use the top-level `const fs = require('fs')` at the top of the file. Inline requires work but are inconsistent and harder to audit.
+## PDF Parsing -- Historical Note
+PDF parsing via `pdf2json` was used for all games prior to Nov 2026. It was replaced with Puppeteer scraping because:
+- PDF parse peaks at 239-535MB RSS depending on game, blocking the event loop
+- FL Lottery PDFs update with a 1-2 day lag after draws
+- Puppeteer scrapes the live website directly, getting results within minutes of each draw
+- Puppeteer uses only ~60-108MB RSS per scrape
 
-## Fantasy 5 — Puppeteer-Based Refresh (Nov 2026)
+`extractPDFText()`, `parseHistoryPDF()`, `parseLottoXHistoryPDF()` etc. still exist in server.js but are no longer called at runtime on Fly.io. `generate_draw_cache.js` (local only) still uses PDF parsers for initial cache generation.
 
-Fantasy 5 PDF parse was replaced with a Puppeteer scraper because:
-- PDF parse peaks at 535MB RSS, blocks event loop for 2.5 minutes
-- Puppeteer scrape uses only ~108MB RSS, completes in ~20 seconds
-- FL Lottery Vue SPA renders draw results fully with `networkidle0` + `waitForSelector('.draw-results-item')`
+## Puppeteer Scraping Architecture (All Games)
 
-### How it works
-`_appendFantasy5DeltasImpl()` now:
+All games now use Puppeteer to scrape the FL Lottery website directly for draw history. No PDFs are parsed on Fly.io at runtime.
+
+### How each `_appendXxxDeltasImpl()` works
 1. Launches Chrome with `networkidle0` + waits for `.draw-results-item` selector (15s timeout)
-2. Extracts article IDs matching `/([0-9]{4}-[0-9]{2}-[0-9]{2})-fantasy5/g`
-3. For each new date, slices HTML between Midday/Evening labels, extracts numbers via `game-numbers__number` class
-4. Uses `existingKeys` Set (date+drawType) to skip already-cached draws — avoids ts comparison issues with 2-digit vs 4-digit year dates
-5. Appends new draws to `f5DrawsCache` (in-memory) and `fantasy5_draws.json` (disk)
-6. Calls `extractAndCacheJackpot('fantasy5', html)` as a side effect
+2. Extracts article IDs matching `/([0-9]{4}-[0-9]{2}-[0-9]{2})-<gameId>(-item)?/g`
+3. For each new date not in `existingKeys` Set, slices HTML around the article, extracts numbers
+4. Appends new draws to in-memory cache AND JSON file on disk
+5. Calls `extractAndCacheJackpot(game, html)` as a side effect (for jackpot games)
 
-### Schedule (unchanged)
-- Primary: 13:10 ET (after Midday draw) and 23:20 ET (after Evening draw)
-- Retry: 13:25 ET and 23:35 ET
-- All 3 schedule wiring points call `appendFantasy5Deltas()` directly — no PDF download
+### Number extraction patterns per game
+| Game | Main numbers | Bonus ball | Notes |
+|------|-------------|------------|-------|
+| JTP | `game-numbers__number` × 6 | none | |
+| Lotto X | `game-numbers__number` × 6 | none | Slice before `'Double Play'` |
+| Fantasy 5 | `game-numbers__number` × 5 | none | Slice between `Midday`/`Evening` labels |
+| Cash Pop | `game-numbers__number` in `<li>` with session label | none | Session name in preceding `<div class="text-xs...">` |
+| Pick 2-5 | `game-numbers__number` × N | `game-numbers__bonus-text` = Fireball | Slice between `Midday`/`Evening` labels |
+| Powerball | `game-numbers__number` × 5 | `game-numbers__bonus-text` = PB | Slice before `'Double Play'` |
+| Mega Millions | `game-numbers__number` × 5 | `game-numbers__bonus-text` = MB | |
 
-### Key rules
-- **NEVER use `String.replace()` with regex literals in replacement strings** — backslashes get eaten. Always use `String.raw` or character classes like `[0-9]` instead of `\d` when writing regex via scripts
-- **existingKeys Set** uses normalized 4-digit year keys — handles mixed 2/4-digit year dates in cache
-- **`generate_draw_cache.js` still uses PDF parser** — for local cache generation only, not deployed
-- **`ensureDailyRefreshF5`** still downloads the PDF (fire-and-forget) — kept for potential future use but parse is no longer called from it
-- **Test endpoint** `GET /test/f5scrape` — read-only diagnostic, does not modify cache
+### Article ID patterns per game
+| Game | Article ID pattern | URL path |
+|------|-------------------|----------|
+| JTP | `YYYY-MM-DD-jackpottripleplay` | `/games/draw-games/jackpot-triple-play` |
+| Lotto X | `YYYY-MM-DD-lotto-item` | `/games/draw-games/florida-lotto` |
+| Fantasy 5 | `YYYY-MM-DD-fantasy5` | `/games/draw-games/fantasy5` |
+| Cash Pop | `YYYY-MM-DD-cashpop` | `/games/draw-games/cash-pop` |
+| Pick 2 | `YYYY-MM-DD-pick2-item` | `/games/draw-games/pick-2` |
+| Pick 3 | `YYYY-MM-DD-pick3-item` | `/games/draw-games/pick-3` |
+| Pick 4 | `YYYY-MM-DD-pick4-item` | `/games/draw-games/pick-4` |
+| Pick 5 | `YYYY-MM-DD-pick5-item` | `/games/draw-games/pick-5` |
+| Powerball | `YYYY-MM-DD-powerball-item` | `/games/draw-games/powerball` |
+| Mega Millions | `YYYY-MM-DD-megamillions-item` | `/games/draw-games/mega-millions` |
 
-### Memory comparison
-| Method | RSS Peak | Time | Event loop blocked? |
-|--------|----------|------|---------------------|
-| PDF parse | 535MB | 2.5 min | Yes |
-| Puppeteer scrape | 108MB | 20s | No |
+### Cash Pop special case
+- Website shows all completed sessions for a date inline in the article
+- Session name in `<div class="text-xs font-normal...">Morning</div>` immediately before `<span class="game-numbers__number mt-2 text-black">5</span>`
+- Regex: `/class="text-xs[^"]*"[^>]*>([^<]+)<\/div><span class="game-numbers__number[^"]*">([0-9]+)<\/span>/g`
+- Only stores complete days (all 5 sessions) as `numbers: [n1,n2,n3,n4,n5]` — same structure as PDF cache
+- Partial days (today, still in progress) are stored with however many sessions have completed
 
-## JSON Draw Cache (Lotto X and Fantasy 5)
-Lotto X (~1MB PDF) uses a JSON draw cache -- **never parsed on Fly.io**. Fantasy 5 switched to Puppeteer-based refresh (Nov 2026) -- no PDF parse at all on Fly.io. Instead:
+### existingKeys deduplication
+All scrapers use a `Set` of normalized keys to skip already-cached draws:
+- Single-draw games (JTP, LX, CP, PB, MM): key = `YYYY-MM-DD`
+- Multi-draw games (F5, Pick): key = `YYYY-MM-DD|DRAWTYPE` (e.g. `2026-11-24|EVENING`)
+- Always normalize to 4-digit year when building keys from existing cache entries
+
+### Date format — ALL JSON caches now use 4-digit years (`MM/DD/YYYY`)
+- Puppeteer scrapers write `mo + '/' + day + '/' + y` where `y` is 4-digit from ISO date
+- All existing caches normalized to 4-digit years (Nov 2026)
+- All `/draws/*` lookup routes use `stripLeadingZeros(d.date) === stripLeadingZeros(date)` — no `normDateForPDF` needed
+- **NEVER use `normDateForPDF()` in draw lookup routes** — it converts to 2-digit year which no longer matches the cache
+
+### ensureDailyRefresh* — all no-ops
+All `ensureDailyRefreshXxx()` functions are now empty no-ops (`async function ensureDailyRefreshXxx() {}`). Scheduled refreshes via `schedulePostDrawRefreshes()` are the only update mechanism.
+
+### Startup sequence (no PDF downloads)
+1. `server.listen()` — health check passes immediately
+2. All JSON caches loaded into memory: `getLottoXDraws()`, `getFantasy5Draws()`, `getPbDraws()`, `getMmDraws()`, `getJtpDraws()`, `getCpDraws()`, `getPickDraws()`
+3. `_serverReady = true` — gate opens, users can access all routes
+4. No PDF downloads at startup — all data comes from committed JSON caches
+5. `schedulePostDrawRefreshes()` handles all future updates via Puppeteer
+
+### Memory per Puppeteer scrape (measured on Fly.io)
+| Game | RSS peak | Time |
+|------|----------|------|
+| JTP | ~64MB | ~20s |
+| Lotto X | ~69MB | ~20s |
+| Fantasy 5 | ~108MB | ~20s |
+| Cash Pop | ~72MB | ~20s |
+| Pick 2-5 | ~65MB each | ~20s |
+| Powerball | ~59MB | ~20s |
+| Mega Millions | ~63MB | ~20s |
+
+All fit comfortably within 1024MB machine RAM. Chrome is closed immediately after each scrape via `closeBrowser()`.
+
+### CRITICAL — Regex in Puppeteer scrapers
+- All regex literals in scraper functions use `[0-9]` not `\d` — avoids backslash-eating when writing via patch scripts
+- Forward slashes in regex literals must be escaped: `<\/span>` not `</span>`
+- **Never write scraper regex through a JS string template or patch script** — always write as a literal in the source file
+- When patching server.js regex lines, always use a `.js` script file with exact string matching, then verify with `node --check server.js`
+
+### When adding a new game — Puppeteer scraper checklist
+1. Confirm the game page URL and article ID pattern by running a test script locally
+2. Confirm number extraction: how many `game-numbers__number` elements, any bonus ball via `game-numbers__bonus-text`
+3. Check if the article contains multiple draws (like F5/Pick) — if so, slice between draw type labels
+4. Check if secondary data must be stripped (like LX Double Play) — slice before the secondary section label
+5. Add `_appendXxxDeltasImpl()` following the F5/JTP pattern with `existingKeys` Set deduplication
+6. Add `appendXxxDeltas()` wrapper with `_xxxDeltaPromise` in-flight guard
+7. Add to `schedulePostDrawRefreshes()` with correct timing (5+ min after draw)
+8. Commit updated JSON cache with 4-digit year dates
+9. **Do NOT add to startup chain** — JSON cache is loaded at startup, Puppeteer only runs post-draw
+
+
+## JSON Draw Caches (All Games)
+All games use JSON draw caches — **no PDFs are parsed on Fly.io**. Puppeteer scrapers append new draws after each scheduled refresh.
 
 ### Architecture
-- **Local machine** parses the full PDF history once using `generate_draw_cache.js`, producing `lottox_draws.json` and `fantasy5_draws.json` (500 draws each, ~70KB each)
-- **JSON files are committed to the repo** and included in the Docker image -- Fly reads JSON at startup (instant, no PDF parse, no OOM risk)
-- **After each draw**: server downloads PDF, parses only rows newer than `draws[0].ts` (delta), prepends to JSON, saves, caps at 500
-- **History is immutable** -- older draws never change, so the JSON never needs a full re-parse unless you run `generate_draw_cache.js` locally
+- **JSON files are committed to the repo** and included in the Docker image — Fly reads JSON at startup (instant, no parse, no OOM risk)
+- **After each draw**: `_appendXxxDeltasImpl()` scrapes the FL Lottery website via Puppeteer, appends only new draws to the JSON, caps at 500
+- **History is immutable** — older draws never change
+- **All dates stored as 4-digit years** (`MM/DD/YYYY`) — normalized Nov 2026
 
-### Key functions
-- `getLottoXDraws()` -- reads `lottox_draws.json` into memory (cached in `lxDrawsCache`), returns draw array instantly
-- `getFantasy5Draws()` -- reads `fantasy5_draws.json` into memory (cached in `f5DrawsCache`), returns draw array instantly
-- `appendLottoXDeltas()` -- downloads PDF, parses only new rows since last JSON entry, prepends + saves JSON
-- `appendFantasy5Deltas()` -- **Puppeteer-based** (Nov 2026): scrapes FL Lottery website directly, no PDF parse. One Chrome launch gets all recent dates in ~20s at ~108MB RSS. Updates `f5DrawsCache` + `fantasy5_draws.json` in-place.
+### Key functions (same pattern for all games)
+- `getXxxDraws()` — reads `xxx_draws.json` into memory (cached in `xxxDrawsCache`), returns draw array instantly
+- `appendXxxDeltas()` — wrapper with `_xxxDeltaPromise` in-flight guard
+- `_appendXxxDeltasImpl()` — Puppeteer scraper: launches Chrome, extracts new draws, updates cache + JSON
 
 ### Startup sequence
-1. `server.listen()` -- health check passes immediately
-2. `getLottoXDraws()` + `getFantasy5Draws()` + `getPbDraws()` + `getMmDraws()` -- read JSON files into memory (instant, <1ms)
-3. `getJtpDraws()` + `getCpDraws()` -- read JTP and Cash Pop JSON caches
-4. `_serverReady = true` -- gate opens immediately, users can access all routes
-5. `downloadPDFs()` -- downloads all PDFs in background, then runs **only** `appendJtpDeltas()` + `appendCpDeltas()` sequentially
+1. All `getXxxDraws()` functions called — JSON loaded into memory instantly
+2. `_serverReady = true` — no waiting for downloads or parses
+3. No PDF downloads at startup
 
-**CRITICAL — OOM safety for startup delta chain**: ONLY JTP and Cash Pop run `appendXxxDeltas()` at startup. Lotto X, Powerball, and Mega Millions do NOT run their delta functions at startup (large PDF parses). Fantasy 5 uses Puppeteer (not PDF) but also does NOT run at startup -- Chrome at startup OOMs. These games have committed JSON caches and `schedulePostDrawRefreshes()` keeps them current after each draw. The startup chain MUST remain:
-```js
-downloadPDFs()
-  .then(() => appendJtpDeltas()).catch(() => {})
-  .then(() => appendCpDeltas()).catch(() => {});
-```
-**NEVER add `appendLottoXDeltas()`, `appendFantasy5Deltas()`, `appendPbDeltas()`, or `appendMmDeltas()` to this startup chain.** Note: `appendFantasy5Deltas()` uses Puppeteer not PDF, but Chrome at startup still OOMs -- same rule applies. When adding a new game with a JSON cache, do NOT add its delta function here either — rely on `schedulePostDrawRefreshes()` instead.
+### When to regenerate JSON caches locally
+- When adding a new game (initial JSON build via `generate_draw_cache.js`)
+- After a long outage where many draws were missed
+- Never needs to run on Fly — Puppeteer keeps caches current
+- **`generate_draw_cache.js` covers**: JTP, Cash Pop, Lotto X, Fantasy 5, Pick 2-5 (PDF-based, local only)
 
-**Why JTP and CP still run at startup**: their PDFs are small (<200KB) and parse quickly. The mtime guard makes it a no-op if the PDF hasn't changed.
+### When adding a new game with a JSON cache
+1. Run `generate_draw_cache.js` locally to build initial JSON
+2. Add `getXxxDraws()` and `appendXxxDeltas()` / `_appendXxxDeltasImpl()` following the Puppeteer pattern
+3. **Do NOT add to startup chain** — JSON is loaded at startup, Puppeteer only runs post-draw
+4. Commit the JSON file — it will be included in the Docker image
+5. Add to `schedulePostDrawRefreshes()` with correct timing
 
-**mtime guard in appendXxxDeltas()**: every `appendXxxDeltas()` function has TWO guards before calling `extractPDFText()`:
-1. **In-memory mtime check** — `if (mtime === xxxLastPdfMtime)` skips parse if the PDF hasn't changed since the last run in this process lifetime
-2. **JSON-vs-PDF mtime check** — `if (mtime <= jsonMtime && existing.length > 0)` skips parse if the PDF file is older than or equal to the JSON cache file. This is the critical OOM-prevention guard: on server restart `xxxLastPdfMtime` resets to `null`, but if the PDF hasn't been updated since the last delta run the JSON is already current. Without this guard, every restart triggers a full parse of all PDFs simultaneously.
+## PDF Parse Performance -- Historical Note
+All games now use Puppeteer scraping. PDF parsing is no longer used at runtime on Fly.io.
 
-**Both guards must be present in every `appendXxxDeltas()` function.** Pattern:
-```js
-async function appendXxxDeltas() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_X).mtimeMs; } catch(e) { return; }
-  if (mtime === xxxLastPdfMtime) { console.log('X: PDF unchanged, skipping parse.'); return; }
-  const existing = getXxxDraws();
-  const newestTs = existing.length ? existing[0].ts : 0;
-  const jsonMtime = (() => { try { return fs.statSync(JSON_PATH_X).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { xxxLastPdfMtime = mtime; console.log('X: PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await extractPDFText(PDF_PATH_X); } catch(e) { return; }
-  xxxLastPdfMtime = mtime;
-  // ... parse and merge
-}
-```
-**When adding a new game**: copy this exact pattern. Never omit the JSON mtime guard — it prevents OOM on restart.
+Previous parse times (measured locally): jtp ~280ms | cash-pop ~686ms | pick2-5 ~1160-1380ms | lotto ~1-2s | fantasy5 ~6s | powerball/megamillions ~4-8s. All replaced with Puppeteer scrapes (~20s each, ~60-108MB RSS, non-blocking).
 
-**Why deltas also run at startup**: every deploy resets the container with the JSON from the Docker image (which may be hours old). The PDFs are always downloaded fresh at startup, so running `appendXxxDeltas()` immediately after `downloadPDFs()` ensures the JSON is current without any manual intervention. The mtime guard makes this a no-op if the PDF hasn't changed since the last delta run.
+## Post-Draw Refresh Schedule
 
-### When to run generate_draw_cache.js locally
-- When adding a new game (initial JSON build)
-- After a long outage where many draws were missed and the delta would be large
-- Never needs to run on Fly -- JSON is always current via deltas
-- **`generate_draw_cache.js` covers all 8 JSON-cached games**: JTP, Cash Pop, Lotto X, Fantasy 5, Pick 2, Pick 3, Pick 4, Pick 5
-- **CRITICAL: parsers in `generate_draw_cache.js` MUST match the server parsers in `server.js` exactly** -- if they diverge, the initial JSON will have wrong/missing data. When updating a server parser, update `generate_draw_cache.js` too. Always verify output has consecutive dates before committing.
+All games refresh via `schedulePostDrawRefreshes()` using Puppeteer. The complete schedule:
 
-### When adding a new game with PDF > 1 MB
-1. Run `generate_draw_cache.js` locally to build initial JSON (add the game's parser to the script)
-2. Add `getXxxDraws()` and `appendXxxDeltas()` functions following the LX/F5 pattern
-3. **Do NOT add `appendXxxDeltas()` to the startup chain** -- add it only to `schedulePostDrawRefreshes()`. Adding large PDF parses to the startup chain OOMs the 256MB heap (confirmed crash Nov 2026). The startup chain must only contain `appendJtpDeltas()` and `appendCpDeltas()`.
-4. Commit the JSON file -- it will be included in the Docker image
-5. No `getXxxText()` cache function needed -- JSON replaces it entirely
+| Game | Draw Time | Refresh fires (ET) |
+|------|-----------|--------------------|
+| F5 Midday | 1:05 PM | 13:10, 13:25, 00:10 |
+| F5 Evening | 11:15 PM | 23:20, 23:35, 23:50, 00:10 |
+| Pick Midday | 1:05 PM | 13:10, 13:25, 00:10 |
+| Pick Evening | 11:15 PM | 23:20, 23:35, 23:50, 00:10 |
+| Cash Pop Morning | 7:29 AM | 7:34, 7:49 |
+| Cash Pop Matinee | 11:29 AM | 11:34, 11:49 |
+| Cash Pop Afternoon | 2:29 PM | 14:34, 14:49 |
+| Cash Pop Evening | 6:29 PM | 18:34, 18:49 |
+| Cash Pop Late Night | 10:29 PM | 22:34, 22:49 |
+| JTP | Tue/Fri 11:15 PM | 23:20, 23:35, 23:50, 00:10 |
+| Lotto X | Wed/Sat 11:15 PM | 23:20, 23:35, 23:50, 00:10 |
+| Powerball | Mon/Wed/Sat 10:59 PM | 23:35\*, 23:50, 00:10 |
+| Mega Millions | Tue/Fri 11:00 PM | 23:35\*, 23:50, 00:10 |
 
-### PDFs under 1 MB (JTP, Cash Pop)
-- **JTP and Cash Pop now use JSON caches** (`jtp_draws.json`, `cashpop_draws.json`) -- same pattern as LX/F5. `pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io shared CPU, so no PDF parsing happens on Fly for these games.
-- `getJtpDraws()` and `getCpDraws()` read from JSON files (instant, no parse)
-- `appendJtpDeltas()` and `appendCpDeltas()` run after each scheduled refresh to update the JSON with new draws
-- **JTP frequency PDF** (`PDF_PATHS.frequency`) uses `getFreqText()` -- an mtime cache with `_freqParsePromise` serialization, same pattern as `getPickText()`. Called only from `runAnalysis()` (`/analyze`). **Never call `extractPDFText(PDF_PATHS.frequency)` directly** -- concurrent `/analyze` requests caused SIGABRT (confirmed crash Nov 2026).
-- **When adding a new game with any PDF**: use JSON cache pattern regardless of PDF size -- `pdf2json` is not safe for concurrent use on Fly.io
+\* 23:20 also fires but before the draw — harmless, finds nothing new.
 
-- JTP History PDF: `https://files.floridalottery.com/exptkt/jtp.pdf`
-- JTP Frequency PDF: `https://files.floridalottery.com/exptkt/jackpot-triple-play_number-frequency-chart.pdf`
-- Lotto X History PDF: `https://files.floridalottery.com/exptkt/lotto_winning-numbers-history.pdf`
-- Fantasy 5 History PDF: `https://files.floridalottery.com/exptkt/fantasy5_winning-numbers-history.pdf`
-- Cash Pop History PDF: `https://files.floridalottery.com/exptkt/cash-pop_winning-numbers-history.pdf`
-- **All PDF URL and path constants are declared at the top of `server.js`** (lines ~94–107) — never declare them inline inside a game section. When adding a new game, add its `PDF_URL_X` and `PDF_PATH_X` constants to that block.
-- **`downloadPDFs()` downloads ALL game PDFs at startup** — JTP (sequential), then Lotto X + Fantasy 5 + Cash Pop in parallel. This ensures no game is missing on a fresh container after deploy. When adding a new game, add it to the `Promise.all` block in `downloadPDFs()`.
-- **`downloadPDFs()` runs INSIDE the `server.listen()` callback as a non-blocking fire-and-forget** — the server starts listening immediately so Fly.io health checks pass, then downloads all PDFs in the background. Grace period in `fly.toml` is 30s to allow downloads to complete before health checks begin.
-- **Readiness gate**: `_serverReady` flag starts `false`. A middleware blocks all non-`/health` routes with 503 until `_serverReady = true`. The flag is set only after `downloadPDFs()` + `getLottoXText()` + `getFantasy5Text()` all complete. This prevents Fly's proxy from timing out on cold PDF parses -- users get a clean 503 "warming up" instead of a 502 Bad Gateway.
-- **`_serverReady` MUST always be set to `true`** -- the final `.catch()` in the startup chain must also set it, otherwise any failure in the chain leaves the server permanently in warming-up state. Pattern: `.then(() => { _serverReady = true; }).catch(() => { _serverReady = true; })`
-- **Hard 90s timeout**: `setTimeout(() => { if (!_serverReady) { _serverReady = true; } }, 90000)` fires immediately after `server.listen()` as a last-resort safety net. If the entire warming chain hangs (e.g. slow PDF download), the server opens after 90s rather than staying permanently locked.
-- **When adding a new game with PDF > 1 MB**: add its `getXxxText()` to the warming chain before `_serverReady = true` is set.
-- **After downloads complete, large PDF caches are warmed sequentially** — `getLottoXText()` then `getFantasy5Text()` are called in the startup chain so the first user request hits the in-memory cache instead of triggering a cold 6-10s parse. Sequential (not parallel) to avoid OOM. When adding a new game with a PDF > 1 MB, add its `getXxxText()` call to this chain.
+**CRITICAL — 23:20 fires BEFORE PB/MM draws**: Powerball draws at 10:59 PM and Mega Millions at 11:00 PM. The 23:20 slot fires before these draws complete. The first meaningful refresh for PB/MM is 23:35, with retries at 23:50 and 00:10.
 
-## PDF Parse Performance -- Decision Table
-Every PDF used by the server must be benchmarked before deciding whether it needs a cache. Fly.io shared-cpu-1x is ~3-4x slower than a local dev machine. Fly's proxy cuts connections at ~8s.
+**00:10 ET retry**: uses `prevDay` (yesterday's day-of-week) to correctly gate JTP/LX/PB/MM on their draw days, since midnight has crossed into the next calendar day.
 
-### Benchmark rule
-Run this locally to measure parse time before adding a new game:
-```js
-node -e "const {performance}=require('perf_hooks');const PDFParser=require('pdf2json');const t=performance.now();const p=new PDFParser(null,1);const _w=console.warn;console.warn=()=>{};p.on('pdfParser_dataReady',()=>{console.warn=_w;console.log(Math.round(performance.now()-t)+'ms len:'+p.getRawTextContent().length);p.destroy();});p.on('pdfParser_dataError',e=>{console.warn=_w;console.error(e.parserError);});p.loadPDF('path/to/file.pdf');"
-```
-Multiply local time by 4 to estimate Fly.io time. If estimated Fly time > 3s, the PDF needs a cache + startup warming.
-
-### Current PDF parse times (measured locally, Nov 2026)
-| PDF | Local parse time | Est. Fly time | Cache type | Needs startup warm |
-|-----|-----------------|---------------|------------|-------------------|
-| jtp.pdf (~65KB text) | ~280ms | ~1s | JSON delta | No |
-| jackpot-triple-play_number-frequency-chart.pdf (~1KB text) | ~68ms | <1s | `getFreqText()` mtime+promise | No |
-| cash-pop_winning-numbers-history.pdf (~126KB text) | ~686ms | ~2.5s | JSON delta | No |
-| pick2_winning-numbers-history.pdf (~118KB text) | ~1160ms | ~25s on Fly | JSON delta | No |
-| pick3_winning-numbers-history.pdf (~141KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
-| pick4_winning-numbers-history.pdf (~155KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
-| pick5_winning-numbers-history.pdf (~176KB text) | ~1380ms | ~25s on Fly | JSON delta | No |
-| lotto_winning-numbers-history.pdf (~1MB) | ~1-2s | ~4-8s | JSON delta | Yes |
-| fantasy5_winning-numbers-history.pdf (~2.7MB) | ~6s | ~8-10s+ | JSON delta | Yes |
-
-### Decision rules
-- **ALL PDFs regardless of parse time**: wrap in a cache function -- `pdf2json` SIGABRTs under concurrent load on Fly.io. Direct `extractPDFText()` calls in user-facing routes are never safe.
-- Local parse < 750ms (est. Fly < 3s): mtime cache (`getXxxText()`) with `xxxParsePromise` serialization -- no startup warming needed
-- Local parse 750ms-2s (est. Fly 3-8s): mtime cache + startup warming optional
-- Local parse > 2s (est. Fly > 8s): mtime cache + startup warming required
-
-### Startup warming chain (server.js listen callback)
-```
-downloadPDFs()
-  .then(() => getLottoXText())    // ~1-2s, warms lxCache
-  .then(() => getFantasy5Text())  // ~6s, warms f5Cache
-```
-- Always sequential -- never parallel -- to avoid concurrent large PDF parses causing OOM
-- Each step swallows errors with `.catch(() => {})` so a failed warm doesn't crash startup
-- When adding a new game with local parse > 2s: add `getXxxText()` call at the END of this chain
-
-### When adding a new game -- PDF checklist
-1. Benchmark the PDF parse time locally using the node command above
-2. **All games**: use JSON cache + delta pattern (`getXxxDraws()` / `appendXxxDeltas()`) -- `pdf2json` is not safe for concurrent use on Fly.io regardless of PDF size. For small supplementary PDFs (like JTP frequency), use `getXxxText()` mtime cache with `xxxParsePromise` serialization instead of calling `extractPDFText()` directly.
-3. If est. Fly time > 3s: add `getXxxText()` cache function with `xxxParsePromise` serialization and `fs.statSync` try/catch guard
-4. If est. Fly time > 8s (or > 2s local): add `getXxxText()` to the startup warming chain in `server.listen()` callback
-5. Always add `PDF_URL_X` and `PDF_PATH_X` to the top constants block and `downloadPDFs()` Promise.all
-- **`getXxxText()` cache functions wrap `fs.statSync` in try/catch** — if a PDF is somehow missing, throw a clean Error (caught by route try/catch) instead of crashing the process with an unhandled exception. Pattern: `try { mtime = fs.statSync(PDF_PATH_X).mtimeMs; } catch(e) { throw new Error('X PDF not yet downloaded. Try again in a moment.'); }`
-- **Direct `extractPDFText(path)` calls** (JTP, Cash Pop) are safe without a guard — `loadPDF()` emits `pdfParser_dataError` on a missing file, which rejects the promise and is caught by the route-level try/catch. Only `fs.statSync` needs explicit guarding because it throws synchronously before any async boundary.
-- Auto-refreshed once per day on first `/analyze` (or `/analyze/lottox`, `/analyze/fantasy5`) call
-- Fantasy 5 and Cash Pop also auto-refresh via `schedulePostDrawRefreshes()` ~5 min after each draw completes (server-side `setTimeout` chain, no external scheduler needed)
-- **JTP and Lotto X also refresh via `schedulePostDrawRefreshes()` at 11:20 PM ET, gated on draw day** — JTP fires on Tue/Fri (days 2,5), Lotto X fires on Wed/Sat (days 3,6)
-- **Pick 2-5 refresh at 1:10 PM and 11:20 PM ET daily** (same schedule as Fantasy 5 -- draws every day Midday + Evening)
-- `ensureDailyRefresh` / `ensureDailyRefreshLottoX` remain as fallback only (fire on first `/analyze` call if scheduled refresh was missed)
-- When adding any new game, add its post-draw refresh to `schedulePostDrawRefreshes()` — **always 5 minutes after the draw time, every game, no exceptions**
-
-### ensureDailyRefresh* — download only for large PDFs
-`ensureDailyRefreshXxx()` for large-PDF games (LX, F5, PB, MM) **only downloads the PDF** — they never call `appendXxxDeltas()`. The parse is handled exclusively by `schedulePostDrawRefreshes()` which runs in the background queue 5 minutes after each draw.
-
-**Why (historical)**: `appendFantasy5Deltas()` previously used PDF parse which took ~2.5 minutes and blocked the event loop (single-threaded). Calling it inline on a user `/analyze` request makes the server unresponsive for 2.5 minutes — health checks fail, all other requests time out.
-
-**The correct flow**:
-- `schedulePostDrawRefreshes()` fires 5 min after each draw → `enqueueRefresh()` → downloads PDF → `appendXxxDeltas()` → JSON cache updated
-- `/analyze/xxx` → `ensureDailyRefreshXxx()` (download only, fire-and-forget) → `runAnalysisXxx()` reads JSON cache → returns lines instantly
-- Generate Lines is always fast because it reads the JSON cache, never the PDF
-
-**Small PDFs (JTP, CP, Pick)**: these are safe to parse inline — JTP/CP parse in <1s, Pick in ~4s. Their `ensureDailyRefresh*` functions do call `appendXxxDeltas()` and await it.
-
-**When adding a new game**: if PDF parse time on Fly > 5s, `ensureDailyRefreshXxx()` must be download-only. Only add `appendXxxDeltas()` to `schedulePostDrawRefreshes()`.
+**When adding a new game**: add its `enqueueRefresh` call to `schedulePostDrawRefreshes()` at the appropriate time slot. For games drawing before 11 PM, the 23:20 slot is fine. For games drawing at or after 11 PM, use 23:35 as the first slot and add 23:50 + 00:10 retries.
 
 ### appendXxxDeltas() — in-flight promise guard (REQUIRED)
-Every `appendXxxDeltas()` function is wrapped with an in-flight promise guard to prevent concurrent PDF parses. The pattern splits the function into a public wrapper and a private `_impl`:
+Every `appendXxxDeltas()` function is wrapped with an in-flight promise guard to prevent concurrent Puppeteer scrapes. The pattern splits the function into a public wrapper and a private `_impl`:
 
 ```js
 let _xxxDeltaPromise = null;
@@ -928,10 +892,10 @@ async function appendXxxDeltas() {
   return _xxxDeltaPromise;
 }
 async function _appendXxxDeltasImpl() {
-  // ... actual parse logic
+  // Puppeteer scrape logic
 }
 ```
-- Prevents the scheduled refresh and a concurrent user `/analyze` call from both calling `extractPDFText()` on the same large PDF simultaneously
+- Prevents the scheduled refresh and a concurrent manual `/refresh` call from both launching Chrome simultaneously
 - For Pick: uses `_pickDeltaPromise[game]` object keyed by game name
 - **When adding a new game**: always use this wrapper pattern for `appendXxxDeltas()`
 
@@ -1107,16 +1071,8 @@ async function scrapeFlDraws(game, dateStr, drawType) {
 - **Draw-time guard before every scraper call**: before calling `scrapeFlDraws`, verify the draw has actually occurred in ET. If the requested date is today and the draw time hasn't passed yet, return 404 immediately — no Chrome launch. Draw cutoffs: JTP/LX 11:15 PM ET; F5 Midday 1:05 PM / Evening 11:15 PM ET; CP per-session (Morning 7:29, Matinee 11:29, Afternoon 2:29, Evening 6:29, Late Night 10:29 ET). Future dates always return 404 immediately.
 - **CRITICAL: Never use `new Date(year, month, day)` for date comparison in draw guards** — this creates midnight in the server's local timezone (UTC on Fly.io), not ET. A date that is "today" in ET may be "yesterday" in UTC. Always compare date components directly using the ET `nowET` object: extract month/day/year from `nowET` as strings and compare against the request date parts.
 
-**PDF parse serialization (`pickParsePromise`) and JSON caches**
-`pdf2json` crashes the Node process (exit_code=134/SIGABRT) under concurrent load on Fly.io. The solution is JSON caches -- no PDF parsing on Fly at all:
-- JTP: `getJtpDraws()` reads `jtp_draws.json`; `appendJtpDeltas()` updates it after each draw
-- Cash Pop: `getCpDraws()` reads `cashpop_draws.json`; `appendCpDeltas()` updates it after each draw
-- LX: `getLottoXDraws()` reads `lottox_draws.json`; `appendLottoXDeltas()` updates it
-- F5: `getFantasy5Draws()` reads `fantasy5_draws.json`; `appendFantasy5Deltas()` updates it
-- Pick 2-5: `getPickText(game)` with `pickParsePromise[game]` serialization (PDFs are small enough, but serialized to prevent concurrent crashes)
-- **All 4 Pick PDFs are pre-warmed at startup** immediately after `_serverReady = true`, running sequentially and independently of the delta chain. This ensures caches are warm within ~16s of startup. Without this, switching Pick games triggers cold parses that stack up and timeout. Pattern: `['pick2','pick3','pick4','pick5'].reduce((p,g) => p.then(() => getPickText(g).catch(()=>{})), Promise.resolve());` — runs immediately after `_serverReady = true`, NOT chained into `downloadPDFs()` (which would delay it by the full delta chain duration).
-- **JTP frequency PDF** (`PDF_PATHS.frequency`) uses `getFreqText()` mtime cache with `_freqParsePromise` serialization -- concurrent `/analyze` calls caused SIGABRT (confirmed crash Nov 2026). Pattern: same as `getPickText()`.
-- **Rule: NEVER call `extractPDFText()` directly from any user-facing route** -- always wrap in a cache function (`getFreqText`, `getPickText`, or JSON delta pattern). `pdf2json` is not safe for concurrent use on Fly.io shared CPU.
+**Puppeteer scrape serialization**
+All `appendXxxDeltas()` calls go through the `enqueueRefresh` queue — one at a time, never concurrent. The `_xxxDeltaPromise` in-flight guard prevents duplicate scrapes if a manual `/refresh` fires while a scheduled scrape is already running. `_scrapeGlobalLock` serializes `forceRefreshJackpot` calls.
 
 **Rate limiting** (global cap 120 req/min, per-route limits) bounds the maximum concurrent load. The serialized refresh queue ensures PDF downloads never run concurrently.
 
@@ -1289,7 +1245,16 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-25`
+Latest stable: `backups/stable-2026-11-25f`
+
+What's in the latest backup (stable-2026-11-25f):
+- `server.js` -- All games migrated to Puppeteer scraping (JTP, LX, CP, Pick 2-5, PB, MM). All JSON caches normalized to 4-digit years. All `/draws/*` lookup routes use `stripLeadingZeros()` directly (no `normDateForPDF`). All `ensureDailyRefreshXxx()` functions are no-ops. Startup no longer downloads any PDFs. `schedulePostDrawRefreshes()` has 23:50 + 00:10 late retries for PB/MM/JTP/LX/F5/Pick. JTP `runAnalysis` computes frequency from draw history (no frequency PDF). `downloadPDFs()` and `downloadFile()` still exist but are never called.
+- `index.html` -- unchanged from stable-2026-11-25e
+- `Dockerfile` -- `--max-old-space-size=768`
+- `fly.toml` -- `memory = "1024mb"`
+- All JSON caches -- 4-digit year dates: `powerball_draws.json`, `megamillions_draws.json`, `jtp_draws.json`, `lottox_draws.json`, `fantasy5_draws.json`
+
+Previous stable: `backups/stable-2026-11-25e`
 
 What's in the latest backup:
 - `server.js` -- (1) 2-digit year parser fix: all parsers now use `yy > 50 ? yy += 1900 : yy += 2000` instead of flat `yy += 2000`. Fantasy 5 and Lotto X PDFs contain 1990s draws (e.g. `12/31/99` = 1999) that were being parsed as 2099, filling the 500-draw cap with phantom future dates and pushing all real draws out. (2) Fantasy 5 `_appendFantasy5DeltasImpl` redundant `> 2000-01-01` filter removed (parser now handles it). (3) PM2 startup fix: `start_jackpot.ps1` no longer calls `pm2 kill` (which caused EPERM on dead daemon); instead directly wipes socket files and kills node processes.
@@ -1342,7 +1307,7 @@ What was in stable-2026-11-23:
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
 - Memory: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills. Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
-- Node RSS at idle: ~117MB; peak with Lotto X PDF parse ~239MB; peak with Chrome (Puppeteer) ~267MB; peak with Fantasy 5 Puppeteer scrape ~108MB. All fit within 1024MB.
+- Node RSS at idle: ~117MB; peak with any single Puppeteer scrape ~60-108MB on top of idle; all games fit within 1024MB with comfortable headroom.
 - Node heap: `--max-old-space-size=768` in Dockerfile CMD -- Lotto X PDF parse peaks at ~239MB RSS; Fantasy 5 now uses Puppeteer (~108MB). 768MB heap gives comfortable headroom within 1024MB machine RAM.
 - Cost: ~$6.70/mo (shared-cpu-1x + 1024MB RAM in iad region)
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
@@ -1370,14 +1335,11 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 
 ## Draw Date Lookup (/draws/* routes)
 
-### Lookup strategy — 3 steps in this order
-1. **PDF first** — checks the already-parsed daily PDF using `normDateForPDF(date)`. Instant, no Chrome. This handles the vast majority of lookups.
-2. **Puppeteer scraper** — only runs if the date is NOT in the PDF (gap period right after a draw before PDF updates). Fetches the FL Lottery game page with headless Chrome, finds the article by ISO date ID, extracts numbers. Chrome is closed immediately after via `closeBrowser()`.
-3. **Official site link** — if neither finds it, return `{ error, resultsUrl }`. Frontend renders as a clickable "View official results" link.
+### Lookup strategy — 2 steps in this order
+1. **JSON cache first** — checks the in-memory draw cache using `stripLeadingZeros(date)`. Instant, no Chrome. Handles the vast majority of lookups.
+2. **Official site link** — if not found in cache, return `{ error, resultsUrl }`. Frontend renders as a clickable "View official results" link. The Puppeteer background refresh (`schedulePostDrawRefreshes`) will add the draw to the cache within minutes of the draw completing.
 
-**CRITICAL order**: PDF must be checked FIRST. Never call puppeteer for dates that are already in the PDF — it wastes memory and causes OOM crashes on 512MB.
-
-**Chrome/Puppeteer is DISABLED in all `/draws/*` routes** — `scrapeFlDraws` is NOT called from any draw lookup route. Exception: `appendFantasy5Deltas()` uses Puppeteer for scheduled background refresh (not user-facing routes).. Chrome crashes the server (exit_code=134/SIGABRT) on Fly.io's shared CPU under any concurrent load. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON/PDF. The frontend renders this as a "View official results" link. `scrapeFlDraws` is only called from `getAvailableDates()` (used by `schedulePostDrawRefreshes`, not page-load routes) and `scrapeJackpot` (cache-only, never launches Chrome directly).
+**Chrome/Puppeteer in `/draws/*` routes**: `scrapeFlDraws` is NOT called from any `/draws/*` route. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON cache. The frontend renders this as a "View official results" link. Puppeteer is only used by `_appendXxxDeltasImpl()` functions (scheduled background refresh) and `getAvailableDates()` / `forceRefreshJackpot()` (also background only).
 
 ### Why puppeteer is required
 - The FL Lottery website is **JavaScript-rendered** — a plain `https.get()` returns an empty shell with no draw data
@@ -1473,14 +1435,11 @@ res.json({ dates: dates.slice(0, 5) });
 - Fantasy 5 and Cash Pop draw every day — no day filter needed
 
 ### Date format rules — CRITICAL
-- PDFs store dates **without zero-padding** — `11/7/26` not `11/07/26`. Always use `stripLeadingZeros(d.date)` when comparing PDF dates to avoid mismatches.
-- `normDateForPDF(date)` converts `MM/DD/YYYY` to `MM/DD/YY` (2-digit year, no zero-padding)
-- `stripLeadingZeros(date)` removes leading zeros from month/day: `11/07/26` → `11/7/26`
-- All draw route PDF matches use: `stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date`
-- `expandYear(date)` normalizes 2-digit years to 4-digit: `11/7/26` → `11/7/2026`; 4-digit years pass through unchanged
-- Cash Pop PDF uses 4-digit years (`MM/DD/YYYY`); JTP/LX/F5 use 2-digit years (`MM/DD/YY`)
-- **Pick 2-5 PDFs also use 4-digit years** (`MM/DD/YYYY`) -- same as Cash Pop, different from JTP/LX/F5
-- `/draws/pick` uses `stripLeadingZeros()` for date comparison (same as all other draw routes)
+- **All JSON caches now use 4-digit years** (`MM/DD/YYYY`) — normalized Nov 2026 when all games migrated to Puppeteer
+- All draw route JSON matches use: `stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date`
+- **NEVER use `normDateForPDF(date)` in draw lookup routes** — it converts to 2-digit year which no longer matches the cache
+- `stripLeadingZeros(date)` removes leading zeros from month/day: `11/07/2026` → `11/7/2026`
+- `expandYear(date)` still exists but is only needed for legacy data; all new data is already 4-digit
 - `<input type="date">` returns `YYYY-MM-DD` — frontend converts to `MM/DD/YYYY` using `parts[0]` (NOT `parts[0].slice(2)`)
 - Scraper converts `MM/DD/YYYY` to `YYYY-MM-DD` for article ID matching
 - **Never use `.slice(2)` on the year** — always send 4-digit year to the server
@@ -1634,24 +1593,23 @@ res.json({ dates: dates.slice(0, 5) });
 ## When Adding a New Game — Complete Checklist
 
 ### Server (server.js)
-1. Add `PDF_URL_X` and `PDF_PATH_X` constants to the **top of the file** in the PDF constants block (lines ~94-107) -- never declare them inline inside the game section
-2. Add the new game download to the `Promise.all` block in `downloadPDFs()` so it downloads on every server startup -- include cache bust (`xCache = null`) if the game has a parse cache
-   - Pick games use a shared `pickCache[game] = null` pattern -- add to the spread in `downloadPDFs()`
-3. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
-4. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
-5. Add game URL to `FL_RESULTS_URLS`
-4. Add `/draws/<game>/available` endpoint — **PDF-based** using `expandYear()`, filtered by draw days, **with stale-check** (see "Stale-check — REQUIRED" section above)
-5. Add `/draws/<game>` route: **PDF first** using `stripLeadingZeros()` comparison, puppeteer fallback, `delete _availCache['<game>']` + official link on 404
-6. Add draw day validation: `if (!isValidDrawDay(date, [days])) return 404` before PDF/scraper
-7. Add `/latestdraw/<game>` endpoint: **PDF only**, filter sentinel dates (`ts > 2019-01-01`), return `{ date, numbers }`
-8. Add `/nextdraw/<game>` endpoint (pure date math, no scraping)
+1. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `scrapeFlDraws`
+2. Add game URL to `GAME_URLS` and game ID to `GAME_IDS` in `getAvailableDates`
+3. Add game URL to `FL_RESULTS_URLS`
+4. Add `/draws/<game>/available` endpoint — **JSON-based** using `expandYear()`, filtered by draw days, **with stale-check**
+5. Add `/draws/<game>` route: **JSON cache first** using `stripLeadingZeros()` comparison, official link on 404. No `normDateForPDF` — all caches use 4-digit years.
+6. Add draw day validation: `if (!isValidDrawDay(date, [days])) return 404` before JSON lookup
+7. Add `/latestdraw/<game>` endpoint: **JSON cache only**, return `{ date, numbers }`
+8. Add `/nextdraw/<game>` endpoint (pure date math)
 9. Add `/analyze/<game>`, `/refresh/<game>`, `/check/<game>`, `/chat/<game>` endpoints
-10. Add game to `schedulePostDrawRefreshes()` — **all games must have a scheduled refresh 5 min after every draw**, regardless of draw frequency. For games that don't draw every day, gate the download on draw day using `getDay()` check inside the callback.
-11. For multi-draw games: handle draw type in `scrapeFlDraws` (slice between labels, use chunk size 4000)
-12. For games with secondary draw data (like Lotto X Double Play): use a **negative lookahead** in the PDF parse regex to skip secondary rows (e.g. `LOTTO(?!\s+DP)`); also strip the secondary section from the scraper chunk before extracting numbers
-13. For games with non-standard page structure (like Cash Pop): add game-specific block BEFORE `if (!nums.length) return null`; skip article ID lookup with `if (idx === -1 && game !== '<game>') return null`
-14. For PDFs > 1 MB: add serialized `getXxxText()` cache function with `xxxParsePromise` variable
-15. If the game has a jackpot: add it to `JACKPOT_GAME_URLS` in server.js; add `forceRefreshJackpot` calls to `schedulePostDrawRefreshes()` for the game's draw schedule (serialized through `_scrapeGlobalLock`); add the game's draw schedule to `getLastDrawTime` so `isDataStaleForGame` works correctly
+10. Add `getXxxDraws()` reading from `xxx_draws.json` (committed JSON cache)
+11. Add `appendXxxDeltas()` wrapper + `_appendXxxDeltasImpl()` Puppeteer scraper following the JTP/F5 pattern
+12. Add to `schedulePostDrawRefreshes()` — **all games must have a scheduled refresh after every draw**. For games drawing at/after 11 PM, add 23:50 + 00:10 retries.
+13. For multi-draw games (like F5/Pick): handle draw type by slicing between draw type labels in the HTML chunk
+14. For games with secondary draw data (like LX Double Play): slice chunk before the secondary section label
+15. If the game has a jackpot: add to `JACKPOT_GAME_URLS`; add `forceRefreshJackpot` calls to `schedulePostDrawRefreshes()` serialized through `_scrapeGlobalLock`; add draw schedule to `getLastDrawTime`
+16. Run `generate_draw_cache.js` locally to build initial JSON; commit the JSON file
+17. **Do NOT add to startup chain** — JSON is loaded at startup, Puppeteer only runs post-draw
 
 ### Frontend (public/index.html)
 1. Add `var xLatestDate = null;` and `var xLastWin = null;` with other game state vars
