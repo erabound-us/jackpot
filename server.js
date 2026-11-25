@@ -444,10 +444,9 @@ function generateLines(freq, draws, count = 6, seenLines = new Set()) {
 
 async function runAnalysis(count = 6, sid = null) {
   const draws = getJtpDraws();
-  const freqText = await getFreqText();
-  const freq  = parseFrequencyPDF(freqText);
-  if (draws.length < 10) throw new Error(`Only ${draws.length} draws parsed from history PDF.`);
-  if (Object.keys(freq).length < 20) throw new Error(`Only ${Object.keys(freq).length} numbers parsed from frequency PDF.`);
+  if (draws.length < 10) throw new Error(`Only ${draws.length} draws in JTP cache.`);
+  const freq = {};
+  draws.forEach(d => d.numbers.forEach(n => { freq[n] = (freq[n] || 0) + 1; }));
 
   const sess = sid ? getSession(sid) : { lines: new Set() };
   const lines = generateLines(freq, draws, count, sess.lines);
@@ -464,7 +463,7 @@ async function runAnalysis(count = 6, sid = null) {
     lines:         lines.map((l, i) => ({ line: i + 1, numbers: l.nums, score: Math.round(l.score * 10) / 10 })),
     topNumbers:    freqStats.slice(0, 10),
     bottomNumbers: freqStats.slice(-10).reverse(),
-    lastUpdated:   fs.statSync(PDF_PATHS.history).mtime.toLocaleString()
+    lastUpdated:   draws[0] ? draws[0].date : 'unknown'
   };
 }
 
@@ -489,21 +488,7 @@ function todayET() {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 }
 
-async function ensureDailyRefresh() {
-  const today = todayET();
-  if (lastAutoRefreshDate === today) return;
-  if (autoRefreshPromise) return autoRefreshPromise;
-  autoRefreshPromise = downloadPDFs().then(() => {
-    lastAutoRefreshDate = today;
-    autoRefreshPromise = null;
-    console.log('Auto-refreshed PDFs for ' + today);
-    return appendJtpDeltas();
-  }).catch(err => {
-    autoRefreshPromise = null;
-    console.warn('Auto-refresh failed: ' + err.message + ' (using cached PDFs)');
-  });
-  return autoRefreshPromise;
-}
+async function ensureDailyRefresh() {}
 
 app.get('/analyze', async (req, res) => {
   try {
@@ -645,11 +630,7 @@ app.get('/test/f5scrape', async (req, res) => {
 
 app.post('/refresh', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
-  enqueueRefresh('jtp', () => downloadPDFs().then(dl => {
-    const failed = Object.entries(dl).filter(([, v]) => v !== 'ok');
-    if (failed.length) throw new Error('Download failed: ' + failed.map(([k,v]) => k+': '+v).join(', '));
-    lastAutoRefreshDate = null;
-  }));
+  enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {}));
   clearSession(sid);
   res.json({ queued: true, game: 'jtp' });
 });
@@ -1228,23 +1209,64 @@ async function appendLottoXDeltas() {
   return _lxDeltaPromise;
 }
 async function _appendLottoXDeltasImpl() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_LX).mtimeMs; } catch(e) { return; }
-  if (mtime === lxLastPdfMtime) { console.log('Lotto X: PDF unchanged, skipping parse.'); return; }
+  console.log('Lotto X: starting Puppeteer scrape...');
+  const LX_URL = 'https://floridalottery.com/games/draw-games/florida-lotto';
+  let html = '';
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(LX_URL, { waitUntil: 'networkidle0', timeout: 30000 });
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); } catch(_) {}
+      html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot('lottox', html);
+      break;
+    } catch(e) {
+      console.warn('Lotto X Puppeteer attempt ' + (_try+1) + ' failed:', e.message);
+      _browser = null;
+      if (_try === 1) { console.log('Lotto X: Puppeteer failed after 2 attempts, skipping.'); return; }
+    }
+  }
+  if (!html) return;
+  const dateRe = /([0-9]{4}-[0-9]{2}-[0-9]{2})-lotto-item/g;
+  const isoDates = []; let dm;
+  while ((dm = dateRe.exec(html)) !== null) { if (!isoDates.includes(dm[1])) isoDates.push(dm[1]); }
+  if (!isoDates.length) { console.log('Lotto X: no dates found in scraped HTML.'); return; }
   const existing = getLottoXDraws();
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/'); let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
-  const jsonMtime = (() => { try { return fs.statSync(JSON_PATH_LX).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { lxLastPdfMtime = mtime; console.log('Lotto X: PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await extractPDFText(PDF_PATH_LX); } catch(e) { return; }
-  lxLastPdfMtime = mtime;
-  const all = parseLottoXHistoryPDF(text);
-  const newDraws = all.filter(d => d.ts > newestTs);
-  if (!newDraws.length) { console.log('Lotto X: no new draws in PDF.'); return; }
+  const newDraws = [];
+  for (const isoDate of isoDates) {
+    const [y, mo, day] = isoDate.split('-');
+    const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
+    if (ts < newestTs - 86400000) continue;
+    if (existingKeys.has(isoDate)) continue;
+    const articleIdx = html.indexOf(isoDate + '-lotto-item');
+    if (articleIdx === -1) continue;
+    const chunk = html.slice(articleIdx, articleIdx + 2000);
+    // Only take numbers from the main lotto block (before Double Play section)
+    const dpIdx = chunk.indexOf('Double Play');
+    const mainChunk = dpIdx !== -1 ? chunk.slice(0, dpIdx) : chunk;
+    const numRe = /class="game-numbers__number"><span>([0-9]+)<\/span>/g;
+    const nums = []; let nm;
+    while ((nm = numRe.exec(mainChunk)) !== null) nums.push(parseInt(nm[1]));
+    const numbers = nums.slice(0, 6).filter(n => n >= 1 && n <= 53);
+    if (numbers.length === 6) {
+      const mmddyyyy = mo + '/' + day + '/' + y;
+      newDraws.push({ date: mmddyyyy, numbers, ts });
+    }
+  }
+  if (!newDraws.length) { console.log('Lotto X: no new draws found via Puppeteer.'); return; }
+  newDraws.sort((a, b) => b.ts - a.ts);
   const merged = newDraws.concat(existing).slice(0, 500);
   lxDrawsCache = merged;
   fs.writeFileSync(JSON_PATH_LX, JSON.stringify(merged, null, 2));
-  console.log('Lotto X: appended ' + newDraws.length + ' new draw(s). Total: ' + merged.length);
+  console.log('Lotto X: appended ' + newDraws.length + ' new draw(s) via Puppeteer. Total: ' + merged.length);
 }
 
 async function runAnalysisLottoX(count = 6, sid = null) {
@@ -1380,20 +1402,7 @@ app.get('/nextdraw/lottox', (req, res) => res.json(getNextDrawLottoX()));
 let lastAutoRefreshLottoX = null;
 let autoRefreshLottoXPromise = null;
 
-async function ensureDailyRefreshLottoX() {
-  const today = todayET();
-  if (lastAutoRefreshLottoX === today) return;
-  if (autoRefreshLottoXPromise) return;
-  autoRefreshLottoXPromise = downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => {
-    lastAutoRefreshLottoX = today;
-    autoRefreshLottoXPromise = null;
-    console.log('Auto-refreshed Lotto X PDF for ' + today);
-  }).catch(err => {
-    autoRefreshLottoXPromise = null;
-    console.warn('Lotto X auto-refresh failed: ' + err.message);
-  });
-  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
-}
+async function ensureDailyRefreshLottoX() {}
 
 app.get('/analyze/lottox', async (req, res) => {
   try {
@@ -1406,9 +1415,7 @@ app.get('/analyze/lottox', async (req, res) => {
 
 app.post('/refresh/lottox', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
-  enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => {
-    lastAutoRefreshLottoX = null; return appendLottoXDeltas();
-  }));
+  enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {}));
   clearSession(sid);
   res.json({ queued: true, game: 'lottox' });
 });
@@ -1515,10 +1522,8 @@ async function start() {
     try { getJtpDraws(); getCpDraws(); console.log('JTP+CP JSON caches loaded.'); } catch(e) { console.log('Warning: ' + e.message); }
     _serverReady = true;
     console.log('Server ready.');
-    // Pick games now use JSON caches (getPickDraws) -- no PDF warming needed
-    downloadPDFs()
-      .then(() => appendJtpDeltas()).catch(() => {})
-      .then(() => appendCpDeltas()).catch(() => {});
+    // Cash Pop still uses PDF -- download on startup for delta detection
+    downloadFile(PDF_URL_CP, PDF_PATH_CP).then(() => appendCpDeltas()).catch(() => {});
     // Jackpot cache warms naturally when users look up draw dates (scrapeFlDraws side effect)
   });
 }
@@ -2061,20 +2066,7 @@ function chatReplyFantasy5(question, context) {
 let lastAutoRefreshF5 = null;
 let autoRefreshF5Promise = null;
 
-async function ensureDailyRefreshF5() {
-  const today = todayET();
-  if (lastAutoRefreshF5 === today) return;
-  if (autoRefreshF5Promise) return;
-  autoRefreshF5Promise = downloadFile(PDF_URL_F5, PDF_PATH_F5).then(() => {
-    lastAutoRefreshF5 = today;
-    autoRefreshF5Promise = null;
-    console.log('Auto-refreshed Fantasy 5 PDF for ' + today);
-  }).catch(err => {
-    autoRefreshF5Promise = null;
-    console.warn('Fantasy 5 auto-refresh failed: ' + err.message);
-  });
-  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
-}
+async function ensureDailyRefreshF5() {}
 
 app.get('/nextdraw/fantasy5', (req, res) => res.json(getNextDrawFantasy5()));
 
@@ -2767,23 +2759,61 @@ async function appendJtpDeltas() {
   return _jtpDeltaPromise;
 }
 async function _appendJtpDeltasImpl() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATHS.history).mtimeMs; } catch(e) { return; }
-  if (mtime === jtpLastPdfMtime) { console.log('JTP: PDF unchanged, skipping delta.'); return; }
+  console.log('JTP: starting Puppeteer scrape...');
+  const JTP_URL = 'https://floridalottery.com/games/draw-games/jackpot-triple-play';
+  let html = '';
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(JTP_URL, { waitUntil: 'networkidle0', timeout: 30000 });
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); } catch(_) {}
+      html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot('jtp', html);
+      break;
+    } catch(e) {
+      console.warn('JTP Puppeteer attempt ' + (_try+1) + ' failed:', e.message);
+      _browser = null;
+      if (_try === 1) { console.log('JTP: Puppeteer failed after 2 attempts, skipping.'); return; }
+    }
+  }
+  if (!html) return;
+  const dateRe = /([0-9]{4}-[0-9]{2}-[0-9]{2})-jackpottripleplay/g;
+  const isoDates = []; let dm;
+  while ((dm = dateRe.exec(html)) !== null) { if (!isoDates.includes(dm[1])) isoDates.push(dm[1]); }
+  if (!isoDates.length) { console.log('JTP: no dates found in scraped HTML.'); return; }
   const existing = getJtpDraws();
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/'); let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
-  const jsonMtime = (() => { try { return fs.statSync(JTP_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { jtpLastPdfMtime = mtime; console.log('JTP: PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await extractPDFText(PDF_PATHS.history); } catch(e) { return; }
-  jtpLastPdfMtime = mtime;
-  const all = parseHistoryPDF(text);
-  const newDraws = all.filter(d => d.ts > newestTs);
-  if (!newDraws.length) { console.log('JTP: no new draws.'); return; }
-  const merged = [...newDraws, ...existing].slice(0, 500);
+  const newDraws = [];
+  for (const isoDate of isoDates) {
+    const [y, mo, day] = isoDate.split('-');
+    const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
+    if (ts < newestTs - 86400000) continue;
+    if (existingKeys.has(isoDate)) continue;
+    const articleIdx = html.indexOf(isoDate + '-jackpottripleplay');
+    if (articleIdx === -1) continue;
+    const chunk = html.slice(articleIdx, articleIdx + 2000);
+    const numRe = /class="game-numbers__number"><span>([0-9]+)<\/span>/g;
+    const nums = []; let nm;
+    while ((nm = numRe.exec(chunk)) !== null) nums.push(parseInt(nm[1]));
+    const numbers = nums.slice(0, 6).filter(n => n >= 1 && n <= 46);
+    if (numbers.length === 6) {
+      const mmddyyyy = mo + '/' + day + '/' + y;
+      newDraws.push({ date: mmddyyyy, numbers, ts });
+    }
+  }
+  if (!newDraws.length) { console.log('JTP: no new draws found via Puppeteer.'); return; }
+  newDraws.sort((a, b) => b.ts - a.ts);
+  const merged = newDraws.concat(existing).slice(0, 500);
   jtpDrawsCache = merged;
   fs.writeFileSync(JTP_DRAWS_PATH, JSON.stringify(merged, null, 2));
-  console.log('JTP: appended ' + newDraws.length + ' new draws.');
+  console.log('JTP: appended ' + newDraws.length + ' new draw(s) via Puppeteer. Total: ' + merged.length);
 }
 
 let cpLastPdfMtime = null;
@@ -3057,24 +3087,7 @@ function chatReplyPick(question, context) {
 const lastAutoRefreshPick = {};
 const autoRefreshPickPromise = {};
 
-async function ensureDailyRefreshPick(game) {
-  const today = todayET();
-  if (lastAutoRefreshPick[game] === today) return;
-  if (autoRefreshPickPromise[game]) return autoRefreshPickPromise[game];
-  const url = PDF_URLS_PICK[game], path = PDF_PATHS_PICK[game];
-  autoRefreshPickPromise[game] = downloadFile(url, path).then(() => {
-    lastAutoRefreshPick[game] = today;
-    autoRefreshPickPromise[game] = null;
-    pickCache[game] = null;
-    pickDrawsCache[game] = null;
-    console.log('Auto-refreshed ' + game + ' PDF for ' + today);
-    return appendPickDeltas(game);
-  }).catch(err => {
-    autoRefreshPickPromise[game] = null;
-    console.warn(game + ' auto-refresh failed: ' + err.message + ' (using cached PDF)');
-  });
-  return autoRefreshPickPromise[game];
-}
+async function ensureDailyRefreshPick(game) {}
 
 app.get('/nextdraw/pick', (req, res) => res.json(getNextDrawPick()));
 
@@ -3169,8 +3182,8 @@ app.post('/check/pick', (req, res) => {
 
 app.post('/refresh/pick', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
-  Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-    enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; }));
+  Object.entries(PDF_URLS_PICK).forEach(([g]) => {
+    enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
   });
   clearSession(sid);
   res.json({ queued: true, games: Object.keys(PDF_URLS_PICK) });
@@ -3192,26 +3205,79 @@ async function appendPickDeltas(game) {
   return _pickDeltaPromise[game];
 }
 async function _appendPickDeltasImpl(game) {
-  const pdfPath = PDF_PATHS_PICK[game];
-  let mtime;
-  try { mtime = fs.statSync(pdfPath).mtimeMs; } catch(e) { return; }
-  if (mtime === pickLastPdfMtime[game]) { console.log(game + ': PDF unchanged, skipping delta.'); return; }
+  const PICK_URLS = {
+    pick2: 'https://floridalottery.com/games/draw-games/pick-2',
+    pick3: 'https://floridalottery.com/games/draw-games/pick-3',
+    pick4: 'https://floridalottery.com/games/draw-games/pick-4',
+    pick5: 'https://floridalottery.com/games/draw-games/pick-5',
+  };
+  const url = PICK_URLS[game];
+  if (!url) return;
+  console.log(game + ': starting Puppeteer scrape...');
+  let html = '';
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); } catch(_) {}
+      html = await page.content();
+      await page.close();
+      await closeBrowser();
+      break;
+    } catch(e) {
+      console.warn(game + ' Puppeteer attempt ' + (_try+1) + ' failed:', e.message);
+      _browser = null;
+      if (_try === 1) { console.log(game + ': Puppeteer failed after 2 attempts, skipping.'); return; }
+    }
+  }
+  if (!html) return;
+  const dateRe = new RegExp('([0-9]{4}-[0-9]{2}-[0-9]{2})-' + game + '-item', 'g');
+  const isoDates = []; let dm;
+  while ((dm = dateRe.exec(html)) !== null) { if (!isoDates.includes(dm[1])) isoDates.push(dm[1]); }
+  if (!isoDates.length) { console.log(game + ': no dates found in scraped HTML.'); return; }
   const existing = getPickDraws(game);
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/'); let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0') + '|' + d.drawType;
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
-  // Skip full parse if PDF is older than our newest cached draw -- nothing new to find
-  const jsonMtime = (() => { try { return fs.statSync(PICK_DRAWS_PATHS[game]).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { pickLastPdfMtime[game] = mtime; console.log(game + ': PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await getPickText(game); } catch(e) { return; }
-  pickLastPdfMtime[game] = mtime;
   const numDigits = parseInt(game.replace('pick', ''));
-  const all = parsePickHistoryPDF(text, numDigits);
-  const newDraws = all.filter(d => d.ts > newestTs);
-  if (!newDraws.length) { console.log(game + ': no new draws.'); return; }
-  const merged = [...newDraws, ...existing].slice(0, 500);
+  const newDraws = [];
+  for (const isoDate of isoDates) {
+    const [y, mo, day] = isoDate.split('-');
+    const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
+    if (ts < newestTs - 86400000) continue;
+    const articleIdx = html.indexOf(isoDate + '-' + game + '-item');
+    if (articleIdx === -1) continue;
+    const chunk = html.slice(articleIdx, articleIdx + 4000);
+    const mmddyyyy = mo + '/' + day + '/' + y;
+    for (const drawType of ['MIDDAY', 'EVENING']) {
+      const drawKey = isoDate + '|' + drawType;
+      if (existingKeys.has(drawKey)) continue;
+      const label = drawType === 'MIDDAY' ? 'Midday' : 'Evening';
+      const otherLabel = drawType === 'MIDDAY' ? 'Evening' : 'Midday';
+      const dtIdx = chunk.indexOf(label);
+      if (dtIdx === -1) continue;
+      const otherIdx = chunk.indexOf(otherLabel, dtIdx + label.length);
+      const block = chunk.slice(dtIdx, otherIdx !== -1 ? otherIdx : dtIdx + 1000);
+      const numRe = /class="game-numbers__number"><span>([0-9]+)<\/span>/g;
+      const digits = []; let nm;
+      while ((nm = numRe.exec(block)) !== null) digits.push(parseInt(nm[1]));
+      const fbM = block.match(/game-numbers__bonus-text">([0-9]+)<\/span>/);
+      const fireball = fbM ? parseInt(fbM[1]) : 0;
+      if (digits.length === numDigits) {
+        const drawTs = ts + (drawType === 'EVENING' ? 1 : 0);
+        newDraws.push({ date: mmddyyyy, drawType, digits, fireball, ts: drawTs });
+      }
+    }
+  }
+  if (!newDraws.length) { console.log(game + ': no new draws found via Puppeteer.'); return; }
+  newDraws.sort((a, b) => b.ts - a.ts);
+  const merged = newDraws.concat(existing).slice(0, 500);
   pickDrawsCache[game] = merged;
   fs.writeFileSync(PICK_DRAWS_PATHS[game], JSON.stringify(merged, null, 2));
-  console.log(game + ': appended ' + newDraws.length + ' new draws.');
+  console.log(game + ': appended ' + newDraws.length + ' new draw(s) via Puppeteer. Total: ' + merged.length);
 }
 
 // ── Powerball ────────────────────────────────────────────────────────────────
@@ -3252,23 +3318,65 @@ async function appendPbDeltas() {
   return _pbDeltaPromise;
 }
 async function _appendPbDeltasImpl() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_PB).mtimeMs; } catch(e) { return; }
-  if (mtime === pbLastPdfMtime) { console.log('PB: PDF unchanged, skipping delta.'); return; }
+  console.log('PB: starting Puppeteer scrape...');
+  const PB_URL = 'https://floridalottery.com/games/draw-games/powerball';
+  let html = '';
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(PB_URL, { waitUntil: 'networkidle0', timeout: 30000 });
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); } catch(_) {}
+      html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot('powerball', html);
+      break;
+    } catch(e) {
+      console.warn('PB Puppeteer attempt ' + (_try+1) + ' failed:', e.message);
+      _browser = null;
+      if (_try === 1) { console.log('PB: Puppeteer failed after 2 attempts, skipping.'); return; }
+    }
+  }
+  if (!html) return;
+  const dateRe = /([0-9]{4}-[0-9]{2}-[0-9]{2})-powerball-item/g;
+  const isoDates = []; let dm;
+  while ((dm = dateRe.exec(html)) !== null) { if (!isoDates.includes(dm[1])) isoDates.push(dm[1]); }
+  if (!isoDates.length) { console.log('PB: no dates found in scraped HTML.'); return; }
   const existing = getPbDraws();
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/'); let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
-  const jsonMtime = (() => { try { return fs.statSync(PB_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { pbLastPdfMtime = mtime; console.log('PB: PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await extractPDFText(PDF_PATH_PB); } catch(e) { return; }
-  pbLastPdfMtime = mtime;
-  const all = parsePbHistoryPDF(text);
-  const newDraws = all.filter(d => d.ts > newestTs);
-  if (!newDraws.length) { console.log('PB: no new draws.'); return; }
-  const merged = [...newDraws, ...existing].slice(0, 500);
+  const newDraws = [];
+  for (const isoDate of isoDates) {
+    const [y, mo, day] = isoDate.split('-');
+    const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
+    if (ts < newestTs - 86400000) continue;
+    if (existingKeys.has(isoDate)) continue;
+    const articleIdx = html.indexOf(isoDate + '-powerball-item');
+    if (articleIdx === -1) continue;
+    const chunk = html.slice(articleIdx, articleIdx + 2000);
+    const dpIdx = chunk.indexOf('Double Play');
+    const mainChunk = dpIdx !== -1 ? chunk.slice(0, dpIdx) : chunk;
+    const numRe = /class="game-numbers__number"><span>([0-9]+)<\/span>/g;
+    const nums = []; let nm;
+    while ((nm = numRe.exec(mainChunk)) !== null) nums.push(parseInt(nm[1]));
+    const pbM = mainChunk.match(/game-numbers__bonus-text">([0-9]+)<\/span>/);
+    const white = nums.slice(0, 5).filter(n => n >= 1 && n <= 69);
+    const pb = pbM ? parseInt(pbM[1]) : null;
+    if (white.length === 5 && pb !== null && pb >= 1 && pb <= 26) {
+      const mmddyyyy = mo + '/' + day + '/' + y;
+      newDraws.push({ date: mmddyyyy, numbers: white, powerball: pb, ts });
+    }
+  }
+  if (!newDraws.length) { console.log('PB: no new draws found via Puppeteer.'); return; }
+  newDraws.sort((a, b) => b.ts - a.ts);
+  const merged = newDraws.concat(existing).slice(0, 500);
   pbDrawsCache = merged;
   fs.writeFileSync(PB_DRAWS_PATH, JSON.stringify(merged, null, 2));
-  console.log('PB: appended ' + newDraws.length + ' new draws.');
+  console.log('PB: appended ' + newDraws.length + ' new draw(s) via Puppeteer. Total: ' + merged.length);
 }
 
 function getNextDrawPowerball() {
@@ -3373,20 +3481,7 @@ function generatePbLines(freq, pbFreq, draws, count, seenLines) {
 let lastAutoRefreshPB = null;
 let autoRefreshPBPromise = null;
 
-async function ensureDailyRefreshPB() {
-  const today = todayET();
-  if (lastAutoRefreshPB === today) return;
-  if (autoRefreshPBPromise) return;
-  autoRefreshPBPromise = downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => {
-    lastAutoRefreshPB = today;
-    autoRefreshPBPromise = null;
-    console.log('Auto-refreshed Powerball PDF for ' + today);
-  }).catch(err => {
-    autoRefreshPBPromise = null;
-    console.warn('Powerball auto-refresh failed: ' + err.message);
-  });
-  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
-}
+async function ensureDailyRefreshPB() {}
 
 async function runAnalysisPowerball(count, sid) {
   const draws = getPbDraws();
@@ -3486,9 +3581,7 @@ app.get('/analyze/powerball', async (req, res) => {
 
 app.post('/refresh/powerball', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
-  enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => {
-    lastAutoRefreshPB = null; pbDrawsCache = null; return appendPbDeltas();
-  }));
+  enqueueRefresh('powerball', () => appendPbDeltas().catch(() => {}));
   clearSession(sid);
   res.json({ queued: true, game: 'powerball' });
 });
@@ -3619,23 +3712,63 @@ async function appendMmDeltas() {
   return _mmDeltaPromise;
 }
 async function _appendMmDeltasImpl() {
-  let mtime;
-  try { mtime = fs.statSync(PDF_PATH_MM).mtimeMs; } catch(e) { return; }
-  if (mtime === mmLastPdfMtime) { console.log('MM: PDF unchanged, skipping delta.'); return; }
+  console.log('MM: starting Puppeteer scrape...');
+  const MM_URL = 'https://floridalottery.com/games/draw-games/mega-millions';
+  let html = '';
+  for (let _try = 0; _try < 2; _try++) {
+    try {
+      const browser = await getBrowser();
+      const page = await browser.newPage();
+      await page.goto(MM_URL, { waitUntil: 'networkidle0', timeout: 30000 });
+      try { await page.waitForSelector('.draw-results-item', { timeout: 15000 }); } catch(_) {}
+      html = await page.content();
+      await page.close();
+      await closeBrowser();
+      extractAndCacheJackpot('megamillions', html);
+      break;
+    } catch(e) {
+      console.warn('MM Puppeteer attempt ' + (_try+1) + ' failed:', e.message);
+      _browser = null;
+      if (_try === 1) { console.log('MM: Puppeteer failed after 2 attempts, skipping.'); return; }
+    }
+  }
+  if (!html) return;
+  const dateRe = /([0-9]{4}-[0-9]{2}-[0-9]{2})-megamillions-item/g;
+  const isoDates = []; let dm;
+  while ((dm = dateRe.exec(html)) !== null) { if (!isoDates.includes(dm[1])) isoDates.push(dm[1]); }
+  if (!isoDates.length) { console.log('MM: no dates found in scraped HTML.'); return; }
   const existing = getMmDraws();
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/'); let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
-  const jsonMtime = (() => { try { return fs.statSync(MM_DRAWS_PATH).mtimeMs; } catch(e) { return 0; } })();
-  if (mtime <= jsonMtime && existing.length > 0) { mmLastPdfMtime = mtime; console.log('MM: PDF older than JSON cache, skipping parse.'); return; }
-  let text;
-  try { text = await extractPDFText(PDF_PATH_MM); } catch(e) { return; }
-  mmLastPdfMtime = mtime;
-  const all = parseMmHistoryPDF(text);
-  const newDraws = all.filter(d => d.ts > newestTs);
-  if (!newDraws.length) { console.log('MM: no new draws in PDF.'); return; }
-  const merged = [...newDraws, ...existing].slice(0, 500);
+  const newDraws = [];
+  for (const isoDate of isoDates) {
+    const [y, mo, day] = isoDate.split('-');
+    const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
+    if (ts < newestTs - 86400000) continue;
+    if (existingKeys.has(isoDate)) continue;
+    const articleIdx = html.indexOf(isoDate + '-megamillions-item');
+    if (articleIdx === -1) continue;
+    const chunk = html.slice(articleIdx, articleIdx + 2000);
+    const numRe = /class="game-numbers__number"><span>([0-9]+)<\/span>/g;
+    const nums = []; let nm;
+    while ((nm = numRe.exec(chunk)) !== null) nums.push(parseInt(nm[1]));
+    const mbM = chunk.match(/game-numbers__bonus-text">([0-9]+)<\/span>/);
+    const white = nums.slice(0, 5).filter(n => n >= 1 && n <= 70);
+    const mb = mbM ? parseInt(mbM[1]) : null;
+    if (white.length === 5 && mb !== null && mb >= 1 && mb <= 25) {
+      const mmddyyyy = mo + '/' + day + '/' + y;
+      newDraws.push({ date: mmddyyyy, numbers: white, megaball: mb, ts });
+    }
+  }
+  if (!newDraws.length) { console.log('MM: no new draws found via Puppeteer.'); return; }
+  newDraws.sort((a, b) => b.ts - a.ts);
+  const merged = newDraws.concat(existing).slice(0, 500);
   mmDrawsCache = merged;
   fs.writeFileSync(MM_DRAWS_PATH, JSON.stringify(merged, null, 2));
-  console.log('MM: appended ' + newDraws.length + ' new draw(s). Total: ' + merged.length);
+  console.log('MM: appended ' + newDraws.length + ' new draw(s) via Puppeteer. Total: ' + merged.length);
 }
 
 function getNextDrawMegaMillions() {
@@ -3739,20 +3872,7 @@ function generateMmLines(freq, mbFreq, draws, count, seenLines) {
 let lastAutoRefreshMM = null;
 let autoRefreshMMPromise = null;
 
-async function ensureDailyRefreshMM() {
-  const today = todayET();
-  if (lastAutoRefreshMM === today) return;
-  if (autoRefreshMMPromise) return;
-  autoRefreshMMPromise = downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => {
-    lastAutoRefreshMM = today;
-    autoRefreshMMPromise = null;
-    console.log('Auto-refreshed Mega Millions PDF for ' + today);
-  }).catch(err => {
-    autoRefreshMMPromise = null;
-    console.warn('Mega Millions auto-refresh failed: ' + err.message);
-  });
-  // Fire-and-forget -- parse handled by schedulePostDrawRefreshes
-}
+async function ensureDailyRefreshMM() {}
 
 async function runAnalysisMegaMillions(count, sid) {
   const draws = getMmDraws();
@@ -3850,9 +3970,7 @@ app.get('/analyze/megamillions', async (req, res) => {
 
 app.post('/refresh/megamillions', (req, res) => {
   const sid = req.body && req.body.sid ? req.body.sid : null;
-  enqueueRefresh('megamillions', () => downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => {
-    lastAutoRefreshMM = null; mmDrawsCache = null; return appendMmDeltas();
-  }));
+  enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {}));
   clearSession(sid);
   res.json({ queued: true, game: 'megamillions' });
 });
@@ -3960,7 +4078,7 @@ function schedulePostDrawRefreshes() {
 
   pickTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
     Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+      enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw refresh queued: Pick 2-5');
   }));
@@ -3973,19 +4091,19 @@ function schedulePostDrawRefreshes() {
   scheduleDaily(23, 20, () => {
     const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
     if (jtpDays.includes(day)) {
-      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
+      enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {}));
       console.log('Post-draw refresh queued: JTP');
     }
     if (lxDays.includes(day)) {
-      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
+      enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {}));
       console.log('Post-draw refresh queued: Lotto X');
     }
     if (pbDays.includes(day)) {
-      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
+      enqueueRefresh('powerball', () => appendPbDeltas().catch(() => {}));
       console.log('Post-draw refresh queued: Powerball');
     }
     if (mmDays.includes(day)) {
-      enqueueRefresh('megamillions', () => downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => { lastAutoRefreshMM = null; mmDrawsCache = null; }).then(() => appendMmDeltas()).catch(() => {}));
+      enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {}));
       console.log('Post-draw refresh queued: Mega Millions');
     }
     const jackpotGames = [];
@@ -4004,7 +4122,7 @@ function schedulePostDrawRefreshes() {
     enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
     console.log('Post-draw midday retry queued: Fantasy 5');
     Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+      enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw midday retry queued: Pick 2-5');
   });
@@ -4016,24 +4134,24 @@ function schedulePostDrawRefreshes() {
     enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
     console.log('Post-draw evening retry queued: Fantasy 5');
     Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
-      enqueueRefresh(g, () => downloadFile(url, PDF_PATHS_PICK[g]).then(() => { pickCache[g] = null; pickDrawsCache[g] = null; }).then(() => appendPickDeltas(g)).catch(() => {}));
+      enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw evening retry queued: Pick 2-5');
     // JTP + LX + PB only on their draw days
     if (jtpDays.includes(day)) {
-      enqueueRefresh('jtp', () => downloadPDFs().then(() => { lastAutoRefreshDate = null; jtpDrawsCache = null; }).then(() => appendJtpDeltas()).catch(() => {}));
+      enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {}));
       console.log('Post-draw retry queued: JTP');
     }
     if (lxDays.includes(day)) {
-      enqueueRefresh('lottox', () => downloadFile(PDF_URLS_LX, PDF_PATH_LX).then(() => { lastAutoRefreshLottoX = null; return appendLottoXDeltas(); }));
+      enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {}));
       console.log('Post-draw retry queued: Lotto X');
     }
     if (pbDays.includes(day)) {
-      enqueueRefresh('powerball', () => downloadFile(PDF_URL_PB, PDF_PATH_PB).then(() => { lastAutoRefreshPB = null; pbDrawsCache = null; }).then(() => appendPbDeltas()).catch(() => {}));
+      enqueueRefresh('powerball', () => appendPbDeltas().catch(() => {}));
       console.log('Post-draw retry queued: Powerball');
     }
     if (mmDays.includes(day)) {
-      enqueueRefresh('megamillions', () => downloadFile(PDF_URL_MM, PDF_PATH_MM).then(() => { lastAutoRefreshMM = null; mmDrawsCache = null; }).then(() => appendMmDeltas()).catch(() => {}));
+      enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {}));
       console.log('Post-draw retry queued: Mega Millions');
     }
   });
