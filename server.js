@@ -2268,7 +2268,7 @@ app.get('/draws/jtp', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = getJtpDraws();
-    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
   // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
@@ -2283,7 +2283,7 @@ app.get('/draws/lottox', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = getLottoXDraws();
-    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
   // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
@@ -2298,7 +2298,7 @@ app.get('/draws/fantasy5', async (req, res) => {
   const pdfDate = normDateForPDF(date);
   try {
     const draws = getFantasy5Draws();
-    const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date) && (!type || d.drawType === type));
+    const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
   // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
@@ -2445,8 +2445,7 @@ app.get('/draws/cashpop', async (req, res) => {
   // PDF fallback first - has 5 numbers per date (one per session)
   try {
     const draws = getCpDraws();
-    const pdfDate = normDateForPDF(date);
-    const match = draws.find(d => d.date === date || d.date === pdfDate);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) {
       const sessions = ['Morning','Matinee','Afternoon','Evening','Late Night'];
       const allSessions = match.numbers.map((n, i) => ({ name: sessions[i], number: n }));
@@ -3664,8 +3663,7 @@ app.get('/draws/powerball', (req, res) => {
   if (!isValidDrawDay(date, [1, 3, 6])) return res.status(404).json({ error: 'No Powerball draw on that date (draws Mon/Wed/Sat).', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
   try {
     const draws = getPbDraws();
-    const pdfDate = normDateForPDF(date);
-    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers, powerball: match.powerball });
   } catch(e) {}
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
@@ -4053,8 +4051,7 @@ app.get('/draws/megamillions', (req, res) => {
   if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No Mega Millions draw on that date (draws Tue & Fri).', resultsUrl: 'https://www.floridalottery.com/games/draw-games/mega-millions' });
   try {
     const draws = getMmDraws();
-    const pdfDate = normDateForPDF(date);
-    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(pdfDate) || d.date === pdfDate || d.date === date);
+    const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers, megaball: match.megaball });
   } catch(e) {}
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://www.floridalottery.com/games/draw-games/mega-millions' });
