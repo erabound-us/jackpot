@@ -8,4 +8,4 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY . .
 EXPOSE 8080
-CMD ["node", "--max-old-space-size=384", "server.js"]
+CMD ["node", "--max-old-space-size=768", "server.js"]
