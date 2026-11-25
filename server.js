@@ -2271,7 +2271,7 @@ app.get('/draws/jtp', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
-  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
+  try { await appendJtpDeltas(); const d2=getJtpDraws(); const m2=d2.find(d=>stripLeadingZeros(d.date)===stripLeadingZeros(date)||d.date===date); if(m2) return res.json({date:m2.date,numbers:m2.numbers}); } catch(e) {}
   delete _availCache['jtp'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.jtp });
 });
@@ -2286,7 +2286,7 @@ app.get('/draws/lottox', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers });
   } catch (e) {}
-  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
+  try { await appendLottoXDeltas(); const d2=getLottoXDraws(); const m2=d2.find(d=>stripLeadingZeros(d.date)===stripLeadingZeros(date)||d.date===date); if(m2) return res.json({date:m2.date,numbers:m2.numbers}); } catch(e) {}
   delete _availCache['lottox'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.lottox });
 });
@@ -2301,7 +2301,7 @@ app.get('/draws/fantasy5', async (req, res) => {
     const match = draws.find(d => (stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date) && (!type || d.drawType === type));
     if (match) return res.json({ date: match.date, drawType: match.drawType, numbers: match.numbers });
   } catch (e) {}
-  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
+  try { await appendFantasy5Deltas(); const d2=getFantasy5Draws(); const m2=d2.find(d=>(stripLeadingZeros(d.date)===stripLeadingZeros(date)||d.date===date)&&(!type||d.drawType===type)); if(m2) return res.json({date:m2.date,drawType:m2.drawType,numbers:m2.numbers}); } catch(e) {}
   delete _availCache['fantasy5'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.fantasy5 });
 });
@@ -3657,7 +3657,7 @@ app.get('/latestdraw/powerball', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/draws/powerball', (req, res) => {
+app.get('/draws/powerball', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   if (!isValidDrawDay(date, [1, 3, 6])) return res.status(404).json({ error: 'No Powerball draw on that date (draws Mon/Wed/Sat).', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
@@ -3666,6 +3666,7 @@ app.get('/draws/powerball', (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers, powerball: match.powerball });
   } catch(e) {}
+  try { await appendPbDeltas(); const d2=getPbDraws(); const m2=d2.find(d=>stripLeadingZeros(d.date)===stripLeadingZeros(date)||d.date===date); if(m2) return res.json({date:m2.date,numbers:m2.numbers,powerball:m2.powerball}); } catch(e) {}
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://www.floridalottery.com/games/draw-games/powerball' });
 });
 
@@ -4045,7 +4046,7 @@ app.get('/latestdraw/megamillions', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/draws/megamillions', (req, res) => {
+app.get('/draws/megamillions', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
   if (!isValidDrawDay(date, [2, 5])) return res.status(404).json({ error: 'No Mega Millions draw on that date (draws Tue & Fri).', resultsUrl: 'https://www.floridalottery.com/games/draw-games/mega-millions' });
@@ -4054,6 +4055,16 @@ app.get('/draws/megamillions', (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) return res.json({ date: match.date, numbers: match.numbers, megaball: match.megaball });
   } catch(e) {}
+  // Puppeteer fallback for dates not yet in JSON cache
+  try {
+    const scraped = await scrapeFlDraws('megamillions', date);
+    if (scraped && scraped.numbers && scraped.numbers.length) {
+      const white = scraped.numbers.slice(0, 5);
+      const mb = scraped.numbers[5];
+      return res.json({ date, numbers: white, megaball: mb });
+    }
+  } catch(e) {}
+  try { await appendMmDeltas(); const d2=getMmDraws(); const m2=d2.find(d=>stripLeadingZeros(d.date)===stripLeadingZeros(date)||d.date===date); if(m2) return res.json({date:m2.date,numbers:m2.numbers,megaball:m2.megaball}); } catch(e) {}
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: 'https://www.floridalottery.com/games/draw-games/mega-millions' });
 });
 
