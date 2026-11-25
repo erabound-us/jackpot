@@ -4101,7 +4101,7 @@ function schedulePostDrawRefreshes() {
   }));
 
   pickTimes.forEach(([h, m]) => scheduleDaily(h, m, () => {
-    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+    Object.entries(PDF_URLS_PICK).forEach(([g]) => {
       enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw refresh queued: Pick 2-5');
@@ -4145,7 +4145,7 @@ function schedulePostDrawRefreshes() {
   scheduleDaily(13, 25, () => {
     enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
     console.log('Post-draw midday retry queued: Fantasy 5');
-    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+    Object.entries(PDF_URLS_PICK).forEach(([g]) => {
       enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw midday retry queued: Pick 2-5');
@@ -4157,7 +4157,7 @@ function schedulePostDrawRefreshes() {
     // Fantasy 5 + Pick retry every day
     enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
     console.log('Post-draw evening retry queued: Fantasy 5');
-    Object.entries(PDF_URLS_PICK).forEach(([g, url]) => {
+    Object.entries(PDF_URLS_PICK).forEach(([g]) => {
       enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {}));
     });
     console.log('Post-draw evening retry queued: Pick 2-5');
@@ -4186,10 +4186,31 @@ function schedulePostDrawRefreshes() {
     console.log('Post-draw Cash Pop retry queued');
   }));
 
-  // REMOVED: midnight retry at 00:05 ET caused OOM crashes on Fly.io (256MB heap).
-  // Fantasy 5 PDF parse (~2.7MB) + 4x Pick PDFs queued simultaneously exceeded heap limit.
-  // The 23:20 + 23:35 ET retries are sufficient for evening draws.
-  // The 13:10 + 13:25 ET retries are sufficient for midday draws.
+  // Late retries for PB (10:59 PM) and MM (11:00 PM) -- 23:20/23:35 fire BEFORE these draws.
+  // JTP/LX (11:15 PM) also benefit from a 23:50 retry.
+  // Puppeteer scrapes are ~60-70MB each -- safe on 1024MB machine.
+  scheduleDaily(23, 50, () => {
+    const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+    if (pbDays.includes(day)) { enqueueRefresh('powerball', () => appendPbDeltas().catch(() => {})); console.log('Late retry queued: Powerball'); }
+    if (mmDays.includes(day)) { enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {})); console.log('Late retry queued: Mega Millions'); }
+    if (jtpDays.includes(day)) { enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {})); console.log('Late retry queued: JTP'); }
+    if (lxDays.includes(day)) { enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {})); console.log('Late retry queued: Lotto X'); }
+  });
+
+  // 00:10 ET final retry -- catches any games whose results weren't up at 23:50
+  scheduleDaily(0, 10, () => {
+    const day = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+    // day is now the NEXT calendar day -- check yesterday's draw days
+    const prevDay = day === 0 ? 6 : day - 1;
+    if (pbDays.includes(prevDay)) { enqueueRefresh('powerball', () => appendPbDeltas().catch(() => {})); console.log('00:10 retry queued: Powerball'); }
+    if (mmDays.includes(prevDay)) { enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {})); console.log('00:10 retry queued: Mega Millions'); }
+    if (jtpDays.includes(prevDay)) { enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {})); console.log('00:10 retry queued: JTP'); }
+    if (lxDays.includes(prevDay)) { enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {})); console.log('00:10 retry queued: Lotto X'); }
+    // F5 + Pick evening draws also at 11:15 PM -- one more retry
+    enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
+    Object.keys(PDF_URLS_PICK).forEach(g => { enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {})); });
+    console.log('00:10 retry queued: F5 + Pick');
+  });
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     delete _jackpotCache['fantasy5'];
