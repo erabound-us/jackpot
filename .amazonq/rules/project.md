@@ -400,13 +400,22 @@ All game panels MUST follow the JTP layout exactly. Any deviation is a bug. When
 - **Never use `<div class="card-title">`** — that class is not defined in the CSS
 - All card headings across all games use `<h2>` with the `.card h2` style (15px, font-weight 600)
 
-### Check My Numbers buttons — MUST use `action-btn`
+### Check My Numbers buttons — MUST use `action-btn` with ID
 ```html
-<button class="action-btn primary" onclick="xCheckNumbers()">Calculate Winnings</button>
+<button class="action-btn primary" id="xCheckBtn" onclick="xCheckNumbers()">Calculate Winnings</button>
 <button class="action-btn secondary" onclick="xClearCheck()">&#10005; Reset</button>
 ```
-- **Never use `class="btn"` or `class="btn btn-secondary"`** for check/clear buttons
+- **Every Calculate Winnings button MUST have an `id` attribute** (`jtpCheckBtn`, `lxCheckBtn`, `cpCheckBtn`, `f5CheckBtn`, `pbCheckBtn`, `mmCheckBtn`, `pickCheckBtn`) so the disable guard can reference it via `getElementById`
+- **Every `xCheckNumbers()` function MUST disable the button on entry and re-enable in `.finally()` (or in the success + catch paths for forEach-based games)**:
+```js
+// At the start of xCheckNumbers(), before the fetch:
+var _b = document.getElementById('xCheckBtn'); if (_b) { _b.disabled = true; _b.textContent = 'Checking...'; }
+// In .finally() for single-fetch games:
+.finally(function() { var _b = document.getElementById('xCheckBtn'); if (_b) { _b.disabled = false; _b.textContent = 'Calculate Winnings'; } })
+// For forEach/pending-counter games (LX, F5, PB, MM): re-enable inside the pending===0 block AND in .catch()
+```
 - `action-btn primary` = green background; `action-btn secondary` = transparent with border
+- **Never use `querySelector('.action-btn.primary')` for the check button** — use `getElementById('xCheckBtn')` directly
 
 ### Results section heading — MUST use `section-header` + `badge blue`
 ```html
@@ -688,7 +697,42 @@ const gameLabel = meta.label;
 - Server renders a green "Winning" row at the top of the HTML email table when `winningNumbers` is present; also appended to plain-text body
 - Server validates: if `lines` is empty array AND `winningNumbers` is null/missing → 400 error
 
-## Rate Limits (per IP/min)
+## Spam Click Protection — All Interactive Buttons
+
+Every button that triggers a fetch MUST be disabled immediately on click and re-enabled when the request completes. This prevents duplicate requests, OOM from concurrent Puppeteer scrapes, and confusing UI states.
+
+### Generate Lines buttons
+- `btn.disabled = true; btn.textContent = 'Generating...';` at the top of the generate function
+- `btn.disabled = false; btn.textContent = '{emoji} Generate Lines';` in `.finally()`
+- Already implemented on all games — do not remove
+
+### Check My Numbers buttons
+- `var _b = document.getElementById('xCheckBtn'); if (_b) { _b.disabled = true; _b.textContent = 'Checking...'; }` before the fetch
+- Re-enable in `.finally()` for single-fetch games (JTP, CP, Pick)
+- Re-enable inside the `pending === 0` block AND in `.catch()` for forEach/pending-counter games (LX, F5, PB, MM)
+- Button ID format: `jtpCheckBtn`, `lxCheckBtn`, `cpCheckBtn`, `f5CheckBtn`, `pbCheckBtn`, `mmCheckBtn`, `pickCheckBtn`
+- **When adding a new game**: add `id="xCheckBtn"` to the HTML button, add disable at start of `xCheckNumbers()`, add re-enable in all exit paths
+
+### Date chip lookups
+- Protected by `window._xLookupAC.abort()` — cancels previous request before firing new one
+- Server-side `_xxxDeltaPromise` in-flight guard ensures only one Puppeteer scrape runs at a time regardless of concurrent requests
+- No button disable needed — abort pattern is sufficient
+
+### Why this matters
+- Generate Lines: Puppeteer scrapes ~20s each — concurrent launches would OOM the server
+- Check My Numbers: pure math, fast, but duplicate requests waste rate limit budget (20/min)
+- Date lookups: Puppeteer fallback in `/draws/*` routes — `_xxxDeltaPromise` guard prevents concurrent Chrome launches
+- Rate limiter (20 `/check`/min, 10 `/analyze`/min, global 120/min) is the last line of defense but should not be the first
+
+### Server-side protection summary
+| Endpoint | Client guard | Server guard |
+|----------|-------------|-------------|
+| `/analyze/*` | `btn.disabled` | Rate limit 10/min |
+| `/check/*` | `btn.disabled` | Rate limit 20/min |
+| `/draws/*` (lookup) | `_xLookupAC.abort()` | `_xxxDeltaPromise` in-flight guard |
+| `/refresh/*` | N/A (manual) | `enqueueRefresh` serialized queue |
+
+
 `/analyze` 10 | `/refresh` 3 | `/email` 5 | `/check` 20 | `/chat` 30 | global cap 120 (all routes combined)
 - Pick games share these same rate limits via the same route prefixes (`/analyze/pick`, `/check/pick`, etc.)
 - Request body size capped at 20 KB — oversized payloads rejected with 413

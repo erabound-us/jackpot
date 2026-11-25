@@ -277,7 +277,7 @@
       <input type="checkbox" id="comboCheck" style="width:16px;height:16px;cursor:pointer;">
       <label for="comboCheck" style="cursor:pointer;">Include Combo (+$1)</label>
     </div>
-    <button class="action-btn primary" onclick="checkNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="jtpCheckBtn" id="jtpCheckBtn" onclick="checkNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="clearCheck()">&#10005; Reset</button>
     <div id="checkResult" style="margin-top:12px;"></div>
   </div>
@@ -451,7 +451,7 @@
         </div>
       </div>
     </div>
-    <button class="action-btn primary" onclick="lxCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="lxCheckBtn" id="lxCheckBtn" onclick="lxCheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="lxClearCheck()">&#10005; Reset</button>
     <div id="lxCheckResult" style="margin-top:12px;"></div>
   </div>
@@ -580,7 +580,7 @@
       <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Play Amount</div><select id="cpPlayAmt" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-weight:700;"><option value="1">$1</option><option value="2">$2</option><option value="5" selected>$5</option><option value="10">$10</option></select></div>
       <div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Prize Multiplier on ticket</div><input type="number" id="cpMultiplier" placeholder="5-250" min="5" max="250" style="width:80px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:14px;font-weight:700;"></div>
     </div>
-    <button class="action-btn primary" onclick="cpCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="cpCheckBtn" id="cpCheckBtn" onclick="cpCheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="cpClearCheck()">&#10005; Reset</button>
     <div id="cpCheckResult" style="margin-top:12px;"></div>
   </div>
@@ -710,7 +710,7 @@
         </select>
       </div>
     </div>
-    <button class="action-btn primary" onclick="pbCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="pbCheckBtn" id="pbCheckBtn" onclick="pbCheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="pbClearCheck()">&#10005; Reset</button>
     <div id="pbCheckResult" style="margin-top:12px;"></div>
   </div>
@@ -834,7 +834,7 @@
         </select>
       </div>
     </div>
-    <button class="action-btn primary" onclick="mmCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="mmCheckBtn" id="mmCheckBtn" onclick="mmCheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="mmClearCheck()">&#10005; Reset</button>
     <div id="mmCheckResult" style="margin-top:12px;"></div>
   </div>
@@ -963,7 +963,7 @@
         <input type="number" id="f5EZMatch" value="0" min="0" max="500" style="width:80px;text-align:center;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;font-size:14px;font-weight:700;">
       </div>
     </div>
-    <button class="action-btn primary" onclick="f5CheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="f5CheckBtn" id="f5CheckBtn" onclick="f5CheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="f5ClearCheck()">&#10005; Reset</button>
     <div id="f5CheckResult" style="margin-top:12px;"></div>
   </div>
@@ -1112,7 +1112,7 @@
         <input type="checkbox" id="pickCheckFireball"> Fireball
       </label>
     </div>
-    <button class="action-btn primary" onclick="pickCheckNumbers()">Calculate Winnings</button>
+    <button class="action-btn primary" id="pickCheckBtn" id="pickCheckBtn" onclick="pickCheckNumbers()">Calculate Winnings</button>
     <button class="action-btn secondary" onclick="pickClearCheck()">&#10005; Reset</button>
     <div id="pickCheckResult" style="margin-top:10px;"></div>
   </div>
@@ -1433,6 +1433,7 @@ function checkNumbers() {
       row[j].className = 'num-input' + (drawnSet[hv] ? ' matched' : '');
     }
   }
+  var _b=document.getElementById('jtpCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   var _acC = new AbortController(); setTimeout(function(){_acC.abort();}, 15000);
   fetch('/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, lines: lines }), signal: _acC.signal })
     .then(function(res) { return res.json(); })
@@ -1470,7 +1471,8 @@ function checkNumbers() {
       html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount">' + totalDisplay + '</div>' + (hasCombo ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Base game + Combo combined</div>' : '') + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Jackpot assumes no other winners. Base prizes are pari-mutuel estimates.</div></div>';
       document.getElementById('checkResult').innerHTML = html;
     })
-    .catch(function(err) { document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+    .catch(function(err) { document.getElementById('checkResult').innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; })
+    .finally(function(){var _b=document.getElementById('jtpCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}});
 }
 
 function clearCheck() {
@@ -1865,6 +1867,7 @@ function lxCheckNumbers() {
   var lxAllResults = [];
   var lxTotalWinAcc = 0;
   var lxPending = allLines.length;
+  var _b=document.getElementById('lxCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   allLines.forEach(function(lineNums, lineIdx) {
     var _acLXC = new AbortController(); setTimeout(function(){_acLXC.abort();}, 15000);
     fetch('/check/lottox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, multiplier: mult, doublePlayDrawn: lineIdx === 0 ? dpDrawn : null, ezMatch: lineIdx === 0 ? ezMatch : 0 }), signal: _acLXC.signal })
@@ -1900,8 +1903,9 @@ function lxCheckNumbers() {
         else html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Base prizes are pari-mutuel estimates. Jackpot varies.</div>';
         html += '</div>';
         lxResultEl.innerHTML = html;
+        var _b=document.getElementById('lxCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}
       })
-      .catch(function(err) { lxResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+      .catch(function(err) { lxResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; var _b=document.getElementById('lxCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';} });
   });
 }
 
@@ -2111,6 +2115,7 @@ function cpCheckNumbers() {
   if (isNaN(pm) || pm < 5 || pm > 250) {
     res.innerHTML = '<div style="color:var(--red);font-size:13px;">Enter your prize multiplier (5-250) from your ticket.</div>'; return;
   }
+  var _b=document.getElementById('cpCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   var _acCPC = new AbortController(); setTimeout(function(){_acCPC.abort();}, 15000);
   fetch('/check/cashpop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ winningNumber: wn, yourNumber: yn, playAmount: pa, prizeMultiplier: pm }), signal: _acCPC.signal })
     .then(function(r) { return r.json(); })
@@ -2130,7 +2135,8 @@ function cpCheckNumbers() {
       }
       res.innerHTML = html;
     })
-    .catch(function(err) { res.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+    .catch(function(err) { res.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; })
+    .finally(function(){var _b=document.getElementById('cpCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}});
 }
 
 function cpClearCheck() {
@@ -2599,6 +2605,7 @@ function f5CheckNumbers() {
   var f5AllResults = [];
   var f5TotalWinAcc = 0;
   var f5Pending = f5AllLines.length;
+  var _b=document.getElementById('f5CheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   f5AllLines.forEach(function(lineNums, lineIdx) {
     var _acF5C = new AbortController(); setTimeout(function(){_acF5C.abort();}, 15000);
     fetch('/check/fantasy5', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ drawn: drawn, line: lineNums, ezMatch: lineIdx === 0 ? (parseInt(document.getElementById('f5EZMatch').value) || 0) : 0 }), signal: _acF5C.signal })
@@ -2631,8 +2638,9 @@ function f5CheckNumbers() {
         else html += '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Prizes are pari-mutuel estimates and vary by number of winners.</div>';
         html += '</div>';
         f5ResultEl.innerHTML = html;
+        var _b=document.getElementById('f5CheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}
       })
-      .catch(function(err) { f5ResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; });
+      .catch(function(err) { f5ResultEl.innerHTML = '<div style="color:var(--red);">Error: ' + err.message + '</div>'; var _b=document.getElementById('f5CheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';} });
   });
 }
 
@@ -3077,6 +3085,7 @@ function pickCheckNumbers() {
   var pa=parseFloat(document.getElementById('pickCheckPlayAmount').value);
   var useFB=document.getElementById('pickCheckFireball').checked;
   var fb=useFB?pickFireballDrawn:null;
+  var _b=document.getElementById('pickCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   var _ac=new AbortController();setTimeout(function(){_ac.abort();},15000);
   fetch('/check/pick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({game:pickGame,drawn:pickDrawn,fireball:fb,played:played,playType:pt,playAmount:pa}),signal:_ac.signal})
     .then(function(r){return r.json();})
@@ -3107,7 +3116,8 @@ function pickCheckNumbers() {
         inp.className='num-input'+(pickDrawn[i]===played[i]?' matched':'');
       });
     })
-    .catch(function(err){document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';});
+    .catch(function(err){document.getElementById('pickCheckResult').innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';})
+    .finally(function(){var _b=document.getElementById('pickCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}});
 }
 
 function pickClearCheck() {
@@ -3353,6 +3363,7 @@ function pbCheckNumbers() {
   resultEl.innerHTML = '';
   var pp = parseInt(document.getElementById('pbPowerPlayCheck').value) || 0;
   var pbLines = [];
+  var _b=document.getElementById('pbCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   for (var r = 0; r < lineRows.length; r++) {
     var inputs = lineRows[r].querySelectorAll('.num-input');
     var allVals = Array.prototype.map.call(inputs, function(inp) { return inp.value.trim(); });
@@ -3392,8 +3403,9 @@ function pbCheckNumbers() {
           var totalLabel = totalWin > 0 ? 'Estimated Winnings' : 'No Prize This Draw';
           html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount" style="color:' + (totalWin>0?'var(--yellow)':'var(--muted)') + ';">' + (totalWin>0?'approx $'+totalWin.toLocaleString():'$0') + '</div></div>';
           resultEl.innerHTML = html;
+          var _b=document.getElementById('pbCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}
         })
-        .catch(function(err){resultEl.innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';});
+        .catch(function(err){resultEl.innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>'; var _b=document.getElementById('pbCheckBtn');if(_b){_b.disabled=false;_b.textContent='Calculate Winnings';}});
     })(line, pbPlayed, r);
   }
 }
@@ -3665,6 +3677,7 @@ function mmCheckNumbers() {
   var resultEl = document.getElementById('mmCheckResult');
   resultEl.innerHTML = '';
   var allResults = [], totalWin = 0, pending = allLines.length;
+  var _b=document.getElementById('mmCheckBtn');if(_b){_b.disabled=true;_b.textContent='Checking...';}
   allLines.forEach(function(entry, lineIdx) {
     var _ac = new AbortController(); setTimeout(function(){_ac.abort();}, 15000);
     fetch('/check/megamillions', { method: 'POST', headers: {'Content-Type':'application/json'},
@@ -3689,8 +3702,9 @@ function mmCheckNumbers() {
         var totalDisplay = totalWin > 0 ? '$' + totalWin.toLocaleString() : '$0';
         html += '<div class="check-total"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">' + totalLabel + '</div><div class="amount" style="color:' + (totalWin > 0 ? 'var(--yellow)' : 'var(--muted)') + ';">' + totalDisplay + '</div></div>';
         resultEl.innerHTML = html;
+          var _b = document.getElementById('mmCheckBtn'); if (_b) { _b.disabled = false; _b.textContent = 'Calculate Winnings'; }
       })
-      .catch(function(err){resultEl.innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>';});
+      .catch(function(err){resultEl.innerHTML='<div style="color:var(--red);">Error: '+err.message+'</div>'; var _b = document.getElementById('mmCheckBtn'); if (_b) { _b.disabled = false; _b.textContent = 'Calculate Winnings'; }});
   });
 }
 
