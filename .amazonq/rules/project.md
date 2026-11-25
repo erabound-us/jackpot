@@ -5,7 +5,7 @@
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
 - **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 1024MB (~$6.70/mo)
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~535MB RSS peak; 768MB heap gives comfortable headroom within the 1024MB machine RAM
+- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- Lotto X PDF parse (~239MB RSS) is the largest remaining PDF parse; 768MB heap gives comfortable headroom within the 1024MB machine RAM. Fantasy 5 now uses Puppeteer (~108MB RSS) instead of PDF parse.
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -702,7 +702,7 @@ const gameLabel = meta.label;
 
 ## Serialized Refresh Queue
 - All PDF downloads (scheduled and manual) go through a single global queue -- **one job at a time, never concurrent**
-- Prevents OOM from concurrent large PDF operations (Fantasy 5 = 2.7MB, Lotto X = 1MB)
+- Prevents OOM from concurrent large PDF operations (Lotto X = 1MB is now the largest; Fantasy 5 uses Puppeteer instead of PDF parse)
 - `enqueueRefresh(game, downloadFn)` -- adds a job; `processRefreshQueue()` runs them serially
 - Each job: **download PDF + invalidate cache only** -- parse happens lazily on next `/analyze` or `/latestdraw` call
 - **Single 30s retry**: on failure waits 30s then tries once more; if retry fails marks `error` and moves on
@@ -759,7 +759,7 @@ Fantasy 5 PDF parse was replaced with a Puppeteer scraper because:
 | Puppeteer scrape | 108MB | 20s | No |
 
 ## JSON Draw Cache (Lotto X and Fantasy 5)
-Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Instead:
+Lotto X (~1MB PDF) uses a JSON draw cache -- **never parsed on Fly.io**. Fantasy 5 switched to Puppeteer-based refresh (Nov 2026) -- no PDF parse at all on Fly.io. Instead:
 
 ### Architecture
 - **Local machine** parses the full PDF history once using `generate_draw_cache.js`, producing `lottox_draws.json` and `fantasy5_draws.json` (500 draws each, ~70KB each)
@@ -771,7 +771,7 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 - `getLottoXDraws()` -- reads `lottox_draws.json` into memory (cached in `lxDrawsCache`), returns draw array instantly
 - `getFantasy5Draws()` -- reads `fantasy5_draws.json` into memory (cached in `f5DrawsCache`), returns draw array instantly
 - `appendLottoXDeltas()` -- downloads PDF, parses only new rows since last JSON entry, prepends + saves JSON
-- `appendFantasy5Deltas()` -- same for Fantasy 5
+- `appendFantasy5Deltas()` -- **Puppeteer-based** (Nov 2026): scrapes FL Lottery website directly, no PDF parse. One Chrome launch gets all recent dates in ~20s at ~108MB RSS. Updates `f5DrawsCache` + `fantasy5_draws.json` in-place.
 
 ### Startup sequence
 1. `server.listen()` -- health check passes immediately
@@ -780,13 +780,13 @@ Large PDFs (Lotto X ~1MB, Fantasy 5 ~2.7MB) are **never parsed on Fly.io**. Inst
 4. `_serverReady = true` -- gate opens immediately, users can access all routes
 5. `downloadPDFs()` -- downloads all PDFs in background, then runs **only** `appendJtpDeltas()` + `appendCpDeltas()` sequentially
 
-**CRITICAL — OOM safety for startup delta chain**: ONLY JTP and Cash Pop run `appendXxxDeltas()` at startup. Lotto X, Fantasy 5, Powerball, and Mega Millions do NOT run their delta functions at startup. Running 4+ large PDF parses back-to-back at startup OOMs the 256MB heap (confirmed crash on Fly.io, Nov 2026). These games have committed JSON caches and `schedulePostDrawRefreshes()` keeps them current after each draw. The startup chain MUST remain:
+**CRITICAL — OOM safety for startup delta chain**: ONLY JTP and Cash Pop run `appendXxxDeltas()` at startup. Lotto X, Powerball, and Mega Millions do NOT run their delta functions at startup (large PDF parses). Fantasy 5 uses Puppeteer (not PDF) but also does NOT run at startup -- Chrome at startup OOMs. These games have committed JSON caches and `schedulePostDrawRefreshes()` keeps them current after each draw. The startup chain MUST remain:
 ```js
 downloadPDFs()
   .then(() => appendJtpDeltas()).catch(() => {})
   .then(() => appendCpDeltas()).catch(() => {});
 ```
-**NEVER add `appendLottoXDeltas()`, `appendFantasy5Deltas()`, `appendPbDeltas()`, or `appendMmDeltas()` to this startup chain.** When adding a new game with a JSON cache, do NOT add its delta function here either — rely on `schedulePostDrawRefreshes()` instead.
+**NEVER add `appendLottoXDeltas()`, `appendFantasy5Deltas()`, `appendPbDeltas()`, or `appendMmDeltas()` to this startup chain.** Note: `appendFantasy5Deltas()` uses Puppeteer not PDF, but Chrome at startup still OOMs -- same rule applies. When adding a new game with a JSON cache, do NOT add its delta function here either — rely on `schedulePostDrawRefreshes()` instead.
 
 **Why JTP and CP still run at startup**: their PDFs are small (<200KB) and parse quickly. The mtime guard makes it a no-op if the PDF hasn't changed.
 
@@ -906,7 +906,7 @@ downloadPDFs()
 ### ensureDailyRefresh* — download only for large PDFs
 `ensureDailyRefreshXxx()` for large-PDF games (LX, F5, PB, MM) **only downloads the PDF** — they never call `appendXxxDeltas()`. The parse is handled exclusively by `schedulePostDrawRefreshes()` which runs in the background queue 5 minutes after each draw.
 
-**Why**: `appendFantasy5Deltas()` takes ~2.5 minutes on Fly.io and blocks the entire Node.js event loop (single-threaded). Calling it inline on a user `/analyze` request makes the server unresponsive for 2.5 minutes — health checks fail, all other requests time out.
+**Why (historical)**: `appendFantasy5Deltas()` previously used PDF parse which took ~2.5 minutes and blocked the event loop (single-threaded). Calling it inline on a user `/analyze` request makes the server unresponsive for 2.5 minutes — health checks fail, all other requests time out.
 
 **The correct flow**:
 - `schedulePostDrawRefreshes()` fires 5 min after each draw → `enqueueRefresh()` → downloads PDF → `appendXxxDeltas()` → JSON cache updated
@@ -1342,8 +1342,8 @@ What was in stable-2026-11-23:
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
 - Memory: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills. Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
-- Node RSS at idle: ~117MB; peak with Fantasy 5 parse ~535MB; peak with Chrome ~267MB. Both fit within 1024MB.
-- Node heap: `--max-old-space-size=768` in Dockerfile CMD -- Fantasy 5 PDF parse peaks at 535MB RSS; 768MB heap gives comfortable headroom within 1024MB machine RAM
+- Node RSS at idle: ~117MB; peak with Lotto X PDF parse ~239MB; peak with Chrome (Puppeteer) ~267MB; peak with Fantasy 5 Puppeteer scrape ~108MB. All fit within 1024MB.
+- Node heap: `--max-old-space-size=768` in Dockerfile CMD -- Lotto X PDF parse peaks at ~239MB RSS; Fantasy 5 now uses Puppeteer (~108MB). 768MB heap gives comfortable headroom within 1024MB machine RAM.
 - Cost: ~$6.70/mo (shared-cpu-1x + 1024MB RAM in iad region)
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
@@ -1377,7 +1377,7 @@ Full project docs in `vault/` (Obsidian). Amazon Q prompts: `@jackpot-wiki` (dee
 
 **CRITICAL order**: PDF must be checked FIRST. Never call puppeteer for dates that are already in the PDF — it wastes memory and causes OOM crashes on 512MB.
 
-**Chrome/Puppeteer is DISABLED in all `/draws/*` routes** — `scrapeFlDraws` is NOT called from any draw lookup route. Chrome crashes the server (exit_code=134/SIGABRT) on Fly.io's shared CPU under any concurrent load. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON/PDF. The frontend renders this as a "View official results" link. `scrapeFlDraws` is only called from `getAvailableDates()` (used by `schedulePostDrawRefreshes`, not page-load routes) and `scrapeJackpot` (cache-only, never launches Chrome directly).
+**Chrome/Puppeteer is DISABLED in all `/draws/*` routes** — `scrapeFlDraws` is NOT called from any draw lookup route. Exception: `appendFantasy5Deltas()` uses Puppeteer for scheduled background refresh (not user-facing routes).. Chrome crashes the server (exit_code=134/SIGABRT) on Fly.io's shared CPU under any concurrent load. All `/draws/*` routes return 404 with `resultsUrl` when the date is not in the JSON/PDF. The frontend renders this as a "View official results" link. `scrapeFlDraws` is only called from `getAvailableDates()` (used by `schedulePostDrawRefreshes`, not page-load routes) and `scrapeJackpot` (cache-only, never launches Chrome directly).
 
 ### Why puppeteer is required
 - The FL Lottery website is **JavaScript-rendered** — a plain `https.get()` returns an empty shell with no draw data
