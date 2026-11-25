@@ -1925,7 +1925,7 @@ async function _appendFantasy5DeltasImpl() {
     }
   }
   if (!html) return;
-  const dateRe = /(d{4}-d{2}-d{2})-fantasy5/g;
+  const dateRe = /([0-9]{4}-[0-9]{2}-[0-9]{2})-fantasy5/g;
   const isoDates = []; let dm;
   while ((dm = dateRe.exec(html)) !== null) {
     if (!isoDates.includes(dm[1])) isoDates.push(dm[1]);
