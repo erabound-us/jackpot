@@ -1932,12 +1932,18 @@ async function _appendFantasy5DeltasImpl() {
   }
   if (!isoDates.length) { console.log('Fantasy 5: no dates found in scraped HTML.'); return; }
   const existing = getFantasy5Draws();
+  // Build a set of existing date+drawType keys for fast lookup
+  const existingKeys = new Set(existing.map(d => {
+    const p = d.date.split('/');
+    let yr = p[2]; if (yr.length === 2) yr = '20' + yr;
+    return yr + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0') + '|' + d.drawType;
+  }));
   const newestTs = existing.length ? existing[0].ts : 0;
   const newDraws = [];
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts <= newestTs) continue;
+    if (ts < newestTs - 86400000) continue; // skip dates more than 1 day older than newest
     const articleIdx = html.indexOf(isoDate + '-fantasy5');
     if (articleIdx === -1) continue;
     const chunk = html.slice(articleIdx, articleIdx + 4000);
@@ -1952,7 +1958,8 @@ async function _appendFantasy5DeltasImpl() {
       const numRe = /class="game-numbers__number"><span>(\d+)<\/span>/g;
       const nums = []; let nm;
       while ((nm = numRe.exec(block)) !== null) nums.push(parseInt(nm[1]));
-      if (nums.length === 5) {
+      const drawKey = isoDate + '|' + drawType;
+      if (nums.length === 5 && !existingKeys.has(drawKey)) {
         newDraws.push({ date: mmddyyyy, drawType, numbers: nums, ts: ts + (drawType === 'EVENING' ? 1 : 0) });
       }
     }
