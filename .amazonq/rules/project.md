@@ -3,9 +3,9 @@
 ## Stack
 - **Backend**: Node.js + Express 5, single file `server.js` (~3,200 lines)
 - **Frontend**: `public/index.html`, vanilla JS, no framework, no bundler (~4,200 lines)
-- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 512MB
+- **Hosting**: Fly.io — app `jackpot-ixupbg`, region `iad`, port `8080`, `shared-cpu-1x` 1024MB (~$6.70/mo)
 - **Deploy**: `deploy.ps1` → `git push` + `fly deploy` (Docker via `Dockerfile`) + restarts local PM2
-- **Node heap**: `--max-old-space-size=384` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~252MB heap; 384MB gives sufficient headroom within the 512MB machine RAM
+- **Node heap**: `--max-old-space-size=768` set in Dockerfile CMD -- Fantasy 5 PDF parse requires ~535MB RSS peak; 768MB heap gives comfortable headroom within the 1024MB machine RAM
 - **Local dev only**: PM2 (`ecosystem.config.js`) on port 7000; `start_jackpot.ps1` to start
 - **Email**: Resend API — `email.config.json` locally (never commit, never in Docker); on Fly.io set via `fly secrets set EMAIL_API_KEY=re_xxx -a jackpot-ixupbg`
 
@@ -718,9 +718,9 @@ const gameLabel = meta.label;
 - Passing a path uses `loadPDF()` internally, avoiding a full Buffer copy of the file in memory before parsing
 - `p.destroy()` is called after every parse to free PDFParser internal state immediately
 - Large PDFs (>1MB) use mtime-based parse cache with serialized `parsePromise` -- see PDF Parse Cache section
-- Node heap: `--max-old-space-size=256` in Dockerfile
-- Fly.io machine: `512mb` -- validated stable with queue serialization
-- **Path to 256MB**: possible if Chrome and PDF parse never overlap -- queue serialization makes this likely; monitor memory before reducing further
+- Node heap: `--max-old-space-size=768` in Dockerfile
+- Fly.io machine: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills (exit_code=137, oom_killed=true). Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
+- **Previous 512MB machine OOM-killed nightly** -- Fantasy 5 PDF parse (~535MB RSS peak) exceeded 512MB limit
 - **`fs.readFileSync` is ONLY permitted for text files** (`email.config.json`, log files) -- never for PDFs
 - **Never use inline `require('fs')`** inside functions -- always use the top-level `const fs = require('fs')` at the top of the file. Inline requires work but are inconsistent and harder to audit.
 
@@ -1307,9 +1307,10 @@ What was in stable-2026-11-23:
 ## Fly.io Machine
 - Account: `baysphoton2@gmail.com` — requires credit card (free trial limits machines to 5 min)
 - Machine ID: `857444c4722408`, region `iad`
-- Memory: `512mb` -- stable with serialized refresh queue and path-based PDF parsing. Queue ensures Chrome and PDF parse never run concurrently.
-- Node RSS at idle: ~117MB (heap limit 256MB); ~343MB available. Peak with Chrome ~267MB, leaving ~245MB headroom.
-- Node heap: `--max-old-space-size=384` in Dockerfile CMD -- Fantasy 5 PDF parse (~2.7MB) requires ~252MB heap; 384MB gives 130MB headroom within the 512MB machine RAM
+- Memory: `1024mb` -- upgraded Nov 2026 from 512MB after confirmed OOM kills. Fantasy 5 parse peaks at 535MB RSS; 1024MB gives ~489MB headroom.
+- Node RSS at idle: ~117MB; peak with Fantasy 5 parse ~535MB; peak with Chrome ~267MB. Both fit within 1024MB.
+- Node heap: `--max-old-space-size=768` in Dockerfile CMD -- Fantasy 5 PDF parse peaks at 535MB RSS; 768MB heap gives comfortable headroom within 1024MB machine RAM
+- Cost: ~$6.70/mo (shared-cpu-1x + 1024MB RAM in iad region)
 - Health check: `GET /health` every 15s, 5s timeout, 30s grace — `/health` returns 200 instantly
 - `auto_stop_machines = "off"`, `min_machines_running = 1` — machine stays running permanently
 - If machine gets stuck in crash loop: `flyctl machine restart 857444c4722408 -a jackpot-ixupbg`
