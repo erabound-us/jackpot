@@ -1371,7 +1371,7 @@ function jtpLookupDraw() {
   msg.textContent = 'Looking up...';
   var _jtpDate = dateVal;
   if (window._jtpLookupAC) window._jtpLookupAC.abort('new-lookup');
-  window._jtpLookupAC = new AbortController(); setTimeout(function(){if(window._jtpLookupAC)window._jtpLookupAC.abort('timeout');},60000);
+  window._jtpLookupAC = new AbortController(); setTimeout(function(){if(window._jtpLookupAC)window._jtpLookupAC.abort('timeout');},120000);
   (function(){return fetch('/draws/jtp?date=' + encodeURIComponent(mmddyy),{signal:window._jtpLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -1788,7 +1788,7 @@ function lxLookupDraw() {
   msg.textContent = 'Looking up...';
   var _lxDate = dateVal;
   if (window._lxLookupAC) window._lxLookupAC.abort('new-lookup');
-  window._lxLookupAC = new AbortController(); setTimeout(function(){if(window._lxLookupAC)window._lxLookupAC.abort('timeout');},60000);
+  window._lxLookupAC = new AbortController(); setTimeout(function(){if(window._lxLookupAC)window._lxLookupAC.abort('timeout');},120000);
   (function(){return fetch('/draws/lottox?date=' + encodeURIComponent(mmddyy),{signal:window._lxLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2174,7 +2174,7 @@ function cpLookupDraw(forceLatest) {
   msg.textContent = 'Looking up...';
   var _cpDate = dateVal;
   if (window._cpLookupAC) window._cpLookupAC.abort('new-lookup');
-  window._cpLookupAC = new AbortController(); setTimeout(function(){if(window._cpLookupAC)window._cpLookupAC.abort('timeout');},60000);
+  window._cpLookupAC = new AbortController(); setTimeout(function(){if(window._cpLookupAC)window._cpLookupAC.abort('timeout');},120000);
   (function(){return fetch('/draws/cashpop?date=' + encodeURIComponent(mmddyyyy),{signal:window._cpLookupAC.signal});})()
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -2540,7 +2540,7 @@ function f5LookupDraw() {
   if (window._f5LookupAC) window._f5LookupAC.abort('new-lookup');
   window._f5LookupAC = new AbortController();
   var _f5Signal = window._f5LookupAC.signal;
-  setTimeout(function(){if(window._f5LookupAC)window._f5LookupAC.abort('timeout');},60000);
+  setTimeout(function(){if(window._f5LookupAC)window._f5LookupAC.abort('timeout');},120000);
   function _f5Fetch(dt) {
     return fetch('/draws/fantasy5?date=' + encodeURIComponent(mmddyyyy) + '&draw=' + dt, {signal:_f5Signal}).then(function(r){return r.json();}).catch(function(){return null;});
   }
@@ -2956,7 +2956,7 @@ function pickLookupDraw() {
   if (window._pickLookupAC) window._pickLookupAC.abort('new-lookup');
   window._pickLookupAC = new AbortController();
   var _pickSignal = window._pickLookupAC.signal;
-  setTimeout(function(){if(window._pickLookupAC)window._pickLookupAC.abort('timeout');},60000);
+  setTimeout(function(){if(window._pickLookupAC)window._pickLookupAC.abort('timeout');},120000);
   function _pFetch(dt) {
     return fetch('/draws/pick?game='+_game+'&date='+encodeURIComponent(mmddyyyy)+'&draw='+dt,{signal:_pickSignal}).then(function(r){return r.json();}).catch(function(){return null;});
   }
@@ -3330,7 +3330,7 @@ function pbLookupDraw() {
   var _pbDate = dateVal;
   if (window._pbLookupAC) window._pbLookupAC.abort('new-lookup');
   window._pbLookupAC = new AbortController();
-  setTimeout(function(){if(window._pbLookupAC)window._pbLookupAC.abort('timeout');}, 60000);
+  setTimeout(function(){if(window._pbLookupAC)window._pbLookupAC.abort('timeout');}, 120000);
   fetch('/draws/powerball?date=' + encodeURIComponent(mmddyyyy), {signal: window._pbLookupAC.signal})
     .then(function(r){return r.json();})
     .then(function(data) {
@@ -3617,7 +3617,7 @@ function mmLookupDraw() {
   msg.style.color = 'var(--muted)'; msg.textContent = 'Looking up...';
   var _mmDate = dateVal;
   if (window._mmLookupAC) window._mmLookupAC.abort('new-lookup');
-  window._mmLookupAC = new AbortController(); setTimeout(function(){if(window._mmLookupAC)window._mmLookupAC.abort('timeout');},60000);
+  window._mmLookupAC = new AbortController(); setTimeout(function(){if(window._mmLookupAC)window._mmLookupAC.abort('timeout');},120000);
   fetch('/draws/megamillions?date=' + encodeURIComponent(mmddyyyy), {signal:window._mmLookupAC.signal})
     .then(function(r){return r.json();})
     .then(function(data) {
