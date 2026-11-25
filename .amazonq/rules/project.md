@@ -840,7 +840,7 @@ All `ensureDailyRefreshXxx()` functions are now empty no-ops (`async function en
 | Powerball | ~59MB | ~20s |
 | Mega Millions | ~63MB | ~20s |
 
-All fit comfortably within 1024MB machine RAM. Chrome is closed immediately after each scrape via `closeBrowser()`.
+All fit comfortably within 512MB machine RAM. Chrome is closed immediately after each scrape via `closeBrowser()`.
 
 ### CRITICAL — Regex in Puppeteer scrapers
 - All regex literals in scraper functions use `[0-9]` not `\d` — avoids backslash-eating when writing via patch scripts
@@ -1159,14 +1159,14 @@ Every user-triggered fetch() in index.html MUST have an AbortController with an 
 ### Timeout values by endpoint type
 | Endpoint type | Timeout | Rationale |
 |---|---|---|
-| /analyze/* | 30s | Returns immediately from JSON cache; PDF parse runs in background |
+| /analyze/* | 30s | Returns immediately from JSON cache; no blocking I/O |
 | /email | 30s | Resend API call + server processing |
 | /refresh/* | 10s | Just enqueues a job, returns immediately |
 | /check/* | 15s | Pure math, should be fast |
 | /chat/* | 15s | String matching, no I/O |
 | /email/config GET/POST | 10s | File read/write only |
 | /email/test | 10s | Single Resend API call |
-| /draws/* (lookup) | 60s | Already had this -- puppeteer can take 15s+ |
+| /draws/* (lookup) | 120s | Puppeteer fallback can take 20s+ plus queue wait |
 
 ### Endpoints that do NOT need AbortController
 - /nextdraw/* -- pure date math, instant; poll errors swallowed with .catch(function(){})
@@ -1289,16 +1289,23 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-25f`
+Latest stable: `backups/stable-2026-11-25h`
 
-What's in the latest backup (stable-2026-11-25f):
-- `server.js` -- All games migrated to Puppeteer scraping (JTP, LX, CP, Pick 2-5, PB, MM). All JSON caches normalized to 4-digit years. All `/draws/*` lookup routes use `stripLeadingZeros()` directly (no `normDateForPDF`). All `ensureDailyRefreshXxx()` functions are no-ops. Startup no longer downloads any PDFs. `schedulePostDrawRefreshes()` has 23:50 + 00:10 late retries for PB/MM/JTP/LX/F5/Pick. JTP `runAnalysis` computes frequency from draw history (no frequency PDF). `downloadPDFs()` and `downloadFile()` still exist but are never called.
-- `index.html` -- unchanged from stable-2026-11-25e
-- `Dockerfile` -- `--max-old-space-size=768`
-- `fly.toml` -- `memory = "1024mb"`
-- All JSON caches -- 4-digit year dates: `powerball_draws.json`, `megamillions_draws.json`, `jtp_draws.json`, `lottox_draws.json`, `fantasy5_draws.json`
+What's in the latest backup (stable-2026-11-25h):
+- `server.js` -- All games Puppeteer-based. All `/draws/*` routes have 3-step lookup (JSON cache -> appendXxxDeltas() Puppeteer fallback -> official link). PB/MM routes made async. All `ensureDailyRefreshXxx()` are no-ops. 23:50 + 00:10 late retries for PB/MM/JTP/LX/F5/Pick. Lookup timeouts 60s -> 120s.
+- `index.html` -- All 7 Check My Numbers buttons have `id` + `btn.disabled=true` + "Checking..." guard + re-enable in `.finally()` / pending===0 + `.catch()` paths.
+- `Dockerfile` -- `--max-old-space-size=384` (downsized from 768MB)
+- `fly.toml` -- `memory = "512mb"` (downsized from 1024MB -- PDF parsing gone, Puppeteer peak ~175MB)
+- `powerball_draws.json` -- synced with live server (includes 11/23/2026)
 
-Previous stable: `backups/stable-2026-11-25e`
+Previous stable: `backups/stable-2026-11-25g`
+
+**CRITICAL -- sync caches before deploy**: After any deploy, the Docker image carries the committed JSON caches. If the live server has newer draws (appended post-draw), they are lost on redeploy. Before deploying, run:
+```js
+// Fetch /latestdraw/* from live server and prepend to local JSON if newer
+node sync_caches.js  // or manually check /latestdraw/powerball etc.
+```
+This prevents the "No draw found" regression where a date was in the live cache but not the committed JSON.
 
 What's in the latest backup:
 - `server.js` -- (1) 2-digit year parser fix: all parsers now use `yy > 50 ? yy += 1900 : yy += 2000` instead of flat `yy += 2000`. Fantasy 5 and Lotto X PDFs contain 1990s draws (e.g. `12/31/99` = 1999) that were being parsed as 2099, filling the 500-draw cap with phantom future dates and pushing all real draws out. (2) Fantasy 5 `_appendFantasy5DeltasImpl` redundant `> 2000-01-01` filter removed (parser now handles it). (3) PM2 startup fix: `start_jackpot.ps1` no longer calls `pm2 kill` (which caused EPERM on dead daemon); instead directly wipes socket files and kills node processes.
