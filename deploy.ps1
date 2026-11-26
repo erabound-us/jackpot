@@ -9,7 +9,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host " Git push failed." -ForegroundColor Red; 
 
 Write-Host ""
 Write-Host " Deploying to Fly.io..." -ForegroundColor Cyan
-fly deploy --local-only
+fly deploy --depot=false
 if ($LASTEXITCODE -ne 0) { Write-Host " Deploy failed." -ForegroundColor Red; exit 1 }
 
 Write-Host ""
