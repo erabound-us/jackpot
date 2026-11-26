@@ -1,5 +1,29 @@
 [
   {
+    "date": "11/25/2026",
+    "drawType": "EVENING",
+    "digits": [
+      7,
+      2,
+      1,
+      4
+    ],
+    "fireball": 1,
+    "ts": 1795582800001
+  },
+  {
+    "date": "11/25/2026",
+    "drawType": "MIDDAY",
+    "digits": [
+      4,
+      0,
+      6,
+      9
+    ],
+    "fireball": 3,
+    "ts": 1795582800000
+  },
+  {
     "date": "11/24/2026",
     "drawType": "EVENING",
     "digits": [
@@ -5974,29 +5998,5 @@
     ],
     "fireball": 6,
     "ts": 1774065600000
-  },
-  {
-    "date": "3/20/2026",
-    "drawType": "EVENING",
-    "digits": [
-      2,
-      2,
-      1,
-      2
-    ],
-    "fireball": 4,
-    "ts": 1773979200001
-  },
-  {
-    "date": "3/20/2026",
-    "drawType": "MIDDAY",
-    "digits": [
-      1,
-      7,
-      3,
-      3
-    ],
-    "fireball": 2,
-    "ts": 1773979200000
   }
 ]

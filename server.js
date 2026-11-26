@@ -2078,12 +2078,14 @@ const _scrapeInFlight = {}; // key -> Promise, deduplicates concurrent scrapes f
 let _scrapeGlobalLock = Promise.resolve(); // ensures only one Chrome instance runs at a time
 async function getBrowser() {
   if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer', '--disable-extensions', '--no-first-run'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
+    _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-software-rasterizer', '--disable-extensions', '--no-first-run', '--single-process'], executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined });
   }
   return _browser;
 }
 async function closeBrowser() {
   if (_browser) { try { await _browser.close(); } catch(_) {} _browser = null; }
+  // Give OS time to fully reap Chrome child processes before next launch
+  await new Promise(r => setTimeout(r, 2000));
 }
 
 const JACKPOT_GAME_URLS = {
@@ -4148,7 +4150,7 @@ function schedulePostDrawRefreshes() {
     if (mmDays.includes(day)) jackpotGames.push('megamillions');
     jackpotGames.forEach(g => {
       delete _jackpotCache[g];
-      _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot(g)).catch(() => {});
+      enqueueRefresh('jackpot_' + g, () => forceRefreshJackpot(g).catch(() => {}));
     });
   });
 
@@ -4225,7 +4227,7 @@ function schedulePostDrawRefreshes() {
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
     delete _jackpotCache['fantasy5'];
-    _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('fantasy5')).catch(() => {});
+    enqueueRefresh('jackpot_fantasy5', () => forceRefreshJackpot('fantasy5').catch(() => {}));
   }));
 }
 
