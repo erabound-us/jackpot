@@ -813,14 +813,23 @@ All games now use Puppeteer to scrape the FL Lottery website directly for draw h
 - Website shows all completed sessions for a date inline in the article
 - Session name in `<div class="text-xs font-normal...">Morning</div>` immediately before `<span class="game-numbers__number mt-2 text-black">5</span>`
 - Regex: `/class="text-xs[^"]*"[^>]*>([^<]+)<\/div><span class="game-numbers__number[^"]*">([0-9]+)<\/span>/g`
-- Only stores complete days (all 5 sessions) as `numbers: [n1,n2,n3,n4,n5]` — same structure as PDF cache
-- Partial days (today, still in progress) are stored with however many sessions have completed
+- Stores any day with at least 1 session — partial days (today, still in progress) are stored with however many sessions have completed so far
+- **NEVER require all 5 sessions before storing** — the old guard (`sessions.length === 5`) caused today's date to be permanently skipped until after the Late Night draw (10:29 PM) completed
 
 ### existingKeys deduplication
 All scrapers use a `Set` of normalized keys to skip already-cached draws:
 - Single-draw games (JTP, LX, CP, PB, MM): key = `YYYY-MM-DD`
 - Multi-draw games (F5, Pick): key = `YYYY-MM-DD|DRAWTYPE` (e.g. `2026-11-24|EVENING`)
 - Always normalize to 4-digit year when building keys from existing cache entries
+
+### CRITICAL: 7-day lookback window — all scrapers
+Every `_appendXxxDeltasImpl()` uses a lookback guard: `if (ts < newestTs - 7 * 86400000) continue;`
+
+**This MUST be 7 days, never 1 day.** The original 1-day guard caused a permanent skip bug: if a scrape failed or the FL Lottery site didn't show a date on the first attempt, that date fell outside the 1-day window on all subsequent runs and was never retried. With 7 days, any missed date within the past week is caught on the next scheduled or manual refresh.
+
+- Confirmed root cause of Nov 2026 stale data: CP showed 11/24, F5/Pick showed 11/25, MM showed 11/24 — all 2-3 days behind — because the 1-day guard permanently skipped missed dates
+- Fix deployed version 188 (2026-11-27): all 7 scrapers updated to `7 * 86400000`
+- **When adding a new game**: always use `7 * 86400000` in the lookback guard, never `86400000`
 
 ### Date format — ALL JSON caches now use 4-digit years (`MM/DD/YYYY`)
 - Puppeteer scrapers write `mo + '/' + day + '/' + y` where `y` is 4-digit from ISO date
@@ -1298,7 +1307,13 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-27`
+Latest stable: `backups/stable-2026-11-27b`
+
+What's in the latest backup (stable-2026-11-27b):
+- `server.js` -- Scraper staleness fix: all 7 scrapers (`_appendXxxDeltasImpl` for JTP, LX, F5, CP, PB, MM, Pick) changed from 1-day to 7-day lookback window (`newestTs - 7 * 86400000`). Root cause: 1-day guard permanently skipped any date the scraper missed on first attempt. CP scraper also fixed to store partial days (any session count > 0, not just complete 5-session days). `/draws/cashpop/available` stale-check added (prepends today if past 7:34 AM ET). Deployed as version 188.
+- All JSON caches current as of 2026-11-27: JTP 11/24, LX 11/25, F5 11/27 Midday, CP 11/27, PB 11/25, MM 11/24 (draw tonight), Pick 11/26 Evening.
+
+Previous stable: `backups/stable-2026-11-27`
 
 What's in the latest backup (stable-2026-11-27):
 - `server.js` -- Jackpot refresh timing fix: `forceRefreshJackpot` now fires at 23:35, 23:50, and 00:10 for JTP/LX/PB/MM (in addition to 23:20). Previously only 23:20 fired, which is too early (only 5 min after the 23:15 JTP/LX draw — FL Lottery site not yet updated). PB/MM draw even later (10:59/11:00 PM) so 23:20 was always before their draws. All 5 jackpot games now reliably update post-draw.
@@ -1624,6 +1639,7 @@ if (vals.every(function(v) { return v === ''; })) continue;  // skip blank rows
 - **CRITICAL: only prepend a date if a draw has actually occurred** — compare current ET time against the game's first draw of the day. If before the first draw, the most recent draw date is yesterday, not today. Prepending today before any draw has occurred causes "No draw found" errors.
   - **Fantasy 5**: first draw is Midday 1:05 PM ET. Before 1:05 PM → prepend yesterday. At/after 1:05 PM → prepend today.
   - **Cash Pop**: first draw is Morning 7:29 AM ET. Before 7:29 AM → prepend yesterday. At/after 7:29 AM → prepend today.
+  - The `/draws/cashpop/available` endpoint uses a simplified check: if current ET time is past 7:34 AM (Morning draw + 5 min refresh window), prepend today if not already present.
   - **Pick 2-5**: first draw is Midday 1:05 PM ET. Same rule as Fantasy 5.
 - Pattern (used in both F5 and Cash Pop `/available` routes):
 ```js
