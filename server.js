@@ -2447,21 +2447,46 @@ app.get('/draws/cashpop/available', async (req, res) => {
   } catch(e) { res.json({ dates: [] }); }
 });
 
+// CP session draw times in ET (hour, min) -- used to gate results to only past draws
+const CP_SESSION_TIMES = {
+  'Morning':    { h: 7,  m: 29 },
+  'Matinee':    { h: 11, m: 29 },
+  'Afternoon':  { h: 14, m: 29 },
+  'Evening':    { h: 18, m: 29 },
+  'Late Night': { h: 22, m: 29 },
+};
+
+function cpSessionHasPassed(sessionName, dateStr) {
+  // Returns true only if the session's draw time has already passed for the given date
+  const t = CP_SESSION_TIMES[sessionName];
+  if (!t) return false;
+  const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const p = dateStr.split('/');
+  if (p.length !== 3) return false;
+  const yr = parseInt(p[2].length === 2 ? '20' + p[2] : p[2]);
+  const drawET = new Date(yr, parseInt(p[0]) - 1, parseInt(p[1]), t.h, t.m, 0, 0);
+  return nowET >= drawET;
+}
+
 app.get('/draws/cashpop', async (req, res) => {
   const { date, session } = req.query;
   if (!date) return res.status(400).json({ error: 'date required (MM/DD/YYYY)' });
-  // PDF fallback first - has 5 numbers per date (one per session)
   try {
     const draws = getCpDraws();
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) {
-      const sessions = ['Morning','Matinee','Afternoon','Evening','Late Night'];
-      const allSessions = match.numbers.slice(0, 5).map((n, i) => ({ name: sessions[i], number: n })).filter(s => s.number !== undefined && s.number !== null);
-      const target = session ? allSessions.find(s => s.name.toLowerCase() === session.toLowerCase()) || allSessions[allSessions.length-1] : allSessions[allSessions.length-1];
-      if (target) return res.json({ date, session: target.name, number: target.number, allSessions });
+      const SESSION_NAMES = ['Morning','Matinee','Afternoon','Evening','Late Night'];
+      // Only include sessions whose draw time has already passed -- never show future results
+      const allSessions = match.numbers.slice(0, 5)
+        .map((n, i) => ({ name: SESSION_NAMES[i], number: n }))
+        .filter(s => s.number !== undefined && s.number !== null && cpSessionHasPassed(s.name, date));
+      if (!allSessions.length) return res.status(404).json({ error: 'No draws have occurred yet for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
+      const target = session
+        ? allSessions.find(s => s.name.toLowerCase() === session.toLowerCase()) || allSessions[allSessions.length - 1]
+        : allSessions[allSessions.length - 1];
+      return res.json({ date, session: target.name, number: target.number, allSessions });
     }
   } catch(e) {}
-  // JSON only -- no scraper (Chrome crashes on Fly.io). Show official results link for missing dates.
   delete _availCache['cashpop'];
   res.status(404).json({ error: 'No draw found for that date.', resultsUrl: FL_RESULTS_URLS.cashpop });
 });
