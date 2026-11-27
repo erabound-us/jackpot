@@ -1244,7 +1244,7 @@ async function _appendLottoXDeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     if (existingKeys.has(isoDate)) continue;
     const articleIdx = html.indexOf(isoDate + '-lotto-item');
     if (articleIdx === -1) continue;
@@ -1929,7 +1929,7 @@ async function _appendFantasy5DeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue; // skip dates more than 1 day older than newest
+    if (ts < newestTs - 7 * 86400000) continue;
     const articleIdx = html.indexOf(isoDate + '-fantasy5');
     if (articleIdx === -1) continue;
     const chunk = html.slice(articleIdx, articleIdx + 4000);
@@ -2782,7 +2782,7 @@ async function _appendJtpDeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     if (existingKeys.has(isoDate)) continue;
     const articleIdx = html.indexOf(isoDate + '-jackpottripleplay');
     if (articleIdx === -1) continue;
@@ -3276,7 +3276,7 @@ async function _appendPickDeltasImpl(game) {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     const articleIdx = html.indexOf(isoDate + '-' + game + '-item');
     if (articleIdx === -1) continue;
     const chunk = html.slice(articleIdx, articleIdx + 4000);
@@ -3382,7 +3382,7 @@ async function _appendPbDeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     if (existingKeys.has(isoDate)) continue;
     const articleIdx = html.indexOf(isoDate + '-powerball-item');
     if (articleIdx === -1) continue;
@@ -3776,7 +3776,7 @@ async function _appendMmDeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     if (existingKeys.has(isoDate)) continue;
     const articleIdx = html.indexOf(isoDate + '-megamillions-item');
     if (articleIdx === -1) continue;
