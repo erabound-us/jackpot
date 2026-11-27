@@ -137,7 +137,7 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - **Scoring**: white balls scored independently (pool top 40 of 69); Powerball picked from top-16 frequency pool (1–26)
 - **Session key format**: `"1,5,12,22,33,41|7"` (white balls comma-separated + `|` + Powerball) — distinct from other games
 - **`getLastDrawTime` schedule**: `powerball: [{ days: [1, 3, 6], h: 22, m: 59 }]` — Mon/Wed/Sat 10:59 PM ET
-- **`schedulePostDrawRefreshes`**: fires at 23:20 ET, gated on `pbDays = [1, 3, 6]`
+- **`schedulePostDrawRefreshes`**: fires at 23:35, 23:50, 00:10 ET gated on `pbDays = [1, 3, 6]` (23:20 fires before the draw)
 
 ### Official Powerball Prizes & Odds
 | Match | Prize | Power Play | Odds |
@@ -174,10 +174,9 @@ Browser → jackpot.allaml.ai → Fly.io (Docker, node server.js, port 8080)
 - **`schedulePostDrawRefreshes`**: fires at 23:35, 23:50, 00:10 ET gated on `pbDays = [1, 3, 6]` (23:20 fires before the draw)
 
 ### Powerball Jackpot Banner
-- Powerball is a **multi-state game** — NOT in `JACKPOT_GAME_URLS`, NOT scraped from FL Lottery
-- Banner center col element `pbJackpotAmount` shows static text `"See FL Lottery"` (not `&mdash;`)
-- Do NOT add Powerball to the frontend jackpot fetch block (`games = ['jtp','lottox','fantasy5']`)
-- Do NOT add `forceRefreshJackpot('powerball')` to `schedulePostDrawRefreshes`
+- Powerball IS in `JACKPOT_GAME_URLS` and IS scraped from the FL Lottery website via Puppeteer
+- Banner center col element `pbJackpotAmount` shows the live jackpot amount (or `"See FL Lottery"` if cache is empty)
+- Powerball jackpot is refreshed via `forceRefreshJackpot('powerball')` in `schedulePostDrawRefreshes` at 23:35, 23:50, 00:10 ET on Mon/Wed/Sat
 
 ### Game 5-8: PICK Daily Games (Pick 2, Pick 3, Pick 4, Pick 5)
 - Pick N: player picks N digits (0-9), draws every day Midday (1:05 PM ET) and Evening (11:15 PM ET)
@@ -556,7 +555,17 @@ If none match, the cache is not updated and the frontend shows `"See FL Lottery"
 ### CRITICAL: scrapeJackpot always returns last known amount
 `scrapeJackpot` **always returns the last cached amount even when stale**. It only returns `null` if no cached amount exists at all (true cold start). The old behavior of returning `null` when stale caused banners to show "See FL Lottery" after every server restart that missed the post-draw scheduled refresh. The fix (Nov 2026): removed the `isDataStaleForGame` check from the file cache read path — stale data is always better than no data. `forceRefreshJackpot` still updates the cache after each draw as before.
 
-**If a jackpot banner shows "See FL Lottery" unexpectedly**: check `jackpot_cache.json` — if the game's `ts` predates the last draw AND `scrapeJackpot` is returning `null`, the cache file has no entry for that game. Fix: bump the `ts` to `Date.now()` in `jackpot_cache.json` locally, or wait for the next scheduled draw to fire `forceRefreshJackpot`. Deploy will carry the updated cache file to Fly.io.
+**If a jackpot banner shows "See FL Lottery" unexpectedly**: trigger a manual refresh via `POST /refresh/<game>` — this calls `appendXxxDeltas()` which scrapes the FL Lottery page and calls `extractAndCacheJackpot` as a side effect, populating the cache immediately. Do NOT manually edit `jackpot_cache.json` — the scraper is the source of truth.
+
+**After any deploy**, if jackpot banners show `—` or "See FL Lottery", trigger manual refreshes for all 5 games:
+```
+POST /refresh          (JTP)
+POST /refresh/lottox
+POST /refresh/fantasy5
+POST /refresh/powerball
+POST /refresh/megamillions
+```
+Each takes ~30s. The scheduled retries at 23:35/23:50/00:10 will also self-correct after the next draw.
 
 **OOM safety**: `forceRefreshJackpot` fires at most 2-3x per day per game, serialized through `_scrapeGlobalLock`. `scrapeJackpot` never launches Chrome. No concurrent Chrome instances possible.
 
@@ -1289,9 +1298,16 @@ Each game fetches `/latestdraw/<game>` on page load to auto-populate Check My Nu
 
 ## Backups
 Stable snapshots -> `backups/stable-YYYY-MM-DD/`
-Latest stable: `backups/stable-2026-11-25h`
+Latest stable: `backups/stable-2026-11-27`
 
-What's in the latest backup (stable-2026-11-25h):
+What's in the latest backup (stable-2026-11-27):
+- `server.js` -- Jackpot refresh timing fix: `forceRefreshJackpot` now fires at 23:35, 23:50, and 00:10 for JTP/LX/PB/MM (in addition to 23:20). Previously only 23:20 fired, which is too early (only 5 min after the 23:15 JTP/LX draw — FL Lottery site not yet updated). PB/MM draw even later (10:59/11:00 PM) so 23:20 was always before their draws. All 5 jackpot games now reliably update post-draw.
+- `jackpot_cache.json` -- Updated with live-scraped amounts: JTP $425,000, LX $2 Million, F5 $100,000, PB $48 Million, MM $673 Million.
+- `.dockerignore` -- unchanged (jackpot_cache.json remains in Docker image as a floor; automated retries keep it current post-draw).
+
+Previous stable: `backups/stable-2026-11-25h`
+
+What's in stable-2026-11-25h:
 - `server.js` -- All games Puppeteer-based. All `/draws/*` routes have 3-step lookup (JSON cache -> appendXxxDeltas() Puppeteer fallback -> official link). PB/MM routes made async. All `ensureDailyRefreshXxx()` are no-ops. 23:50 + 00:10 late retries for PB/MM/JTP/LX/F5/Pick. Lookup timeouts 60s -> 120s.
 - `index.html` -- All 7 Check My Numbers buttons have `id` + `btn.disabled=true` + "Checking..." guard + re-enable in `.finally()` / pending===0 + `.catch()` paths.
 - `Dockerfile` -- `--max-old-space-size=384` (downsized from 768MB)
