@@ -943,6 +943,22 @@ All games refresh via `schedulePostDrawRefreshes()` using Puppeteer. The complet
 
 **When adding a new game**: add its `enqueueRefresh` call to `schedulePostDrawRefreshes()` at the appropriate time slot. For games drawing before 11 PM, the 23:20 slot is fine. For games drawing at or after 11 PM, use 23:35 as the first slot and add 23:50 + 00:10 retries.
 
+### Generate Lines — data freshness guarantee
+
+`runAnalysisXxx()` (called by every `/analyze/*` route) reads draws from the in-memory cache variable (`jtpDrawsCache`, `lxDrawsCache`, `f5DrawsCache`, `cpDrawsCache`, `pbDrawsCache`, `mmDrawsCache`, `pickDrawsCache[game]`). Every `getXxxDraws()` function returns that variable directly if populated, only reading from disk on cold start.
+
+Every `_appendXxxDeltasImpl()` writes new draws to that **same in-memory variable** before returning — so the moment a refresh completes, the next Generate Lines call scores against the updated data. No server restart needed, no re-read from disk.
+
+```
+appendXxxDeltas() → sets xxxDrawsCache = merged (in-memory) + writes JSON to disk
+                                    ↓
+runAnalysisXxx() → getXxxDraws() → returns xxxDrawsCache (already updated)
+```
+
+**Generate Lines is never stale relative to the JSON cache.** The only way it can score against old data is if the JSON cache itself is stale — i.e. `appendXxxDeltas()` hasn't run since the last draw. This is why the 7-day lookback fix and the scheduled refresh timing matter: they ensure `appendXxxDeltas()` picks up every draw promptly.
+
+**When adding a new game**: follow the same pattern — `getXxxDraws()` returns `xxxDrawsCache` if set, reads JSON on first call; `_appendXxxDeltasImpl()` sets `xxxDrawsCache = merged` before writing to disk. Never read from disk inside `runAnalysisXxx()` directly.
+
 ### appendXxxDeltas() — in-flight promise guard (REQUIRED)
 Every `appendXxxDeltas()` function is wrapped with an in-flight promise guard to prevent concurrent Puppeteer scrapes. The pattern splits the function into a public wrapper and a private `_impl`:
 
