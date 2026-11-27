@@ -4191,6 +4191,11 @@ function schedulePostDrawRefreshes() {
       enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {}));
       console.log('Post-draw retry queued: Mega Millions');
     }
+    // Jackpot retry -- 23:20 fires only 5 min after JTP/LX draw, site may not be updated yet
+    if (jtpDays.includes(day)) { delete _jackpotCache['jtp']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('jtp')).catch(() => {}); }
+    if (lxDays.includes(day)) { delete _jackpotCache['lottox']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('lottox')).catch(() => {}); }
+    if (pbDays.includes(day)) { delete _jackpotCache['powerball']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('powerball')).catch(() => {}); }
+    if (mmDays.includes(day)) { delete _jackpotCache['megamillions']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('megamillions')).catch(() => {}); }
   });
 
   // Cash Pop retries 15 min after each session
@@ -4208,6 +4213,11 @@ function schedulePostDrawRefreshes() {
     if (mmDays.includes(day)) { enqueueRefresh('megamillions', () => appendMmDeltas().catch(() => {})); console.log('Late retry queued: Mega Millions'); }
     if (jtpDays.includes(day)) { enqueueRefresh('jtp', () => appendJtpDeltas().catch(() => {})); console.log('Late retry queued: JTP'); }
     if (lxDays.includes(day)) { enqueueRefresh('lottox', () => appendLottoXDeltas().catch(() => {})); console.log('Late retry queued: Lotto X'); }
+    // Jackpot retry at 23:50 -- by now FL Lottery site should have updated
+    if (jtpDays.includes(day)) { delete _jackpotCache['jtp']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('jtp')).catch(() => {}); }
+    if (lxDays.includes(day)) { delete _jackpotCache['lottox']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('lottox')).catch(() => {}); }
+    if (pbDays.includes(day)) { delete _jackpotCache['powerball']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('powerball')).catch(() => {}); }
+    if (mmDays.includes(day)) { delete _jackpotCache['megamillions']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('megamillions')).catch(() => {}); }
   });
 
   // 00:10 ET final retry -- catches any games whose results weren't up at 23:50
@@ -4223,6 +4233,11 @@ function schedulePostDrawRefreshes() {
     enqueueRefresh('fantasy5', () => appendFantasy5Deltas().catch(() => {}));
     Object.keys(PDF_URLS_PICK).forEach(g => { enqueueRefresh(g, () => appendPickDeltas(g).catch(() => {})); });
     console.log('00:10 retry queued: F5 + Pick');
+    // Final jackpot retry for previous-day draw games
+    if (jtpDays.includes(prevDay)) { delete _jackpotCache['jtp']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('jtp')).catch(() => {}); }
+    if (lxDays.includes(prevDay)) { delete _jackpotCache['lottox']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('lottox')).catch(() => {}); }
+    if (pbDays.includes(prevDay)) { delete _jackpotCache['powerball']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('powerball')).catch(() => {}); }
+    if (mmDays.includes(prevDay)) { delete _jackpotCache['megamillions']; _scrapeGlobalLock = _scrapeGlobalLock.then(() => forceRefreshJackpot('megamillions')).catch(() => {}); }
   });
 
   f5Times.forEach(([h, m]) => scheduleDaily(h, m, () => {
