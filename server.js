@@ -2456,8 +2456,8 @@ app.get('/draws/cashpop', async (req, res) => {
     const match = draws.find(d => stripLeadingZeros(d.date) === stripLeadingZeros(date) || d.date === date);
     if (match) {
       const sessions = ['Morning','Matinee','Afternoon','Evening','Late Night'];
-      const allSessions = match.numbers.map((n, i) => ({ name: sessions[i], number: n }));
-      const target = session ? allSessions.find(s => s.name.toLowerCase() === session.toLowerCase()) : allSessions[allSessions.length-1];
+      const allSessions = match.numbers.slice(0, 5).map((n, i) => ({ name: sessions[i], number: n })).filter(s => s.number !== undefined && s.number !== null);
+      const target = session ? allSessions.find(s => s.name.toLowerCase() === session.toLowerCase()) || allSessions[allSessions.length-1] : allSessions[allSessions.length-1];
       if (target) return res.json({ date, session: target.name, number: target.number, allSessions });
     }
   } catch(e) {}
