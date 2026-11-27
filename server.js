@@ -2434,9 +2434,15 @@ app.get('/draws/cashpop/available', async (req, res) => {
   try {
     const draws = getCpDraws();
     const dates = draws.slice(0, 5).map(d => expandYear(d.date));
-    // Return the 5 most recent dates from the JSON.
-    // CP PDF updates once per day (end of day) -- today's data won't appear until appendCpDeltas() runs tonight.
-    // Don't prepend today speculatively -- it would trigger the scraper which is unstable.
+    // Stale check: if any CP session has passed today and today isn't in the list, prepend it
+    const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const h = nowET.getHours(), m = nowET.getMinutes();
+    if (h > 7 || (h === 7 && m >= 34)) { // at least Morning session has fired + 5 min
+      const mo = String(nowET.getMonth() + 1).padStart(2, '0');
+      const dy = String(nowET.getDate()).padStart(2, '0');
+      const todayFull = mo + '/' + dy + '/' + nowET.getFullYear();
+      if (!dates.includes(todayFull)) dates.unshift(todayFull);
+    }
     res.json({ dates: dates.slice(0, 5) });
   } catch(e) { res.json({ dates: [] }); }
 });
@@ -2841,7 +2847,7 @@ async function _appendCpDeltasImpl() {
   for (const isoDate of isoDates) {
     const [y, mo, day] = isoDate.split('-');
     const ts = new Date(parseInt(y), parseInt(mo) - 1, parseInt(day)).getTime();
-    if (ts < newestTs - 86400000) continue;
+    if (ts < newestTs - 7 * 86400000) continue;
     if (existingKeys.has(isoDate)) continue;
     const articleIdx = html.indexOf(isoDate + '-cashpop');
     if (articleIdx === -1) continue;
@@ -2852,13 +2858,8 @@ async function _appendCpDeltasImpl() {
       const name = sm[1].trim();
       if (SESSION_NAMES.includes(name)) sessions.push(parseInt(sm[2]));
     }
-    // Only store complete days (all 5 sessions) to match existing cache structure
-    // For today (partial day), skip -- will be picked up in next scheduled refresh
-    if (sessions.length === 5) {
-      const mmddyyyy = mo + '/' + day + '/' + y;
-      newDraws.push({ date: mmddyyyy, numbers: sessions, ts });
-    } else if (sessions.length > 0 && ts < newestTs) {
-      // Partial day older than newest -- store what we have padded to avoid gaps
+    // Store any day with at least 1 session (partial days included)
+    if (sessions.length > 0) {
       const mmddyyyy = mo + '/' + day + '/' + y;
       newDraws.push({ date: mmddyyyy, numbers: sessions, ts });
     }
