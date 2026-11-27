@@ -4,6 +4,7 @@ backups
 vault
 *.log
 email.config.json
+jackpot_cache.json
 start_jackpot.*
 startup_public.ps1
 tray.ps1
